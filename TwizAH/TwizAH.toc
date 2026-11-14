@@ -2,7 +2,7 @@
 ## Title: TwizAH
 ## Notes: Researches the Auction House, factors in deposits and the AH cut, and tells you what to post, for how long, and at what price - or when to just vendor it.
 ## Author: Alan Sherbourne
-## Version: 2.3.0
+## Version: 2.3.1
 ## SavedVariables: DepositWiseDB
 ## OptionalDeps: TwizCraft, TwizChef
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01

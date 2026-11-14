@@ -356,7 +356,7 @@ end
 local lastPost = 0
 local function Debounced()
     local now = GetTime()
-    if now - lastPost < 0.5 then return true end -- give the AH a moment between posts
+    if now - lastPost < 0.35 then return true end -- give the AH a moment between posts
     lastPost = now
     return false
 end
@@ -392,20 +392,50 @@ function ns.PostAllQueue()
     return q
 end
 
--- One post per click or key press (the game requires it), working down the whole list.
+-- One post per click, key press or mouse-wheel notch (the game requires a
+-- real input for every post), working down the whole list.
+local lastNag = 0
+local function Nag(msg)
+    if GetTime() - lastNag > 3 then lastNag = GetTime(); ns.Print(msg) end
+end
+
 function ns.PostAll()
-    if not ns.ahOpen then ns.Print("Open the Auction House first."); return end
-    if pendingConfirm then ns.Print("Confirm or cancel the open post first."); return end
+    if not ns.ahOpen then Nag("Open the Auction House first."); return end
+    if pendingConfirm then Nag("Confirm or cancel the open post first."); return end
     if Debounced() then return end
-    local it = ns.PostAllQueue()[1]
-    if not it then ns.Print("Everything worth posting is posted. Rescan if prices changed."); return end
+    local q = ns.PostAllQueue()
+    local it = q[1]
+    if not it then Nag("Everything worth posting is posted. Rescan if prices changed."); ns.UpdateWheelPost(); return end
     ns.Post(it)
-    local left = #ns.PostAllQueue()
-    if left > 0 then
-        ns.Print(("%d item%s left to post - keep clicking Post All or press your hotkey."):format(left, left == 1 and "" or "s"))
-    else
+    local left = #q - 1
+    if left == 0 then
         ns.Print("All done - everything worth posting is up.")
+        ns.UpdateWheelPost()
+    elseif left % 5 == 0 then
+        ns.Print(("%d left to post."):format(left))
     end
+end
+
+-- Scroll-to-post: while the AH is open and something is waiting, the mouse
+-- wheel (outside the TwizAH list) is bound to Post All. Released when done.
+local wheelOwner = CreateFrame("Frame")
+local wheelBound = false
+function ns.UpdateWheelPost()
+    local want = ns.ahOpen and ns.S and ns.S.wheelPost and #ns.PostAllQueue() > 0
+    if want == wheelBound then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    if want then
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELUP", "DEPOSITWISE_POSTALL")
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELDOWN", "DEPOSITWISE_POSTALL")
+        if not ns.wheelHinted then
+            ns.wheelHinted = true
+            ns.Print(("%d item%s ready - spin your mouse wheel (or click Post All) to post them all. /dw wheel off to disable."):format(
+                #ns.PostAllQueue(), #ns.PostAllQueue() == 1 and "" or "s"))
+        end
+    else
+        ClearOverrideBindings(wheelOwner)
+    end
+    wheelBound = want and true or false
 end
 
 ------------------------------------------------------------------------
@@ -955,6 +985,8 @@ ev:SetScript("OnEvent", function(_, event, arg1)
         ns.AbortFullScan("the Auction House was closed.")
         if ns.autoScanTicker then ns.autoScanTicker:Cancel(); ns.autoScanTicker = nil end
         wipe(queue); FinishCurrent(); ns.scanning = false
+        ns.wheelHinted = nil
+        ns.UpdateWheelPost()
         ns.UI.Hide()
     elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
         OnCommodityResults(arg1)

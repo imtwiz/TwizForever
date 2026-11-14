@@ -4,7 +4,7 @@ Custom addons for World of Warcraft: Forever (interface 16001), written by Alan 
 
 | Addon | What it does | Version |
 |---|---|---|
-| **TwizAH** | Auction House profit tool: what to post, for how long and at what price (deposits, AH cut and learned sell speed included), when to vendor instead, deals, low bids, market movers, smelt-or-sell ore, craft-or-sell for every profession, Buy All Supplies for profitable crafts, undercut watch with cancel-and-repost, and one-click AH mail collection. | 2.3.0 |
+| **TwizAH** | Auction House profit tool: what to post, for how long and at what price (deposits, AH cut and learned sell speed included), when to vendor instead, deals, low bids, market movers, smelt-or-sell ore, craft-or-sell for every profession, Buy All Supplies for profitable crafts, undercut watch with cancel-and-repost, and one-click AH mail collection. | 2.3.1 |
 | **TwizQuest** | Plans which quests to do and in what order for the most XP per hour from where you stand, using Questie's database. Learns your kill speed, rest time, travel speed and real XP rates; counts quest items in your bank; plans around rested XP, groups, sell & repair stops; target key; log cleanup. | 1.4.0 |
 | **TwizCraft** | Cheapest path to level each profession: recipe per skill range, how many, shopping list, cheapest shopping route, buy from vendors/AH, craft straight from the window, and tracks AH purchases waiting in your mailbox. Learns your real skill-up odds. | 1.6.0 |
 | **TwizChef** | Remembers your cooking recipes and, at a vendor, buys the missing ingredients for the best recipes your bag ingredients can make (highest level, buff suited to your class/spec); one-key eat/drink and cook, drink restock, Well Fed reminder. | 2.0.1 |

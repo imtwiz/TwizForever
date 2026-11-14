@@ -661,11 +661,13 @@ local function Create()
     frame.postMarg:SetScript("OnLeave", GameTooltip_Hide)
     frame.postAll = MakeButton(frame, "Post All", 110, function() ns.PostAll() end)
     frame.postAll:SetPoint("LEFT", frame.postMarg, "RIGHT", 6, 0)
+    frame.postAll:EnableMouseWheel(true)
+    frame.postAll:SetScript("OnMouseWheel", function() ns.PostAll() end)
     frame.postAll:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Post All")
         GameTooltip:AddLine("Works down everything in your bags worth posting: the best items first, then the marginal ones that still turn a profit. Skips items that are worth more at a vendor, quest items and tools.", 1, 1, 1, true)
-        GameTooltip:AddLine("The game allows one post per click - keep clicking, or bind a key in Options > Keybindings > AddOns > TwizAH and tap it.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Fastest: spin your mouse wheel - each notch posts the next item. The game needs a real click, key or wheel notch for every post, so fully automatic posting isn't possible.", 0.4, 1, 0.4, true)
         GameTooltip:Show()
     end)
     frame.postAll:SetScript("OnLeave", GameTooltip_Hide)
@@ -1140,6 +1142,7 @@ RefreshNow = function()
         local all = #ns.PostAllQueue()
         frame.postAll:SetText(("Post All (%d)"):format(all))
         frame.postAll:SetEnabled(all > 0)
+        if ns.UpdateWheelPost then ns.UpdateWheelPost() end
     end
     if tab == "BAGS" then
         local n, ev, vend, all = 0, 0, 0, 0

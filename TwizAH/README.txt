@@ -88,6 +88,15 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.3.1
+- Scroll to post: while the AH is open and items are waiting, just spin your
+  mouse wheel - each notch posts the next item (best first, then profitable
+  marginal ones) as fast as the AH accepts. The wheel goes back to normal as
+  soon as everything is posted or you close the AH. Over the TwizAH list (or
+  any AH list) the wheel still scrolls. /dw wheel off turns it off.
+  Why not fully automatic? The game rejects any post that isn't triggered by
+  a real click, key press or wheel notch - no addon can post unattended.
+
 WHAT'S NEW IN 2.3.0
 - Post All button (My Bags): works down everything worth posting - the best
   items first, then marginal ones that still turn a profit. The game allows one

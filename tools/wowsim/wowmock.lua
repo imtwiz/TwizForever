@@ -412,3 +412,12 @@ C_TooltipInfo = { GetItemByID = function(id) local it = SIM.items[id] if not it 
     if SIM.tooltips[id] then lines[#lines + 1] = { leftText = "Use: " .. SIM.tooltips[id] } end
     return { lines = lines } end }
 ITEM_SPELL_TRIGGER_ONUSE = "Use:"
+
+-- override bindings (scroll-to-post)
+SIM.overrides = {}
+function SetOverrideBinding(owner, prio, key, cmd) rec("SetOverrideBinding", key, cmd) SIM.overrides[key] = cmd end
+function ClearOverrideBindings(owner) rec("ClearOverrideBindings") SIM.overrides = {} end
+function SIM.Wheel()   -- a mouse-wheel notch outside any scrolling frame
+    local cmd = SIM.overrides["MOUSEWHEELDOWN"]
+    if cmd == "DEPOSITWISE_POSTALL" then TwizAH.PostAll() end
+end

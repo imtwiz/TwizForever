@@ -32,6 +32,7 @@ ns.DEFAULTS = {
     autoFullScan     = true,           -- full AH scan when you open the AH, and every 15 min while it's open
     freshMinutes     = 30,             -- auto-vendor only trusts AH prices this recent
     tooltip          = true,
+    wheelPost        = true,           -- while the AH is open and items wait, the mouse wheel posts them
 }
 
 local function CopyDefaults(src, dst)
@@ -568,6 +569,7 @@ local HELP = {
     "/dw fullscan - full AH scan for deals (once per 15 min)",
     "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
     "/dw postall - post everything worth posting, one item per press",
+    "/dw wheel on|off - spin the mouse wheel at the AH to post everything (on by default)",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
     "/dw cut 5 - AH cut in percent",
 "/dw rates 30 55 75 - starting sell chance % for 2h/8h/24h (used until rates are learned)",
@@ -669,6 +671,10 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ns.UI.Show(); ns.UI.SetTab("AUCTIONS")
     elseif cmd == "cancel" then
         ns.CancelNextUndercut()
+    elseif cmd == "wheel" then
+        S.wheelPost = rest:lower() ~= "off"
+        ns.Print("scroll-to-post " .. (S.wheelPost and "on: spin the mouse wheel to post everything" or "off"))
+        if ns.UpdateWheelPost then ns.UpdateWheelPost() end
     elseif cmd == "autovendor" then
         S.autoVendor = rest:lower() ~= "off"; ns.Print("auto-vendor " .. (S.autoVendor and "on" or "off"))
     elseif cmd == "tooltip" then
