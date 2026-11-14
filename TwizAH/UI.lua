@@ -613,9 +613,31 @@ local function Create()
         UI.Refresh()
     end)
 
+    -- Page buttons: shown whenever a list has more items than fit in the window
+    local function PageInfo()
+        local n = #ListFor(tab)
+        local pages = math.max(1, math.ceil(n / math.max(1, visible)))
+        return n, pages
+    end
+    frame.pager = CreateFrame("Frame", nil, frame)
+    frame.pager:SetSize(150, 22)
+    frame.pager:SetPoint("BOTTOMRIGHT", -12, 36)
+    frame.pagePrev = MakeButton(frame.pager, "< Prev", 56, function()
+        offset = math.max(0, offset - visible); UI.Refresh()
+    end)
+    frame.pagePrev:SetPoint("LEFT", 0, 0)
+    frame.pageNext = MakeButton(frame.pager, "Next >", 56, function()
+        local _, pages = PageInfo()
+        offset = math.min(offset + visible, (pages - 1) * visible); UI.Refresh()
+    end)
+    frame.pageNext:SetPoint("RIGHT", 0, 0)
+    frame.pageText = frame.pager:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.pageText:SetPoint("CENTER", 0, 0)
+    frame.PageInfo = PageInfo
+
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     frame.status:SetPoint("BOTTOMLEFT", 14, 40)
-    frame.status:SetPoint("RIGHT", -14, 0)
+    frame.status:SetPoint("RIGHT", frame.pager, "LEFT", -8, 0)
     frame.status:SetJustifyH("LEFT")
 
     frame.scanBags = MakeButton(frame, "Rescan Bags", 100, function() ns.StartBagScan() end)
@@ -1058,6 +1080,19 @@ end
 RefreshNow = function()
     if not frame or not frame:IsShown() then return end
     local list = ListFor(tab)
+    -- keep the page in range when the list shrinks (posting, vendoring) or the window resizes
+    local pages = math.max(1, math.ceil(#list / math.max(1, visible)))
+    offset = math.max(0, math.min(offset, (pages - 1) * visible))
+    if frame.pager then
+        local show = pages > 1 and not TEXT_TABS[tab]
+        frame.pager:SetShown(show)
+        if show then
+            local page = (offset + visible >= #list) and pages or (math.floor(offset / visible) + 1)
+            frame.pageText:SetText(("Page %d/%d"):format(page, pages))
+            frame.pagePrev:SetEnabled(offset > 0)
+            frame.pageNext:SetEnabled(page < pages)
+        end
+    end
     for i, row in ipairs(rows) do
         local data = (i <= visible) and list[i + offset] or nil
         row.data = data
@@ -1256,6 +1291,7 @@ end
 
 UI.RefreshNow = function() if RefreshNow then RefreshNow() end end
 function UI._rows() return rows end
+function UI._frame() return frame end
 
 -- tabs defined in other files (they load before this one)
 for _, register in ipairs(ns.UI_RegisterLater or {}) do register(UI) end

@@ -192,7 +192,7 @@ end
 
 function ns.MarketStats(itemID)
     local r = DB().rates[itemID]
-    if r and r.n >= 2 and r.h >= 0.5 then
+    if type(r) == "table" and (r.n or 0) >= 2 and (r.h or 0) >= 0.5 then
         return r.u / r.h, r.x / r.h, r
     end
 end

@@ -88,6 +88,11 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.2.2
+- Page buttons: when a list (My Bags, Deals, Movers...) has more items than fit
+  in the window, "< Prev  Page 1/3  Next >" appears at the bottom right.
+  The mouse wheel still scrolls too.
+
 WHAT'S NEW IN 2.2
   - Auction lengths fixed: Forever auctions are 2h / 8h / 24h (not 12/24/48).
     Listing times, sell chances and labels now match the game.
