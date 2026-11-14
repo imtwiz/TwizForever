@@ -13,6 +13,10 @@ local KIND_TEXT = {
 
 local function StepText(s)
     local q = s.q
+    if s.kind == "service" then
+        return ("|cffff9933%s|r at %s |cff999999- %s|r"):format(s.repair and "Sell & repair" or "Sell junk",
+            s.who or "a vendor", s.why or "")
+    end
     if s.kind == "bank" then
         return ("  |cff40c0ffBank:|r get %d %s |cff999999- %s|r"):format(s.need or 0, s.name or "items", q.name)
     elseif s.kind == "useitem" then
@@ -91,7 +95,9 @@ local function Refresh()
         toLevel and ("|cff999999level in ~" .. NS.FormatTime(toLevel) .. "|r") or "",
         NS.IsPlanning() and "  |cffffff00updating...|r" or
             ("  |cff777777" .. (age < 5 and "just now" or NS.FormatTime(age) .. " ago") .. "|r"))
-        .. (((plan.skipped or 0) > 0) and ("  |cffff8040(%d skipped, /qr error)|r"):format(plan.skipped) or ""))
+        .. (((plan.skipped or 0) > 0) and ("  |cffff8040(%d skipped, /qr error)|r"):format(plan.skipped) or "")
+        .. (((plan.rested or 0) > 0) and ("  |cff6699ffrested %s|r"):format(NS.FormatNum(plan.rested)) or "")
+        .. ((#(plan.drop or {}) > 0) and ("  |cffffd100%d to drop (/qr cleanup)|r"):format(#plan.drop) or ""))
     local shown, fit = 0, RowsFit()
     for i = 1, ROWS do
         local s = (i <= fit) and plan.route[i] or nil
@@ -200,9 +206,40 @@ local function Build()
     if not NS.db.shown then frame:Hide() end
 end
 
+------------------------------------------------------------------------
+-- Target key: targets the mob or NPC for step 1 (a secure button, so it
+-- works from a key binding; updated out of combat whenever the plan changes)
+------------------------------------------------------------------------
+local targetButton, targetDirty
+local function StepTargetName(s)
+    if not s then return nil end
+    if s.kind == "monster" or s.kind == "killcredit" then return s.name end
+    if s.kind == "item" then return s.dropper end
+    if s.role == 1 or s.role == 3 or s.kind == "service" then return s.who end
+end
+
+function NS.UpdateTargetButton()
+    if not targetButton then return end
+    if InCombatLockdown() then targetDirty = true; return end
+    targetDirty = false
+    local name = plan and plan.route[1] and StepTargetName(plan.route[1])
+    targetButton:SetAttribute("macrotext", name and ("/targetexact " .. name) or "")
+    targetButton.name = name
+end
+
+local function MakeTargetButton()
+    targetButton = CreateFrame("Button", "TwizQuestTargetButton", UIParent, "SecureActionButtonTemplate")
+    targetButton:SetSize(1, 1); targetButton:SetAlpha(0)
+    targetButton:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10, 10)
+    targetButton:RegisterForClicks("AnyUp", "AnyDown")
+    targetButton:SetAttribute("type", "macro")
+    targetButton:SetAttribute("macrotext", "")
+end
+
 function NS.OnPlan(result, why)
     if result then
         plan = result
+        NS.UpdateTargetButton()
         if NS.db.autoWay and result.route[1] then SetWaypoint(result.route[1], true) end
     elseif frame then
         frame.status = "Can't plan yet: " .. tostring(why or "unknown") .. "  (/qr error)"
@@ -215,6 +252,7 @@ end
 ------------------------------------------------------------------------
 local dirty = true          -- something changed: search all quests again
 function NS.MarkDirty() dirty = true end
+function NS._plan() return plan end
 local lastFull = -999
 local wantFull = false      -- a manual "Plan" asked while busy
 
@@ -256,20 +294,37 @@ local function Done(questID, role)
         if s.q.id == questID and s.role == role then table.remove(plan.route, i) end
     end
     if NS.db.autoWay and plan.route[1] then SetWaypoint(plan.route[1], true) end
+    NS.UpdateTargetButton()
     Refresh()
 end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",
     "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED", "PLAYER_LEVEL_UP", "ZONE_CHANGED_NEW_AREA",
-    "PLAYER_ENTERING_WORLD" }) do
+    "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "MERCHANT_CLOSED", "GROUP_ROSTER_UPDATE",
+    "UPDATE_INVENTORY_DURABILITY", "PLAYER_UPDATE_RESTING", "BAG_UPDATE_DELAYED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
     if event == "PLAYER_LOGIN" then
         Build()
+        MakeTargetButton()
         C_Timer.NewTicker(3, Tick)
         return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        if targetDirty then NS.UpdateTargetButton() end
+        return
+    end
+    if event == "MERCHANT_CLOSED" and plan then
+        -- sold and repaired: the service stop is done
+        for i = #plan.route, 1, -1 do if plan.route[i].kind == "service" then table.remove(plan.route, i) end end
+        Refresh()
+    end
+    if event == "UPDATE_INVENTORY_DURABILITY" or event == "PLAYER_UPDATE_RESTING" or event == "BAG_UPDATE_DELAYED" then
+        -- only matters if it changes whether a service stop is needed / rested XP
+        local need = NS.ServiceNeed and select(2, NS.ServiceNeed()) or nil
+        if (need ~= nil) == (plan and plan.service ~= nil) and event ~= "PLAYER_UPDATE_RESTING" then return end
     end
     dirty = true
     if event == "QUEST_ACCEPTED" then
@@ -296,6 +351,9 @@ local function Help()
     print("  /qr learned      - what it has learned about how you play")
     print("  /qr size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /qr relearn      - forget learned speeds and rates")
+    print("  /qr cleanup      - quests in your log that aren't worth their slot; /qr abandon drops them")
+    print("  /qr service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
+    print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end
 
 SLASH_QUESTROUTE1 = "/qr"
@@ -303,6 +361,37 @@ SLASH_QUESTROUTE2 = "/twizquest"
 SLASH_QUESTROUTE3 = "/questroute"
 SlashCmdList.QUESTROUTE = function(msg)
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    if cmd == "cleanup" or cmd == "abandon" then
+        local drop = plan and plan.drop or {}
+        if #drop == 0 then NS.Print("every quest in your log is worth keeping right now."); return end
+        if cmd == "cleanup" then
+            NS.Print(("%d quest(s) aren't worth their log slot:"):format(#drop))
+            for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
+            print("  /qr abandon drops them all (asks first).")
+        else
+            StaticPopupDialogs.TWIZQUEST_ABANDON = StaticPopupDialogs.TWIZQUEST_ABANDON or {
+                text = "Abandon %d quest(s) that aren't worth it?\n(See chat for the list.)",
+                button1 = YES or "Yes", button2 = NO or "No", timeout = 0, hideOnEscape = true, preferredIndex = 3,
+                OnAccept = function(_, list)
+                    for _, d in ipairs(list) do
+                        pcall(C_QuestLog.SetSelectedQuest, d.id)
+                        pcall(C_QuestLog.SetAbandonQuest)
+                        pcall(C_QuestLog.AbandonQuest)
+                    end
+                    NS.Print(("abandoned %d quest(s)."):format(#list))
+                    NS.Replan()
+                end,
+            }
+            for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
+            StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
+        end
+        return
+    elseif cmd == "service" then
+        NS.db.service = not NS.db.service
+        NS.Print("sell & repair stops " .. (NS.db.service and "on" or "off"))
+        NS.Replan()
+        return
+    end
     cmd = (cmd or ""):lower()
     local n = tonumber(rest)
     if cmd == "" then

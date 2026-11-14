@@ -115,6 +115,9 @@ function Stub.IsObjectType(self, t) return self.__kind == t end
 function Stub.GetObjectType(self) return self.__kind end
 function Stub.GetChildren(self) return end
 function Stub.GetNumLines(self) return 0 end
+function Stub.SetAttribute(self, k, v) self.__attr = self.__attr or {} self.__attr[k] = v end
+function Stub.GetAttribute(self, k) return self.__attr and self.__attr[k] end
+function Stub.RegisterForClicks(self) end
 function Stub.NumLines(self) return 0 end
 function Stub.GetTextColor(self) return 1, 1, 1, 1 end
 function Stub.GetFrameLevel(self) return 1 end
@@ -330,7 +333,7 @@ function GetMerchantItemInfo(i) local m = SIM.merchant[i] if not m then return n
 C_MerchantFrame = {}
 function C_MerchantFrame.GetItemInfo(i) local m = SIM.merchant[i] if not m then return nil end local it = I(m.id)
     return { name = it.name, texture = it.icon, price = m.price, stackCount = m.stack or 1, numAvailable = m.avail or -1, isPurchasable = true, isUsable = true, hasExtendedCost = false } end
-function BuyMerchantItem(i, q) rec("BuyMerchantItem", i, q) local m = SIM.merchant[i] SIM.money = SIM.money - m.price * q / (m.stack or 1) SIM.PutInBags(m.id, q) C_Timer.After(0.2, function() SIM.Fire("BAG_UPDATE_DELAYED") end) end
+function BuyMerchantItem(i, q) local m = SIM.merchant[i] q = q or (m.stack or 1) rec("BuyMerchantItem", i, q) SIM.money = SIM.money - m.price * q / (m.stack or 1) SIM.PutInBags(m.id, q) C_Timer.After(0.2, function() SIM.Fire("BAG_UPDATE_DELAYED") end) end
 function SIM.OpenMerchant() MerchantFrame.__shown = true SIM.Fire("MERCHANT_SHOW") end
 function SIM.CloseMerchant() MerchantFrame.__shown = false SIM.Fire("MERCHANT_CLOSED") end
 
@@ -383,3 +386,29 @@ function SIM.LoadAddon(dir, name)
     end
     return ns
 end
+
+-- ------------------------------------------------------------------ player, auras, tooltips (TwizChef / TwizQuest)
+SIM.level, SIM.class, SIM.power = 20, "MAGE", 0
+SIM.auras, SIM.resting, SIM.rested, SIM.group = {}, true, 0, 1
+SIM.tooltips = {} -- [itemID] = "use text"
+function UnitLevel() return SIM.level end
+function UnitClass() return SIM.class:lower(), SIM.class end
+function UnitPowerType() return SIM.power end
+function UnitFactionGroup() return "Alliance" end
+function UnitXP() return 1000 end
+function UnitXPMax() return 20000 end
+function GetXPExhaustion() return SIM.rested > 0 and SIM.rested or nil end
+function GetNumGroupMembers() return SIM.group end
+function IsResting() return SIM.resting end
+function UnitExists() return false end
+function GetSpecialization() return 1 end
+function GetBindingKey(cmd) return SIM.bindings and SIM.bindings[cmd] end
+function GetInventoryItemDurability(slot) local d = SIM.durability and SIM.durability[slot] if d then return d[1], d[2] end end
+function debugprofilestop() return os.clock() * 1000 end
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) SIM.log[#SIM.log + 1] = m end }
+C_UnitAuras = { GetAuraDataByIndex = function(unit, i) local n = SIM.auras[i] return n and { name = n } end }
+C_TooltipInfo = { GetItemByID = function(id) local it = SIM.items[id] if not it then return nil end
+    local lines = { { leftText = it.name } }
+    if SIM.tooltips[id] then lines[#lines + 1] = { leftText = "Use: " .. SIM.tooltips[id] } end
+    return { lines = lines } end }
+ITEM_SPELL_TRIGGER_ONUSE = "Use:"

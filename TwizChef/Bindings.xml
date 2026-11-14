@@ -1,0 +1,7 @@
+<Bindings>
+    <Binding name="TWIZCHEF_COOK" header="TWIZCHEF" category="ADDONS">
+        if TwizChef and TwizChef.CookNext then TwizChef.CookNext() end
+    </Binding>
+    <Binding name="CLICK TwizChefEatButton:LeftButton" category="ADDONS">
+    </Binding>
+</Bindings>

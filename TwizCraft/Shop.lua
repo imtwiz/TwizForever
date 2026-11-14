@@ -63,8 +63,12 @@ function NS.ShoppingRoute(plan)
     local px, py, inst
     if R then px, py, inst = R.PlayerPos() end
 
-    local ah, farm, vend, bank = {}, {}, {}, {}
+    local ah, farm, vend, bank, mail = {}, {}, {}, {}, {}
     for _, e in ipairs(plan.shop) do
+        local short = e.need - e.bags - e.bank
+        if (e.mail or 0) > 0 and short > 0 then
+            table.insert(mail, { id = e.id, n = math.min(e.mail, short) })
+        end
         if e.bank > 0 and e.bags < e.need then
             table.insert(bank, { id = e.id, n = math.min(e.bank, e.need - e.bags) })
         end
@@ -80,6 +84,14 @@ function NS.ShoppingRoute(plan)
         local s = { kind = "bank", label = "Bank: take out", items = bank, cost = 0 }
         local b = R and R.NearestBank and inst and R.NearestBank(inst, px, py)
         if b then s.x, s.y, s.map, s.mx, s.my = b.x, b.y, b.map, b.mx, b.my end
+        stops[#stops + 1] = s
+    end
+
+    -- mailbox: AH purchases waiting to be picked up
+    if #mail > 0 then
+        local s = { kind = "mail", label = "Mailbox: pick up", items = mail, cost = 0 }
+        local m = inst and NS.NearestMailbox and NS.NearestMailbox(inst, px, py)
+        if m then s.x, s.y, s.map, s.mx, s.my = m.x, m.y, m.map, m.mx, m.my end
         stops[#stops + 1] = s
     end
 
@@ -219,15 +231,19 @@ local function MerchantIndex()
 end
 
 -- What this vendor sells from your list: { {id, n, offer, cost} }, total
+-- Amounts come from live counts (bags + bank + mailbox), not the last plan, so a
+-- purchase that just landed (ours or TwizChef's) is never bought a second time.
 function NS.VendorCart(plan)
     local cart, total = {}, 0
     if not (plan and plan.shop and NS.merchantOpen) then return cart, 0 end
     local idx = MerchantIndex()
     for _, e in ipairs(plan.shop) do
         local o = idx[e.id]
+        local want = e.buy
+        if e.need then want = math.min(want, math.max(0, e.need - NS.Owned(e.id))) end
         -- buy here if it's on the list and this vendor is the cheapest way to get it
-        if o and e.buy > 0 and (e.src == "vendor" or e.src == "farm" or o.price / o.bundle <= (e.unit or math.huge)) then
-            local purchases = math.ceil(e.buy / o.bundle)
+        if o and want > 0 and (e.src == "vendor" or e.src == "farm" or o.price / o.bundle <= (e.unit or math.huge)) then
+            local purchases = math.ceil(want / o.bundle)
             if o.avail > 0 then purchases = math.min(purchases, o.avail) end
             local c = { id = e.id, n = purchases * o.bundle, offer = o, cost = purchases * o.price }
             cart[#cart + 1] = c; total = total + c.cost
@@ -236,47 +252,70 @@ function NS.VendorCart(plan)
     return cart, total
 end
 
+-- true while either Twiz addon is buying from a vendor
+function NS.VendorBusy() return queue ~= nil end
+local function OtherBusy() return TwizChef and TwizChef.Busy and TwizChef.Busy() end
+
 local function StopVendor(msg)
     queue, waiting = nil, nil
     if msg then NS.Print(msg) end
     if NS.Replan then NS.Replan(true) end
+    if NS.RefreshUI then NS.RefreshUI() end
 end
 
+-- Each job buys until the bags hold job.goal: re-checked before every purchase,
+-- so nothing is double-counted even if a purchase arrives late or in pieces.
 local function NextVendorBuy()
     if not queue or waiting then return end
     if not NS.merchantOpen then return StopVendor("vendor closed, stopped buying.") end
     local job = queue[1]
     if not job then return StopVendor("done buying from this vendor.") end
-    if job.left <= 0 then table.remove(queue, 1); return NextVendorBuy() end
+    local left = job.goal - NS.BagCount(job.id)
+    if left <= 0 then table.remove(queue, 1); return NextVendorBuy() end
     local o = job.offer
     if GetMerchantItemID(o.index) ~= job.id then return StopVendor("vendor list changed, stopped.") end
-    local amount = math.max(o.bundle, math.floor(math.min(job.left, o.chunk) / o.bundle) * o.bundle)
-    if GetMoney() < (amount / o.bundle) * o.price then return StopVendor("not enough gold.") end
+    local amount
+    if o.bundle > 1 then
+        amount = o.bundle                    -- one bundle per purchase: no quantity ambiguity
+    else
+        amount = math.min(left, o.chunk)
+    end
+    if GetMoney() < math.ceil(amount / o.bundle) * o.price then return StopVendor("not enough gold.") end
     waiting = { id = job.id, before = NS.BagCount(job.id), amount = amount }
     local token = waiting
-    BuyMerchantItem(o.index, amount)
-    job.left = job.left - amount
+    if o.bundle > 1 then BuyMerchantItem(o.index) else BuyMerchantItem(o.index, amount) end
     C_Timer.After(4, function() if waiting == token then StopVendor("a purchase didn't arrive (bags full?), stopped.") end end)
 end
 
 local function StartVendor(cart)
+    if queue then NS.Print("already buying - wait for it to finish."); return end
+    if OtherBusy() then NS.Print("TwizChef is buying here right now - try again when it's done."); return end
     queue = {}
-    for _, c in ipairs(cart) do queue[#queue + 1] = { id = c.id, offer = c.offer, left = c.n } end
+    for _, c in ipairs(cart) do
+        queue[#queue + 1] = { id = c.id, offer = c.offer, goal = NS.BagCount(c.id) + c.n }
+    end
+    if NS.RefreshUI then NS.RefreshUI() end
     NextVendorBuy()
 end
 
 StaticPopupDialogs["CRAFTROUTE_VENDOR"] = {
     text = "TwizCraft: spend %s at this vendor on crafting supplies?",
     button1 = YES or "Yes", button2 = NO or "No",
-    OnAccept = function(_, cart) StartVendor(cart) end,
+    -- rebuild the cart on accept: counts may have changed while the popup was up
+    OnAccept = function(_, plan)
+        local cart = NS.VendorCart(plan)
+        if #cart > 0 then StartVendor(cart) end
+    end,
     timeout = 0, hideOnEscape = true, preferredIndex = 3,
 }
 
 function NS.BuyFromVendor(plan)
+    if queue then NS.Print("already buying - wait for it to finish."); return end
+    if OtherBusy() then NS.Print("TwizChef is buying here right now - try again when it's done."); return end
     local cart, total = NS.VendorCart(plan)
-    if #cart == 0 then NS.Print("this vendor doesn't sell anything on your list."); return end
+    if #cart == 0 then NS.Print("nothing left to buy here - you already have it."); return end
     if total > (NS.db.confirmOver or 50000) then
-        StaticPopup_Show("CRAFTROUTE_VENDOR", NS.Money(total), nil, cart)
+        StaticPopup_Show("CRAFTROUTE_VENDOR", NS.Money(total), nil, plan)
     else
         StartVendor(cart)
     end
@@ -378,6 +417,8 @@ f:SetScript("OnEvent", function(_, event, a1, a2)
         if waiting and NS.BagCount(waiting.id) - waiting.before >= waiting.amount then
             waiting = nil
             C_Timer.After(0.15, NextVendorBuy)
+        elseif not queue and NS.merchantOpen and NS.Replan then
+            NS.Replan()          -- e.g. TwizChef just bought something: refresh the list
         end
     elseif event == "COMMODITY_PRICE_UPDATED" then
         if A.state == "pricing" then
@@ -393,9 +434,12 @@ f:SetScript("OnEvent", function(_, event, a1, a2)
         end
     elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
         if A.state == "buying" then
-            NS.Print(("bought %d %s."):format(A.item.buy, NS.ItemName(A.item.id)))
+            NS.Print(("bought %d %s - it's waiting in your mailbox."):format(A.item.buy, NS.ItemName(A.item.id)))
+            if NS.NoteMailed then NS.NoteMailed(A.item.id, A.item.buy) end
             A.state, A.item = nil, nil
-            C_Timer.After(0.8, function() if NS.Replan then NS.Replan(true) end end)
+            -- update the list right away: it's no longer something to buy
+            if NS.Replan then NS.Replan(true) end
+            if NS.RefreshUI then NS.RefreshUI() end
         end
     elseif event == "COMMODITY_PURCHASE_FAILED" then
         if A.state == "buying" then

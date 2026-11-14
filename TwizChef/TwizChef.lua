@@ -11,12 +11,21 @@ local ADDON = ...
 local f = CreateFrame("Frame")
 
 local DEFAULTS = {
-    enabled     = true,
-    confirmOver = 100000, -- copper; ask before spending more than 10g in one visit
-    maxCrafts   = 0,      -- 0 = no limit on crafts per recipe
-    stats       = nil,    -- manual stat priority override, e.g. {"str","sta"}
-    chars       = {},
+    enabled      = true,
+    confirmOver  = 100000, -- copper; ask before spending more than 10g in one visit
+    maxCrafts    = 0,      -- 0 = no limit on crafts per recipe
+    keep         = 40,     -- don't cook more of a food than this many (bags + bank)
+    restockDrink = 20,     -- keep this many of your best vendor drink (mana users only; 0 = off)
+    restockFood  = 0,      -- keep this many of your best vendor food (0 = off; cooking covers food)
+    remind       = true,   -- remind you to eat buff food when you leave town without Well Fed
+    stats        = nil,    -- manual stat priority override, e.g. {"str","sta"}
+    chars        = {},
 }
+
+TwizChef = TwizChef or {}
+BINDING_HEADER_TWIZCHEF = "TwizChef"
+BINDING_NAME_TWIZCHEF_COOK = "Cook your best recipe"
+_G["BINDING_NAME_CLICK TwizChefEatButton:LeftButton"] = "Eat and drink your best food"
 
 local db, char
 local COOKING_SKILL_LINE = 185
@@ -135,6 +144,39 @@ local function MyPriorities()
 end
 
 -- Read the buff stats a food gives from its tooltip.
+local function UseText(itemID)
+    local text = ""
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local data = C_TooltipInfo.GetItemByID(itemID)
+        for _, line in ipairs(data and data.lines or {}) do
+            if TooltipUtil and TooltipUtil.SurfaceArgs and not line.leftText then TooltipUtil.SurfaceArgs(line) end
+            local t = safe(line.leftText)
+            if type(t) == "string" then text = text .. " " .. t:lower() end
+        end
+    end
+    local use = (ITEM_SPELL_TRIGGER_ONUSE or "Use:"):lower()
+    local at = text:find(use, 1, true)
+    return at and text:sub(at) or nil
+end
+
+-- What eating/drinking it does: { health, mana, buff (Well Fed), stats } or nil if unknown
+local foodCache = {}
+local function FoodInfo(itemID)
+    local c = foodCache[itemID]
+    if c then return c end
+    local effect = UseText(itemID)
+    if not effect then RequestItem(itemID); return nil end
+    local function amount(word)
+        local n = effect:match("restores ([%d,]+) " .. word) or effect:match("([%d,]+) " .. word .. " over")
+            or effect:match("and ([%d,]+) " .. word)
+        return n and tonumber((n:gsub(",", ""))) or 0
+    end
+    c = { health = amount("health"), mana = amount("mana"),
+          buff = effect:find("well fed", 1, true) ~= nil }
+    foodCache[itemID] = c
+    return c
+end
+
 local function FoodStats(itemID)
     local stats = {}
     local text = ""
@@ -256,6 +298,29 @@ local function Capture()
 end
 
 ------------------------------------------------------------------------
+-- Ingredients an active quest asks for are never cooked
+------------------------------------------------------------------------
+local function QuestItemNames()
+    local names = {}
+    if not (C_QuestLog and C_QuestLog.GetNumQuestLogEntries) then return names end
+    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+        local info = C_QuestLog.GetInfo(i)
+        local qid = info and not safe(info.isHeader) and safe(info.questID)
+        if qid then
+            local ok, objs = pcall(C_QuestLog.GetQuestObjectives, qid)
+            for _, o in ipairs(ok and objs or {}) do
+                local t = safe(o.text)
+                if safe(o.type) == "item" and type(t) == "string" then
+                    local n = t:match("^%s*(.-)%s*:%s*%d+%s*/%s*%d+") or t:match("^%s*%d+%s*/%s*%d+%s+(.-)%s*$")
+                    if n then names[n:lower()] = true end
+                end
+            end
+        end
+    end
+    return names
+end
+
+------------------------------------------------------------------------
 -- What the vendor sells
 ------------------------------------------------------------------------
 local function MerchantOffer(i)
@@ -305,10 +370,17 @@ local function ScoreRecipe(r, myLevel)
     return score, reqLevel, stats, bonus
 end
 
+local AddRestock -- defined below
+
 -- Returns plan = { crafts = {...}, buys = { [itemID] = {offer, count, purchases, cost} }, total }
 local function BuildPlan(vendor)
     local myLevel = UnitLevel("player") or 1
-    local pool = setmetatable({}, { __index = function(t, id) local c = BagCount(id); rawset(t, id, c); return c end })
+    local questItems = QuestItemNames()
+    local pool = setmetatable({}, { __index = function(t, id)
+        local c = BagCount(id)
+        local name = ItemInfo(id)
+        if name and questItems[name:lower()] then c = 0 end -- a quest needs it
+        rawset(t, id, c); return c end })
 
     local candidates = {}
     for id, r in pairs(char.recipes or {}) do
@@ -350,6 +422,12 @@ local function BuildPlan(vendor)
             end
         end
         if db.maxCrafts > 0 then crafts = math.min(crafts, db.maxCrafts) end
+        -- don't cook more than you'll eat: stop at db.keep of this food (bags + bank)
+        if (db.keep or 0) > 0 and crafts ~= math.huge then
+            local have = (C_Item and C_Item.GetItemCount and safe(C_Item.GetItemCount(r.out, true))) or BagCount(r.out)
+            local per = r.makes or 1
+            crafts = math.min(crafts, math.max(0, math.ceil((db.keep - have) / per)))
+        end
         if crafts ~= math.huge and crafts > 0 then
             local buyList = {}
             for i, slot in ipairs(r.reagents) do
@@ -369,12 +447,13 @@ local function BuildPlan(vendor)
                 b.count = b.count + n
                 plan.buys[vid] = b
             end
-            plan.crafts[#plan.crafts + 1] = { name = r.name, crafts = crafts, out = r.out,
+            plan.crafts[#plan.crafts + 1] = { id = c.id, name = r.name, crafts = crafts, out = r.out,
                                               stats = c.stats, bonus = c.bonus, req = c.req }
         end
     end
 
     for _, r in pairs(char.recipes or {}) do r.sold = nil end
+    if next(vendor) then AddRestock(plan, vendor) end
     for vid, b in pairs(plan.buys) do
         local o = b.offer
         b.purchases = math.ceil(b.count / o.bundle)
@@ -387,15 +466,73 @@ local function BuildPlan(vendor)
     return plan
 end
 
+-- Water and food from the vendor: keep db.restockDrink of your best drink (if you
+-- use mana) and db.restockFood of your best food. Anything in your bags that's
+-- at least 70% as good counts toward the target.
+local function UsesMana()
+    local p = UnitPowerType and UnitPowerType("player")
+    return p == 0 or p == nil
+end
+
+local function BagFoods()
+    local list = {}
+    for bag = 0, (NUM_TOTAL_EQUIPPED_BAG_SLOTS or 4) do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local id = info and safe(info.itemID)
+            if id then
+                local fi = FoodInfo(id)
+                if fi and (fi.health > 0 or fi.mana > 0) then
+                    local e = list[id] or { id = id, count = 0, info = fi }
+                    e.count = e.count + (safe(info.stackCount) or 1)
+                    list[id] = e
+                end
+            end
+        end
+    end
+    return list
+end
+
+AddRestock = function(plan, vendor)
+    local myLevel = UnitLevel("player") or 1
+    local bags = BagFoods()
+    local function restock(kind, target)
+        if (target or 0) <= 0 then return end
+        local bestID, best
+        for id, offer in pairs(vendor) do
+            local fi = FoodInfo(id)
+            local _, _, _, req = ItemInfo(id)
+            if fi and not fi.buff and (req or 0) <= myLevel and fi[kind] > 0
+                and (kind == "mana" or fi.mana == 0) then -- food slot: plain food, not mana food
+                if not best or fi[kind] > best then bestID, best = id, fi[kind] end
+            end
+        end
+        if not bestID then return end
+        local have = 0
+        for _, e in pairs(bags) do
+            if e.info[kind] >= best * 0.7 then have = have + e.count end
+        end
+        local need = target - have
+        if need <= 0 then return end
+        local b = plan.buys[bestID] or { offer = vendor[bestID], count = 0 }
+        b.count = b.count + need
+        b.restock = kind == "mana" and "drink" or "food"
+        plan.buys[bestID] = b
+    end
+    if UsesMana() then restock("mana", db.restockDrink) end
+    restock("health", db.restockFood)
+end
+
 local function DescribePlan(plan)
     for _, c in ipairs(plan.crafts) do
         local _, link = ItemInfo(c.out)
         local buff = next(c.stats or {}) and (" (" .. StatText(c.stats) .. (c.bonus < 0 and ", off-spec" or "") .. ")") or ""
-        print(("  %s x%d%s"):format(link or c.name, c.crafts, buff))
+        print(("  cook %s x%d%s"):format(link or c.name, c.crafts, buff))
     end
     for vid, b in pairs(plan.buys) do
         local _, link = ItemInfo(vid)
-        print(("  buy %d %s for %s"):format(b.items, link or b.offer.name or vid, Money(b.cost)))
+        print(("  buy %d %s for %s%s"):format(b.items, link or b.offer.name or vid, Money(b.cost),
+            b.restock and (" (restock " .. b.restock .. ")") or ""))
     end
 end
 
@@ -416,22 +553,21 @@ BuyNext = function()
     local job = queue[1]
     if not job then
         StopBuying()
-        Print("done shopping. Open your Cooking window to cook.")
+        Print("done shopping - press your Cook key (or /chef cook) to cook.")
         return
     end
-    if job.left <= 0 then table.remove(queue, 1); return BuyNext() end
+    local left = job.goal - BagCount(job.id)
+    if left <= 0 then table.remove(queue, 1); return BuyNext() end
 
     local o = job.offer
     if safe(GetMerchantItemID(o.index)) ~= job.id then return StopBuying("vendor list changed, stopped buying.") end
-    local amount = math.min(job.left, o.chunk)
-    amount = math.max(o.bundle, math.floor(amount / o.bundle) * o.bundle)
-    if o.price > 0 and GetMoney() < (amount / o.bundle) * o.price then
+    local amount = (o.bundle > 1) and o.bundle or math.min(left, o.chunk)
+    if o.price > 0 and GetMoney() < math.ceil(amount / o.bundle) * o.price then
         return StopBuying("ran out of gold.")
     end
     waiting = { id = job.id, before = BagCount(job.id), amount = amount }
     local token = waiting
-    BuyMerchantItem(o.index, amount)
-    job.left = job.left - amount
+    if o.bundle > 1 then BuyMerchantItem(o.index) else BuyMerchantItem(o.index, amount) end
     C_Timer.After(4, function()
         if waiting == token then StopBuying("a purchase didn't arrive (bags full?), stopped buying.") end
     end)
@@ -445,10 +581,17 @@ local function CheckDelivery()
     end
 end
 
+function TwizChef.Busy() return queue ~= nil end
+
 local function StartBuying(plan)
+    if queue then return end
+    if TwizCraft and TwizCraft.VendorBusy and TwizCraft.VendorBusy() then
+        Print("TwizCraft is buying here right now - skipped.")
+        return
+    end
     queue = {}
     for vid, b in pairs(plan.buys) do
-        queue[#queue + 1] = { id = vid, offer = b.offer, left = b.items }
+        queue[#queue + 1] = { id = vid, offer = b.offer, goal = BagCount(vid) + b.items }
     end
     if #queue == 0 then queue = nil; return end
     Print(("buying ingredients for %s."):format(Money(plan.total)))
@@ -464,9 +607,8 @@ StaticPopupDialogs["AUTOCHEF_CONFIRM"] = {
 }
 
 local function Run(dry)
-    if not char.recipes or not next(char.recipes) then
-        if dry then Print("open your Cooking window once so I can learn your recipes.") end
-        return
+    if (not char.recipes or not next(char.recipes)) and dry then
+        Print("open your Cooking window once so I can learn your recipes (restocking still works).")
     end
     local plan = BuildPlan(VendorTable())
     if not next(plan.buys) then
@@ -491,6 +633,134 @@ local function Run(dry)
 end
 
 ------------------------------------------------------------------------
+-- Cook: one key cooks your best recipe from what's in your bags
+------------------------------------------------------------------------
+local COOKING_LINE = COOKING_SKILL_LINE
+
+local function CookingWindowShown()
+    local frame = ProfessionsFrame or TradeSkillFrame
+    return IsCookingOpen() and (not frame or frame:IsShown())
+end
+
+function TwizChef.CookPlan()
+    if not char or not char.recipes then return { crafts = {} } end
+    return BuildPlan({}) -- nothing to buy: only what your bags can make now
+end
+
+function TwizChef.CookNext()
+    if not char or not char.recipes or not next(char.recipes) then
+        Print("open your Cooking window once so I can learn your recipes."); return
+    end
+    local plan = TwizChef.CookPlan()
+    local c = plan.crafts[1]
+    if not c then Print("nothing worth cooking from what's in your bags."); return end
+    if not CookingWindowShown() then
+        if C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill and pcall(C_TradeSkillUI.OpenTradeSkill, COOKING_LINE) then
+            Print("opened Cooking - press again to cook. (You need a fire: Basic Campfire.)")
+        else
+            Print("open your Cooking window, then press again.")
+        end
+        return
+    end
+    local _, link = ItemInfo(c.out)
+    local ok, err = pcall(C_TradeSkillUI.CraftRecipe, c.id, c.crafts)
+    if ok then
+        Print(("cooking %d %s%s"):format(c.crafts, link or c.name,
+            #plan.crafts > 1 and (" - press again for %s next"):format(plan.crafts[2].name) or ""))
+    else
+        Print("the game wouldn't cook: " .. tostring(err))
+    end
+end
+
+------------------------------------------------------------------------
+-- Eat: one key eats your best food (buff food if you're not Well Fed)
+-- and drinks your best drink if you use mana. A secure button, so it works
+-- from a key binding; it's updated whenever your bags change (out of combat).
+------------------------------------------------------------------------
+local eatButton, eatDirty
+local WELL_FED = "well fed"
+
+local function WellFed()
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        for i = 1, 40 do
+            local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not a then break end
+            local n = safe(a.name)
+            if type(n) == "string" and n:lower() == WELL_FED then return true end
+        end
+    end
+    return false
+end
+TwizChef.WellFed = WellFed
+
+-- returns foodID, drinkID, isBuffFood
+function TwizChef.BestFood()
+    local myLevel = UnitLevel("player") or 1
+    local bestBuff, buffScore, bestHP, hp, bestDrink, mana
+    for id, e in pairs(BagFoods()) do
+        local _, _, _, req = ItemInfo(id)
+        if (req or 0) <= myLevel then
+            local fi = e.info
+            if fi.buff then
+                local stats = FoodStats(id)
+                local bonus = StatBonus(stats)
+                local score = (req or 0) + bonus
+                if bonus >= 0 and (not buffScore or score > buffScore) then bestBuff, buffScore = id, score end
+            end
+            if fi.health > 0 and (not hp or fi.health > hp or (fi.health == hp and not fi.buff)) then
+                bestHP, hp = id, fi.health
+            end
+            if fi.mana > 0 and (not mana or fi.mana > mana) then bestDrink, mana = id, fi.mana end
+        end
+    end
+    local food = (not WellFed() and bestBuff) or bestHP
+    return food, UsesMana() and bestDrink or nil, food == bestBuff and bestBuff ~= nil
+end
+
+local function UpdateEatButton()
+    if not eatButton then return end
+    if InCombatLockdown() then eatDirty = true; return end
+    eatDirty = false
+    local food, drink = TwizChef.BestFood()
+    local lines = {}
+    if food then lines[#lines + 1] = "/use item:" .. food end
+    if drink and drink ~= food then lines[#lines + 1] = "/use item:" .. drink end
+    eatButton:SetAttribute("macrotext", #lines > 0 and table.concat(lines, "\n") or "")
+    eatButton.food, eatButton.drink = food, drink
+end
+
+local function MakeEatButton()
+    if eatButton then return end
+    eatButton = CreateFrame("Button", "TwizChefEatButton", UIParent, "SecureActionButtonTemplate")
+    eatButton:SetSize(1, 1)
+    eatButton:SetAlpha(0)
+    eatButton:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10, 10)
+    eatButton:RegisterForClicks("AnyUp", "AnyDown")
+    eatButton:SetAttribute("type", "macro")
+    eatButton:SetAttribute("macrotext", "")
+    UpdateEatButton()
+end
+
+local function EatKey()
+    local key = GetBindingKey and GetBindingKey("CLICK TwizChefEatButton:LeftButton")
+    return key and ("press " .. key) or "bind a key under Options > Keybindings > AddOns > TwizChef"
+end
+
+-- leaving town without Well Fed while carrying buff food that suits you
+local lastRemind = 0
+local function Remind()
+    if not db.remind or InCombatLockdown() then return end
+    if IsResting and IsResting() then return end
+    if time() - lastRemind < 600 or WellFed() then return end
+    local food, _, isBuff = TwizChef.BestFood()
+    if food and isBuff then
+        lastRemind = time()
+        local _, link = ItemInfo(food)
+        Print(("no Well Fed buff - eat %s (%s)."):format(link or "your buff food", EatKey()))
+    end
+end
+
+------------------------------------------------------------------------
 -- Events
 ------------------------------------------------------------------------
 local captureQueued
@@ -503,7 +773,8 @@ end
 local function Reg(e) pcall(f.RegisterEvent, f, e) end
 for _, e in ipairs({ "ADDON_LOADED", "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE",
     "TRADE_SKILL_DATA_SOURCE_CHANGED", "NEW_RECIPE_LEARNED", "MERCHANT_SHOW",
-    "MERCHANT_CLOSED", "BAG_UPDATE_DELAYED", "UI_ERROR_MESSAGE" }) do Reg(e) end
+    "MERCHANT_CLOSED", "BAG_UPDATE_DELAYED", "UI_ERROR_MESSAGE", "PLAYER_LOGIN",
+    "PLAYER_REGEN_ENABLED", "PLAYER_LEVEL_UP", "UNIT_AURA", "PLAYER_UPDATE_RESTING" }) do Reg(e) end
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "ADDON_LOADED" then
@@ -533,9 +804,26 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
     elseif event == "MERCHANT_CLOSED" then
         merchantOpen = false
         if queue then StopBuying() end
+    elseif event == "PLAYER_LOGIN" then
+        MakeEatButton()
+        C_Timer.After(5, UpdateEatButton) -- item data loads a little after login
+    elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_LEVEL_UP" then
+        UpdateEatButton()
+    elseif event == "UNIT_AURA" then
+        if arg1 == "player" and not eatDirty then
+            eatDirty = true -- Well Fed came or went: switch between buff food and plain food
+            C_Timer.After(0.5, UpdateEatButton)
+        end
+    elseif event == "PLAYER_UPDATE_RESTING" then
+        C_Timer.After(1, Remind)
     elseif event == "BAG_UPDATE_DELAYED" then
         CheckDelivery()
+        UpdateEatButton()
     elseif event == "UI_ERROR_MESSAGE" then
+        local emsg = arg2 or arg1
+        if type(emsg) == "string" and emsg:lower():find("cooking fire", 1, true) then
+            Print("you need a fire to cook: cast Basic Campfire (or stand by any fire), then press again.")
+        end
         if waiting then
             local msg = arg2 or arg1
             if type(msg) == "string" and (msg == ERR_INV_FULL or msg == ERR_NOT_ENOUGH_MONEY
@@ -563,6 +851,12 @@ local function Help()
     print("  /chef stats str sta - set your own stat priority (/chef stats auto to undo)")
     print("  /chef confirm 10 - ask before spending more than 10g (now " .. Money(db.confirmOver) .. ")")
     print("  /chef max 20     - cap crafts per recipe (0 = no cap, now " .. db.maxCrafts .. ")")
+    print("  /chef cook       - cook your best recipe from your bags (bindable)")
+    print("  /chef eat        - what the Eat key will use (bind it: Keybindings > AddOns > TwizChef)")
+    print("  /chef keep 40    - cook at most this many of each food (now " .. db.keep .. ")")
+    print("  /chef water 20   - restock your best vendor drink to this many (now " .. db.restockDrink .. ")")
+    print("  /chef food 0     - restock your best vendor food to this many (now " .. db.restockFood .. ")")
+    print("  /chef remind     - Well Fed reminder when leaving town (now " .. (db.remind and "on" or "off") .. ")")
 end
 
 SLASH_AUTOCHEF1 = "/chef"
@@ -580,6 +874,26 @@ SlashCmdList.AUTOCHEF = function(msg)
     elseif cmd == "plan" or cmd == "buy" then
         if not merchantOpen then Print("talk to a vendor first."); return end
         Run(cmd == "plan")
+    elseif cmd == "cook" then
+        TwizChef.CookNext()
+    elseif cmd == "eat" then
+        local food, drink, isBuff = TwizChef.BestFood()
+        local _, fl = ItemInfo(food or 0)
+        local _, dl = ItemInfo(drink or 0)
+        Print(("eat key uses: %s%s%s (%s)."):format(fl or "no food", isBuff and " (buff food)" or "",
+            drink and (" + " .. (dl or "drink")) or "", EatKey()))
+    elseif cmd == "keep" then
+        local n = tonumber(rest); if n then db.keep = math.max(0, math.floor(n)) end
+        Print(db.keep == 0 and "no cap on cooked food" or ("cooks up to %d of each food (bags + bank)"):format(db.keep))
+    elseif cmd == "water" or cmd == "drink" then
+        local n = tonumber(rest); if n then db.restockDrink = math.max(0, math.floor(n)) end
+        Print(db.restockDrink == 0 and "drink restock off" or ("keeps %d of your best vendor drink (mana users)"):format(db.restockDrink))
+    elseif cmd == "food" then
+        local n = tonumber(rest); if n then db.restockFood = math.max(0, math.floor(n)) end
+        Print(db.restockFood == 0 and "vendor food restock off" or ("keeps %d of your best vendor food"):format(db.restockFood))
+    elseif cmd == "remind" then
+        db.remind = not db.remind
+        Print("Well Fed reminder " .. (db.remind and "on" or "off"))
     elseif cmd == "recipes" then
         if not char.recipes then Print("open your Cooking window once first."); return end
         local list, myLevel = {}, UnitLevel("player") or 1

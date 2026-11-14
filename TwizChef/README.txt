@@ -1,4 +1,20 @@
-TwizChef 1.0.0 - buys missing cooking ingredients for your best recipes
+TwizChef 2.0.0 - buys missing cooking ingredients for your best recipes
+
+NEW IN 2.0
+  Eat key   - one key eats and drinks your best: buff food when you're not
+              Well Fed (for your spec), otherwise your best healing food,
+              plus your best drink if you use mana. Bind it: Options >
+              Keybindings > AddOns > TwizChef > "Eat and drink your best food".
+  Cook key  - cooks your best recipe from what's in your bags, the right
+              amount. First press opens Cooking; you need a fire (Basic
+              Campfire). Also /chef cook.
+  Restock   - at any vendor, tops up your best usable drink to 20 (mana
+              users; /chef water 20) and optionally food (/chef food 20).
+  Stock cap - never cooks more than 40 of a food you already hold
+              (bags + bank; /chef keep 40), so it won't over-buy spices.
+  Quests    - ingredients an active quest asks for are never cooked.
+  Reminder  - leaving town without Well Fed while carrying buff food that
+              suits you? It tells you (/chef remind to turn off).
 
 1. Open your Cooking window once (and again after learning new recipes).
    The game only shares recipes while that window is open, so TwizChef

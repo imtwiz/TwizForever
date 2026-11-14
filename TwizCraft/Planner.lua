@@ -264,9 +264,10 @@ function NS.PlanFor(line)
     for id, n in pairs(need) do
         if n > 0 then
             local bags, bank = NS.BagCount(id), NS.BankCount(id)
+            local mail = NS.MailCount and NS.MailCount(id) or 0
             local unit, src, extra = UnitCost(id, via[id] and 2 or 0) -- sub-mats: buy, don't craft again
-            local buy = math.max(0, n - bags - bank)
-            shop[#shop + 1] = { id = id, need = n, bags = bags, bank = bank, buy = buy,
+            local buy = math.max(0, n - bags - bank - mail)
+            shop[#shop + 1] = { id = id, need = n, bags = bags, bank = bank, mail = mail, buy = buy,
                                 unit = unit, src = src, extra = extra, cost = buy * unit, via = via[id] }
         end
     end

@@ -1,4 +1,20 @@
-TwizQuest 1.2.0 - which quests to do, in what order, for the most XP/hour
+TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
+
+NEW IN 1.4
+  Rested XP    - kills are worth double while you're rested, so the route
+                 favors kill-heavy quests until your rested XP runs out (each
+                 step shows its rested bonus; the header shows your pool).
+  Target key   - one key targets step 1's mob or quest NPC. Bind it: Options >
+                 Keybindings > AddOns > TwizQuest. There's also a key for
+                 "waypoint to step 1".
+  Groups       - in a party, elite quests are planned automatically and
+                 elites are counted as about twice as fast.
+  Sell & repair- bags nearly full (2 slots) or gear at 25%? A stop at the
+                 nearest friendly vendor/repairer is added where it costs the
+                 least time (/qr service to turn off).
+  Cleanup      - quests in your log earning under a third of your plan's
+                 XP/hour (gray ones included) are listed: /qr cleanup, and
+                 /qr abandon drops them (asks first).
 
 Needs Questie (you have it). Works best with TomTom (you have it) for the arrow.
 

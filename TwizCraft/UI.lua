@@ -155,10 +155,13 @@ local function Refresh()
         local row = shopRows[k]
         row.data = e
         row:ClearAllPoints(); row:SetPoint("TOPLEFT", 10, y)
-        local have = e.bags + e.bank
+        local have = e.bags + e.bank + (e.mail or 0)
         row.left:SetText(e.buy > 0 and ("|cffffffff%d|r"):format(e.buy) or "|cff40ff40ok|r")
+        local where = {}
+        if e.bank > 0 then where[#where + 1] = e.bank .. " in bank" end
+        if (e.mail or 0) > 0 then where[#where + 1] = "|cffffd100" .. e.mail .. " in mailbox|r" end
         row.mid:SetText(("%s  |cff999999need %d, have %d%s|r"):format(NS.ItemLink(e.id), e.need, have,
-            e.bank > 0 and (" (" .. e.bank .. " in bank)") or ""))
+            #where > 0 and (" (" .. table.concat(where, ", ") .. "|cff999999)") or ""))
         row.right:SetText(e.buy > 0 and (SRC_TEXT[e.src] .. " " .. NS.Money(e.cost)) or "")
         row:Show()
         y = y - ROW_H
@@ -191,7 +194,9 @@ local function Refresh()
 
     -- buy button: at a vendor or the AH
     local text
-    if NS.merchantOpen then
+    if NS.merchantOpen and NS.VendorBusy and NS.VendorBusy() then
+        text = "Buying..."
+    elseif NS.merchantOpen then
         local cart, total = NS.VendorCart(plan)
         if #cart > 0 then text = ("Buy %d item%s here for %s"):format(#cart, #cart == 1 and "" or "s", NS.Money(total)) end
     elseif NS.ahOpen then

@@ -8,7 +8,13 @@ local ADDON, ns = ...
 local PRICE_GUARD = 1.5 -- flag prices over 1.5x the usual market
 
 local function Have(id)
-    return C_Item.GetItemCount(id, true, false, true) or 0 -- bags + bank + reagent bank
+    local n = C_Item.GetItemCount(id, true, false, true) or 0 -- bags + bank + reagent bank
+    -- AH purchases wait in the mailbox (TwizCraft keeps track of what's there)
+    if TwizCraft and TwizCraft.MailCount then
+        local ok, m = pcall(TwizCraft.MailCount, id)
+        if ok and m then n = n + m end
+    end
+    return n
 end
 
 -- Which source is cheapest for one unit
@@ -227,6 +233,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         if b then
             ns.Print(("Bought %dx %s for %s."):format(b.qty, C_Item.GetItemInfo(b.itemID) or "item", ns.Money(b.total)))
             if ns.NoteBought then ns.NoteBought(b.itemID) end
+            if TwizCraft and TwizCraft.NoteMailed then pcall(TwizCraft.NoteMailed, b.itemID, b.qty) end
             ns.buy = nil
         end
         C_Timer.After(0.5, ns.UI.Refresh)

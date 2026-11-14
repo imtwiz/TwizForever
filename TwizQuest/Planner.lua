@@ -91,11 +91,16 @@ local function MobInfo(npc)
     return (lvl > 0) and lvl or UnitLevel("player"), (rank == 1 or rank == 2 or rank == 3)
 end
 
+-- In a group, elites go down about twice as fast and elite quests are fair game.
+function NS.Grouped()
+    return (GetNumGroupMembers and GetNumGroupMembers() or 0) > 1
+end
+
 local function KillWork(kills, mobLevel, elite, spacing)
     local L = NS.db.learn
     local me = UnitLevel("player")
     local lf = math.max(0.6, math.min(2.5, 1 + 0.12 * (mobLevel - me)))
-    if elite then lf = lf * 3 end
+    if elite then lf = lf * (NS.Grouped() and 1.5 or 3) end
     local per = L.secPerKill * lf + L.restPerKill + spacing * L.detour / L.runSpeed
     return kills * per, kills * NS.KillXP(me, mobLevel, elite)
 end
@@ -375,7 +380,7 @@ local function BuildQuest(id, inst, px, py, active)
             if (o.need or 0) <= 0 then
                 -- the bank covers it all
             elseif s then
-                if s.elite and not NS.db.elites and not active then return nil end
+                if s.elite and not NS.db.elites and not NS.Grouped() and not active then return nil end
                 q.stops[#q.stops + 1] = s
                 rx, ry = s.x, s.y
             elseif active then
@@ -434,6 +439,7 @@ local function Candidates(inst, px, py)
     local list = {}
     local active, inLog = QuestLog()
     NS.PrepareBankers()   -- may pause between frames; must happen outside any pcall
+    if NS.PrepareServices then NS.PrepareServices() end
     NS.skipped, NS.firstSkip = 0, nil
 
     -- one quest with odd data must never stop the whole plan
@@ -478,11 +484,17 @@ local function Leg(a, b)
     return NS.TravelTime(NS.Dist(a.x, a.y, b.x, b.y))
 end
 
+-- Rested XP doubles kill XP until the rested pool runs out, so while you're
+-- rested, kill-heavy quests are worth more. NS.restPool is read once per plan.
 local function Totals(route, start)
     local t, xp, prev = 0, 0, start
+    local rest = NS.restPool or 0
     for _, s in ipairs(route) do
         t = t + Leg(prev, s) + s.work
-        xp = xp + (s.kxp or 0)
+        local k = s.kxp or 0
+        local bonus = math.min(k, rest)
+        rest = rest - bonus
+        xp = xp + k + bonus
         if s.role == 3 then xp = xp + s.q.xp end
         prev = s
     end
@@ -646,6 +658,7 @@ function NS.Plan(full)
             return
         end
         local start = { x = px, y = py }
+        NS.restPool = (GetXPExhaustion and GetXPExhaustion()) or 0
         local cache = NS.cache
         local cands, free
         if full or not cache or cache.inst ~= inst then
@@ -655,18 +668,43 @@ function NS.Plan(full)
             cands, free = cache.cands, cache.free
         end
         local route = BuildRoute(cands, free, start)
+        local service = NS.AddServiceStop and NS.AddServiceStop(route, start, inst, Leg)
         local t, prev, xp = 0, start, 0
+        local rest = NS.restPool or 0
         for _, s in ipairs(route) do
             s.dist = NS.Dist(prev.x, prev.y, s.x, s.y)
             s.travel = Leg(prev, s)
             t = t + s.travel + s.work
-            xp = xp + (s.kxp or 0) + ((s.role == 3) and s.q.xp or 0)
+            local k = s.kxp or 0
+            s.restBonus = math.min(k, rest)
+            rest = rest - s.restBonus
+            xp = xp + k + s.restBonus + ((s.role == 3) and s.q.xp or 0)
             s.eta, s.cumXP = t, xp
             prev = s
         end
+        -- quests in your log that didn't make the route: not worth their slot
+        local inRoute = {}
+        for _, s in ipairs(route) do if s.q then inRoute[s.q] = true end end
+        local planRate = (t > 0) and xp / t or 0
+        local gray = NS.GrayLevel(UnitLevel("player"))
+        local drop = {}
+        for _, q in ipairs(cands) do
+            -- judged on its own: XP/hour if you did just this quest from here
+            local slow = planRate > 0 and (q.rate or 0) < planRate * 0.35
+            if q.active and (slow or not inRoute[q]) then
+                local lvl = q.level or 0
+                if lvl > 0 and lvl <= gray and (slow or not inRoute[q]) then
+                    drop[#drop + 1] = { id = q.id, name = q.name, why = ("gray - %s xp/hr on its own"):format(NS.FormatNum((q.rate or 0) * 3600)) }
+                elseif slow then
+                    drop[#drop + 1] = { id = q.id, name = q.name,
+                        why = ("%s xp/hr vs your plan's %s"):format(NS.FormatNum((q.rate or 0) * 3600), NS.FormatNum(planRate * 3600)) }
+                end
+            end
+        end
         local result = { route = route, time = t, xp = xp, rate = (t > 0) and xp / t * 3600 or 0,
                          candidates = #cands, at = GetTime(), x = px, y = py, inst = inst, full = full,
-                         skipped = NS.skipped or 0 }
+                         skipped = NS.skipped or 0, drop = drop, service = service, rested = NS.restPool or 0,
+                         logFull = (free or 0) <= 0 }
         if (NS.skipped or 0) > 0 and NS.db then
             NS.db.lastError = { msg = ("%d quest(s) skipped; first: %s"):format(NS.skipped, NS.firstSkip or "?"),
                                 stack = "", at = time and time() or 0 }

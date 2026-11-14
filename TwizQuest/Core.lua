@@ -1,6 +1,9 @@
 -- TwizQuest core: settings, the bridge into Questie's database, and geometry.
 local ADDON, NS = ...
 TwizQuest = NS
+BINDING_HEADER_TWIZQUEST = "TwizQuest"
+BINDING_NAME_TWIZQUEST_NEXT = "Waypoint to step 1"
+_G["BINDING_NAME_CLICK TwizQuestTargetButton:LeftButton"] = "Target step 1's mob or NPC"
 
 NS.DEFAULTS = {
     horizon   = 60,    -- minutes of play to plan
@@ -8,6 +11,9 @@ NS.DEFAULTS = {
     maxDist   = 3000,  -- yards; ignore quest givers farther than this
     elites    = false, -- plan quests that need elite kills
     autoWay   = true,  -- put a waypoint on step 1 automatically
+    service   = true,  -- add a sell & repair stop when bags are nearly full or gear is breaking
+    sellAt    = 2,     -- free bag slots that trigger the sell stop
+    repairAt  = 0.25,  -- lowest durability that triggers the repair stop
     auto      = true,  -- keep the plan updated by itself
     shown     = true,
     learn = {

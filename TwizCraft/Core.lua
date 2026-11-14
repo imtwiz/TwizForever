@@ -84,7 +84,7 @@ function NS.BankCount(id)
 end
 
 function NS.Owned(id)
-    return NS.BagCount(id) + NS.BankCount(id)
+    return NS.BagCount(id) + NS.BankCount(id) + (NS.MailCount and NS.MailCount(id) or 0)
 end
 
 -- a recipe slot may accept several items (e.g. any of a few fish): count them all

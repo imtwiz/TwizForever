@@ -1,5 +1,16 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.5.1
+- Fixed vendor overbuying: buying stops once your bags hold what the list needs
+  (counted live, so extra clicks or TwizChef buying first never double up).
+  The button shows "Buying..." while it works.
+
+NEW IN 1.5 - mailbox
+  AH purchases go to your mailbox. The moment a purchase completes it comes
+  off the "to buy" list and shows as "N in mailbox", and the route gets a
+  "Mailbox: pick up" stop (your nearest mailbox once you've used it).
+  Opening the mailbox reads the real inbox (mats mailed from alts count too).
+
 Open each profession's window once (and after learning new recipes) so
 TwizCraft can read your recipes. Then /cr shows, for the selected
 profession, from your current skill to your cap:
