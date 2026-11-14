@@ -1,0 +1,6 @@
+# WoW writes these per account/character - never commit them
+WTF/
+*.bak
+*.backup-*
+.DS_Store
+Thumbs.db

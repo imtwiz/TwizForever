@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: QuestRoute
+## Notes: Plans which quests to do, in what order, for the most XP per hour from where you're standing. Uses Questie's quest database for locations and learns your kill speed, rest time and travel speed as you play.
+## Author: Alan Sherbourne
+## Version: 1.3.1
+## Dependencies: Questie
+## OptionalDeps: TomTom, QuestieDB
+## SavedVariables: QuestRouteDB
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+
+Core.lua
+Learn.lua
+Bank.lua
+Planner.lua
+Resize.lua
+UI.lua

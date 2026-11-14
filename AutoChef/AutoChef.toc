@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: AutoChef
+## Notes: Remembers your cooking recipes, and at a vendor buys the missing ingredients for the best recipes your bag ingredients can make: highest level first, with the food buff that suits your class and spec.
+## Author: Alan Sherbourne
+## Version: 1.0.0
+## SavedVariables: AutoChefDB
+## IconTexture: Interface\Icons\INV_Misc_Food_15
+
+AutoChef.lua

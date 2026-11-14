@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="CRAFTROUTE_NEXT" header="CRAFTROUTE" category="ADDONS">
+        if CraftRoute and CraftRoute.CraftNext then CraftRoute.CraftNext() end
+    </Binding>
+</Bindings>
