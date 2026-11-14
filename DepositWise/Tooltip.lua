@@ -38,6 +38,17 @@ local function OnItemTooltip(tooltip, data)
     if m and m.med then
         tooltip:AddDoubleLine("|cff33ff99DW|r Market median", ns.Money(m.med) .. ("  (%d listed)"):format(m.q or 0), 1, 1, 1)
     end
+    -- how fast it moves, and the listing length worth using
+    local demand = ns.MarketStats and ns.MarketStats(itemID)
+    if demand then
+        local rates = ns.SellRates(itemID, 1)
+        tooltip:AddDoubleLine("|cff33ff99DW|r Sells about", ("%.1f a day  |cff808080(%s %d%%, %s %d%%, %s %d%%)|r"):format(demand * 24,
+            ns.DURATION_LABEL[1], rates[1] * 100, ns.DURATION_LABEL[2], rates[2] * 100, ns.DURATION_LABEL[3], rates[3] * 100), 1, 1, 1, 1, 1, 1)
+    end
+    local o = ns.db.outcomes and ns.db.outcomes[itemID]
+    if o and (o.s + o.e) > 0 then
+        tooltip:AddDoubleLine("|cff33ff99DW|r Your auctions", ("%d of %d sold"):format(o.s, o.s + o.e), 1, 1, 1, 1, 1, 1)
+    end
 end
 
 function ns.Tooltip_OnLoad()

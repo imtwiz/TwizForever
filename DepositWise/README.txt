@@ -85,28 +85,72 @@ USE
 
   Tooltips
     Item tooltips show the last seen AH low, what you'd net after the cut,
-    and the market median.
+    the market median, how many sell a day (and the chance for 2h/8h/24h),
+    and how your own auctions of it have done.
+
+WHAT'S NEW IN 2.2
+  - Auction lengths fixed: Forever auctions are 2h / 8h / 24h (not 12/24/48).
+    Listing times, sell chances and labels now match the game.
+  - Full scans no longer fail silently: if the AH doesn't answer within a
+    minute you can retry right away, and closing the AH mid-scan throws the
+    partial scan away instead of saving half the market.
+  - Sell rates: time-left aware and repost-aware (see below). Demand learned
+    by older versions was halved once, since it was counted too generously.
+  - My Auctions tab: every auction you have up, the cheapest other seller,
+    how many cheaper units are ahead of yours, and "Cancel Undercut" for the
+    ones worth reposting (not if it ends within 30 minutes, has bids, or the
+    repost wouldn't clear its new deposit 5x).
+  - Collect AH Mail button on the mailbox: takes gold from sales and items
+    from expired/cancelled auctions. Never touches player mail or COD.
+  - Your sales are now actually learned (from AH mail and your auctions list).
+  - Auto-vendor never sells: anything you bought in the last 2 hours,
+    materials for profitable crafts, CraftRoute's current plan, or AutoChef
+    ingredients (on top of quest items, tools and /dw exclude).
+  - Low Bids show when each auction ends; ones ending soonest come first.
+  - Deals tab explains an empty list when a filter is hiding everything.
+  - Faster and lighter: redraws are batched, the Craft list is cached, and
+    saved data is stored compactly (about half the size, loads faster).
+
+  My Auctions tab
+    Opens on its own when you visit the AH. Status per auction: Cheapest,
+    Undercut (with how many cheaper units are ahead of you), Has bids (can't
+    be cancelled) or Sold. "Cancel Undercut" cancels the next one worth it -
+    one per click, the game requires it. The item comes back by mail; collect
+    it and repost from My Bags. Key binding available.
+
+  Collect AH Mail (button under the mailbox)
+    One click takes everything from Auction House mail, one mail at a time.
+    Stops if your bags fill up.
 
 HOW SELL RATES ARE LEARNED
   Every full scan is compared with the previous one (if they're 15 min to
-  6 hours apart). For each seller listed near the cheapest price, units that
-  disappeared = units bought. It's counted per seller, so canceling and
-  reposting lower isn't mistaken for a sale. It also counts how often
-  someone lists below the cheapest price. From that:
+  6 hours apart). Units that disappeared from near the cheapest price count
+  as bought - except listings whose time could have run out in between
+  (each listing's time left is recorded), and new listings that show up
+  below the old cheapest are treated as probable cancel-and-reposts and half
+  their amount is taken off. Forever's scan doesn't name sellers, so this
+  errs on the low side on purpose: deposits only get risked on things that
+  really sell. It also counts how often someone lists below the cheapest
+  price. From that:
     time you stay cheapest  = how long until you're likely undercut
     sell chance             = expected share of your stack bought in that time
-  Your own results ("A buyer has been found..." / "...has expired") are
-  blended in per item, and once you have 8+ results for a listing length
-  they also replace the starting guesses. Older scans fade out, so the rates
-  follow the market. Tip: do a full scan, play 15-30 min, scan again.
+  Your own results are blended in per item. They're learned from AH mail
+  ("Auction successful" / "Auction expired"), from your owned-auctions list
+  and from the "A buyer has been found..." chat message - each sale counted
+  once. Once you have 8+ results for a listing length they also replace the
+  starting guesses. Older scans fade out, so the rates follow the market.
+  Full scans run automatically when you open the AH and every 15 minutes
+  while it's open (/dw autofull off to stop).
 
 HOW THE MATH WORKS
   The deposit comes back when an item sells and is lost when it expires.
   If an undercut listing sells with chance p per listing period, and you
   relist until it does, you lose on average  deposit x (1-p)/p  along the way.
     Expected = price x qty x (1 - cut)  -  deposit x (1-p)/p
-  This is worked out for 12h, 24h and 48h; the best one is chosen and then
-  compared with the guaranteed vendor price. Deposits come straight from the
+  This is worked out for Forever's 2h, 8h and 24h auctions; the best one is
+  chosen (counting every extra relist as a small cost in your time, so tiny
+  deposits don't push everything to 2h) and then compared with the
+  guaranteed vendor price. Deposits come straight from the
   game, so changes Blizzard makes to deposit rules are picked up automatically.
 
 EXCLUDED ITEMS
@@ -123,7 +167,10 @@ SETTINGS (slash commands)
   /dw                      toggle the panel
   /dw scan | fullscan      rescan bags / full AH scan
   /dw cut 5                AH cut in percent
-  /dw rates 45 60 75       starting guesses for 12h/24h/48h, used only until rates are learned
+  /dw rates 30 55 75       starting guesses for 2h/8h/24h, used only until rates are learned
+  /dw autofull on|off      automatic full scans at the AH
+  /dw auctions             My Auctions tab; /dw cancel = cancel next undercut (bindable)
+  /dw mail                 collect gold and items from AH mail
   /dw mingain 5s           how much the AH must beat the vendor by
   /dw threshold 60         Deals: % of median that counts as underpriced
   /dw autoscan on|off      scan bags automatically when the AH opens

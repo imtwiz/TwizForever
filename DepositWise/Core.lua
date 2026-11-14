@@ -7,12 +7,15 @@ BINDING_NAME_DEPOSITWISE_POSTBEST = "Post next best item"
 BINDING_NAME_DEPOSITWISE_POSTMARGINAL = "Post next marginal item (profitable only)"
 BINDING_NAME_DEPOSITWISE_TOGGLE = "Toggle DepositWise window"
 BINDING_NAME_DEPOSITWISE_BUYSUPPLIES = "Buy All Supplies (next step)"
+BINDING_NAME_DEPOSITWISE_CANCELUNDERCUT = "Cancel next undercut auction"
 
-ns.DURATION_LABEL = { [1] = "12h", [2] = "24h", [3] = "48h" }
+-- WoW: Forever uses the classic auction lengths: short 2h, medium 8h, long 24h
+ns.DURATION_HOURS = { 2, 8, 24 }
+ns.DURATION_LABEL = { [1] = "2h", [2] = "8h", [3] = "24h" }
 
 ns.DEFAULTS = {
     ahCut            = 0.05,           -- auction house cut on a sale
-    sellRate         = { 0.45, 0.60, 0.75 }, -- starting guess for 12h/24h/48h; replaced by learned rates as data comes in
+    sellRate         = { 0.30, 0.55, 0.75 }, -- starting guess for 2h/8h/24h; replaced by learned rates as data comes in
     minGain          = 500,            -- copper: AH must beat vendor by at least this much to be worth it (5s)
     fallbackDeposit  = 1,              -- copper: used only if the game won't report a deposit
     dealThreshold    = 0.60,           -- "underpriced" = listing below 60% of the item's median price
@@ -25,6 +28,7 @@ ns.DEFAULTS = {
     quickOnly        = false,          -- Deals tab: only quick flips
     autoScanBags     = true,           -- scan your bags automatically when the AH opens
     autoVendor       = true,           -- sell to merchants anything a vendor pays more for than the AH
+    autoFullScan     = true,           -- full AH scan when you open the AH, and every 15 min while it's open
     freshMinutes     = 30,             -- auto-vendor only trusts AH prices this recent
     tooltip          = true,
 }
@@ -50,6 +54,14 @@ function ns.InitDB()
         if db.settings.dealMinProfit == 1000 then db.settings.dealMinProfit = 500 end
         db.settings.version = 3
     end
+    -- v2.2: Forever auctions are 2h/8h/24h (not 12/24/48). Move the starting guesses,
+    -- and halve demand learned before scans knew about expiring listings and reposts.
+    if db.settings.version < 4 then
+        local r = db.settings.sellRate
+        if r and r[1] == 0.45 and r[2] == 0.60 and r[3] == 0.75 then db.settings.sellRate = { 0.30, 0.55, 0.75 } end
+        for _, x in pairs(db.rates or {}) do if type(x) == "table" and x.u then x.u = x.u * 0.5 end end
+        db.settings.version = 4
+    end
     db.settings.excluded = db.settings.excluded or {} -- [itemID] = true (exclude) / false (allow)
     db.prices = db.prices or {}   -- [itemID] = { p = lowest unit buyout, t = time }
     db.market = db.market or {}   -- [itemID] = { min, med, n, q, t } from full scans
@@ -57,6 +69,7 @@ function ns.InitDB()
     db.history = db.history or {} -- [itemID] = { [yyyymmdd] = { med, q } }
     ns.db = db
     ns.S = db.settings
+    ns.Expand(db)
     ns.movers = {}
 end
 
@@ -78,6 +91,66 @@ function ns.RecordPost(it, r)
     s.postedValue = s.postedValue + (r.netIfSold or 0)
     s.vendorAvoided = s.vendorAvoided + (r.vendorTotal or 0)
     if ns.Rates_RecordPost then ns.Rates_RecordPost(it, r) end
+end
+
+------------------------------------------------------------------------
+-- Saved data is stored compactly (strings) and expanded at login, so the
+-- file stays small and the game loads and saves it quickly.
+------------------------------------------------------------------------
+local function num(x) return tonumber(x) end
+local function fmt(x)
+    if x == math.floor(x) then return tostring(x) end
+    local s = ("%.3f"):format(x)
+    s = s:gsub("0+$", "")
+    s = s:gsub("%.$", "")
+    return s
+end
+
+function ns.Expand(db)
+    -- history[itemID] = "day:med:q,day:med:q"
+    for id, h in pairs(db.history or {}) do
+        if type(h) == "string" then
+            local t = {}
+            for day, med, q in h:gmatch("(%d+):([%d%.]+):([%d%.]+)") do t[num(day)] = { med = num(med), q = num(q) } end
+            db.history[id] = t
+        end
+    end
+    -- market[itemID] = "min,med,n,q,t"
+    for id, m in pairs(db.market or {}) do
+        if type(m) == "string" then
+            local a, b, c, d, e = m:match("([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)")
+            db.market[id] = { min = num(a), med = num(b), n = num(c), q = num(d), t = num(e) }
+        end
+    end
+    -- rates[itemID] = "u,h,x,n,t"
+    for id, r in pairs(db.rates or {}) do
+        if type(r) == "string" then
+            local u, h, x, n, t = r:match("([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)")
+            db.rates[id] = { u = num(u) or 0, h = num(h) or 0, x = num(x) or 0, n = num(n) or 0, t = num(t) }
+        end
+    end
+end
+
+function ns.Compact(db)
+    for id, h in pairs(db.history or {}) do
+        if type(h) == "table" then
+            local parts = {}
+            for day, v in pairs(h) do
+                if type(v) == "table" and v.med then parts[#parts + 1] = day .. ":" .. fmt(v.med) .. ":" .. fmt(v.q or 0) end
+            end
+            db.history[id] = (#parts > 0) and table.concat(parts, ",") or nil
+        end
+    end
+    for id, m in pairs(db.market or {}) do
+        if type(m) == "table" and m.min then
+            db.market[id] = fmt(m.min) .. "," .. fmt(m.med or m.min) .. "," .. (m.n or 0) .. "," .. (m.q or 0) .. "," .. (m.t or 0)
+        end
+    end
+    for id, r in pairs(db.rates or {}) do
+        if type(r) == "table" then
+            db.rates[id] = fmt(r.u or 0) .. "," .. fmt(r.h or 0) .. "," .. fmt(r.x or 0) .. "," .. (r.n or 0) .. "," .. (r.t or 0)
+        end
+    end
 end
 
 ------------------------------------------------------------------------
@@ -327,6 +400,7 @@ end
 ------------------------------------------------------------------------
 function ns.RecordPrice(itemID, unit)
     if itemID and unit and unit > 0 then
+        if ns.InvalidateCraft then ns.InvalidateCraft() end
         ns.db.prices[itemID] = { p = unit, t = time() }
     end
 end
@@ -354,8 +428,15 @@ end
 --     deposit * (1 - p) / p
 -- and the expected take-home is
 --     price * qty * (1 - cut)  -  deposit * (1 - p) / p
--- We compare that for 12h / 24h / 48h against the guaranteed vendor price.
+-- We compare that for 2h / 8h / 24h against the guaranteed vendor price.
 ------------------------------------------------------------------------
+-- What one extra relist "costs" you in time, used only to pick the listing length:
+-- 2% of the sale, at least 10c. With Forever's tiny deposits this stops 2h listings
+-- (relist, relist, relist...) from winning on a copper of deposit.
+function ns.RelistEffort(net)
+    return math.max(10, (net or 0) * (ns.S.relistEffort or 0.02))
+end
+
 function ns.Evaluate(it)
     local S = ns.S
     local r = {}
@@ -377,14 +458,16 @@ function ns.Evaluate(it)
     r.netIfSold = r.gross - r.cut
 
     r.ev, r.lost = {}, {}
-    local bestEV, bestDur
+    local bestEV, bestDur, bestScore
     for d = 1, 3 do
         local dep = (it.deposit and it.deposit[d]) or S.fallbackDeposit
         local p = (it.rates and it.rates[d]) or S.sellRate[d] or 0.5
         p = math.max(0.01, math.min(1, p))
         r.lost[d] = dep * (1 - p) / p
         r.ev[d] = r.netIfSold - r.lost[d]
-        if not bestEV or r.ev[d] > bestEV then bestEV, bestDur = r.ev[d], d end
+        -- choosing the length also weighs your time: every relist is a trip to the AH
+        local score = r.ev[d] - (1 / p - 1) * ns.RelistEffort(r.netIfSold)
+        if not bestScore or score > bestScore then bestEV, bestDur, bestScore = r.ev[d], d, score end
     end
     r.duration = bestDur
     r.deposit = (it.deposit and it.deposit[bestDur]) or S.fallbackDeposit
@@ -422,7 +505,7 @@ local HELP = {
     "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
     "/dw cut 5 - AH cut in percent",
-"/dw rates 45 60 75 - starting sell chance % for 12h/24h/48h (used until rates are learned)",
+"/dw rates 30 55 75 - starting sell chance % for 2h/8h/24h (used until rates are learned)",
     "/dw mingain 5s - AH must beat vendor by at least this",
     "/dw threshold 60 - deals: % of median that counts as underpriced",
     "/dw minprofit 10s, /dw minroi 10 - hide deals below these",
@@ -430,6 +513,9 @@ local HELP = {
     "/dw filter cloth|gems|metal|herbs|leather|enchanting|elemental|cooking|firstaid|engineering|materials|gear|all, /dw quick on|off",
     "/dw exclude [item] / /dw include [item] - never touch an item (profession tools are excluded already)",
     "/dw autoscan on|off, /dw tooltip on|off",
+    "/dw autofull on|off - full AH scan on opening the AH and every 15 min while open",
+    "/dw auctions - your auctions and undercuts; /dw cancel - cancel next undercut (bindable)",
+    "/dw mail - collect gold and items from AH mail (mailbox open)",
     "/dw autovendor on|off - auto-sell items a vendor pays more for (hold Shift at the merchant to skip once)",
     "/dw smelt - smelt your ore into bars, or sell the ore? (also the Smelt tab)",
     "/dw craft - craft with your materials or sell them? plus buy-and-craft profits (Craft tab)",
@@ -507,6 +593,14 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ShowSettings()
     elseif cmd == "autoscan" then
         S.autoScanBags = rest:lower() ~= "off"; ns.Print("auto bag scan " .. (S.autoScanBags and "on" or "off"))
+    elseif cmd == "autofull" then
+        S.autoFullScan = rest:lower() ~= "off"; ns.Print("automatic full scans " .. (S.autoFullScan and "on" or "off"))
+    elseif cmd == "mail" then
+        ns.CollectAHMail()
+    elseif cmd == "auctions" or cmd == "undercut" then
+        ns.UI.Show(); ns.UI.SetTab("AUCTIONS")
+    elseif cmd == "cancel" then
+        ns.CancelNextUndercut()
     elseif cmd == "autovendor" then
         S.autoVendor = rest:lower() ~= "off"; ns.Print("auto-vendor " .. (S.autoVendor and "on" or "off"))
     elseif cmd == "tooltip" then
@@ -545,7 +639,12 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("ADDON_LOADED")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:RegisterEvent("PLAYER_MONEY")
+boot:RegisterEvent("PLAYER_LOGOUT")
 boot:SetScript("OnEvent", function(self, event, name)
+    if event == "PLAYER_LOGOUT" then
+        if ns.db then pcall(ns.Compact, ns.db) end
+        return
+    end
     if event == "PLAYER_LOGIN" then
         ns.StartSession()
         if ns.BuildMovers then ns.BuildMovers() end

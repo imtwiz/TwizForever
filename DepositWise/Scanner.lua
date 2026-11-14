@@ -2,6 +2,8 @@
 local ADDON, ns = ...
 
 local PRICE_SORT = { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false } }
+-- gear and other non-stacking items sort by buyout (price sorting there can be by bid)
+local BUYOUT_SORT = { { sortOrder = Enum.AuctionHouseSortOrder.Buyout or 4, reverseSort = false } }
 local FULL_SCAN_COOLDOWN = 15 * 60
 
 ns.items = {}         -- bag items being evaluated (array)
@@ -143,10 +145,12 @@ Pump = function()
     end
     local it = table.remove(queue, 1)
     current = it
-    C_AuctionHouse.SendSearchQuery(it.itemKey, PRICE_SORT, true)
+    C_AuctionHouse.SendSearchQuery(it.itemKey, it.isCommodity and PRICE_SORT or BUYOUT_SORT, true)
     currentTimer = C_Timer.NewTimer(4, function()
         if current == it and it.priceOnly then
-            FinishCurrent(); Pump()
+            FinishCurrent()
+            if it.lookup then pcall(it.lookup, nil) end
+            Pump()
         elseif current == it then
             -- no answer: fall back to whatever we know
             it.market = ns.KnownPrice(it.itemID)
@@ -186,9 +190,34 @@ local function Resolve(it, unit, ownLowest, listed)
     Pump()
 end
 
+local function IsOwnRow(r)
+    if r.owners and r.owners[1] == "player" then return true end
+    return r.containsOwnerItem and (r.numOwnerItems or r.quantity or 0) >= (r.quantity or 0)
+end
+
+-- Generic lookup: hand the first rows of a search to a callback
+local function FinishLookup(rows)
+    local cb = current.lookup
+    local id = current.itemID
+    if rows and rows[1] then
+        for _, r in ipairs(rows) do if not r.own then ns.RecordPrice(id, r.unit); break end end
+    end
+    FinishCurrent()
+    pcall(cb, rows)
+    Pump()
+end
+
 local function OnCommodityResults(itemID)
     if not (current and current.isCommodity and current.itemID == itemID) then return end
     local n = C_AuctionHouse.GetNumCommoditySearchResults(itemID) or 0
+    if current.lookup then
+        local rows = {}
+        for i = 1, math.min(n, 25) do
+            local r = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, i)
+            if r then rows[#rows + 1] = { unit = r.unitPrice, qty = r.quantity, own = IsOwnRow(r), auctionID = r.auctionID } end
+        end
+        return FinishLookup(rows)
+    end
     if n == 0 then return Resolve(current, nil) end
     local first = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, 1)
     local listed = SafeCall(C_AuctionHouse.GetCommoditySearchResultsQuantity, itemID)
@@ -202,6 +231,17 @@ end
 local function OnItemResults(itemKey)
     if not (current and not current.isCommodity and itemKey and itemKey.itemID == current.itemID) then return end
     local n = C_AuctionHouse.GetNumItemSearchResults(itemKey) or 0
+    if current.lookup then
+        local rows = {}
+        for i = 1, math.min(n, 25) do
+            local r = C_AuctionHouse.GetItemSearchResultInfo(itemKey, i)
+            if r and r.buyoutAmount and r.buyoutAmount > 0 then
+                rows[#rows + 1] = { unit = math.floor(r.buyoutAmount / math.max(1, r.quantity or 1)), qty = r.quantity or 1,
+                    own = IsOwnRow(r), auctionID = r.auctionID }
+            end
+        end
+        return FinishLookup(rows)
+    end
     for i = 1, n do
         local r = C_AuctionHouse.GetItemSearchResultInfo(itemKey, i)
         if r and r.buyoutAmount and r.buyoutAmount > 0 then
@@ -212,9 +252,18 @@ local function OnItemResults(itemKey)
     Resolve(current, nil, nil, 0)
 end
 
+-- Ask the AH about one item; cb(rows) gets { {unit, qty, own, auctionID}, ... } cheapest first, or nil
+function ns.QueueLookup(itemID, itemKey, isCommodity, cb)
+    table.insert(queue, { itemID = itemID, itemKey = itemKey or C_AuctionHouse.MakeItemKey(itemID),
+        isCommodity = isCommodity, priceOnly = true, lookup = cb, qty = 0, locs = {} })
+    Pump()
+end
+
 function ns.StartBagScan()
     if not ns.ahOpen then ns.Print("Open the Auction House first."); return end
-    wipe(queue); FinishCurrent()
+    -- keep pending lookups (e.g. the undercut check); drop the old bag research
+    for i = #queue, 1, -1 do if not queue[i].lookup then table.remove(queue, i) end end
+    if current and not current.lookup then FinishCurrent() end
     pcall(ns.RefreshQuestItems)
     ns.items = CollectBags()
     ns.scanProgress = 0
@@ -346,10 +395,44 @@ function ns.StartFullScan()
         return
     end
     fullScanPending = true
+    local previous = ns.db.lastFullScan
     ns.db.lastFullScan = time()
     ns.fullScanStatus = "Requesting full scan..."
+    ns.fullScanFailed = nil
     ns.UI.Refresh()
     C_AuctionHouse.ReplicateItems()
+    -- if the AH never answers, say so and let you try again instead of waiting out a cooldown
+    local token = {}
+    ns.fullScanToken = token
+    C_Timer.After(60, function()
+        if fullScanPending and ns.fullScanToken == token then
+            fullScanPending = false
+            ns.db.lastFullScan = previous
+            ns.fullScanFailed = true
+            ns.fullScanStatus = "The AH didn't send the full scan. Try again."
+            ns.Print("The Auction House didn't send the full scan (it can be busy right after a reload). You can try again now.")
+            ns.UI.Refresh()
+        end
+    end)
+    ns.fullScanPrevious = previous
+end
+
+-- AH closed mid-scan: the data is gone, so throw the partial scan away
+function ns.AbortFullScan(reason)
+    if fullScanPending then
+        fullScanPending = false
+        ns.db.lastFullScan = ns.fullScanPrevious or ns.db.lastFullScan
+        ns.fullScanFailed = true
+        ns.fullScanStatus = "Full scan cancelled: " .. reason
+        ns.Print("Full scan cancelled: " .. reason .. " You can start another one right away.")
+    end
+    if ns.processingTicker then
+        ns.processingTicker:Cancel()
+        ns.processingTicker = nil
+        ns.fullScanFailed = true
+        ns.fullScanStatus = "Full scan cancelled: " .. reason
+        ns.Print("Full scan cancelled: " .. reason .. " Nothing was saved from it.")
+    end
 end
 
 local function Median(sorted, totalCount)
@@ -403,7 +486,7 @@ local function AddDeal(deals, d)
     table.insert(deals, d)
 end
 
-function ns.BuildDeals()
+function ns.BuildDeals(fromScan)
     local S = ns.S
     local deals = {}
     local raw = ns.rawScan
@@ -412,7 +495,7 @@ function ns.BuildDeals()
 
     if raw then
         for itemID, entries in pairs(raw) do
-            table.sort(entries, function(a, b) return a[1] < b[1] end)
+            -- entries were sorted cheapest-first when the scan was processed
             local count = 0
             for _, e in ipairs(entries) do count = count + e[2] end
             local med = Median(entries, count)
@@ -509,7 +592,7 @@ function ns.BuildDeals()
     table.sort(deals, function(a, b) return a.profit > b.profit end)
     while #deals > 200 do table.remove(deals) end
     ns.deals = deals
-    if raw then
+    if raw and fromScan then
         ns.RecordHistory()
         ns.BuildMovers()
     end
@@ -547,13 +630,17 @@ function ns.BuildBidDeals()
                         qty = c.count, cost = c.bid, bid = c.bid, hasBids = c.hasBids, buyout = c.buyout,
                         worth = worth, vendorValue = floorValue, relist = relist, profit = profit,
                         roi = profit / c.bid, speed = ns.MarketStats(c.itemID),
-                        sellVia = (floorValue >= ahValue) and "vendor" or "AH", cat = ns.ItemCategory(c.itemID) }
+                        sellVia = (floorValue >= ahValue) and "vendor" or "AH", cat = ns.ItemCategory(c.itemID),
+                        timeLeft = c.timeLeft }
                 end
             end
         end
     end
     table.sort(out, function(a, b)
         if a.conf ~= b.conf then return a.conf == "SAFE" or (a.conf == "HIGH" and b.conf == "UNKNOWN") end
+        -- ending soonest first: less time for anyone to outbid you
+        local ta, tb = a.timeLeft or 9, b.timeLeft or 9
+        if ta ~= tb then return ta < tb end
         return a.roi > b.roi
     end)
     while #out > 200 do table.remove(out) end
@@ -578,16 +665,16 @@ function ns.AutoVendor()
     local now = time()
     local fresh = now - S.freshMinutes * 60
     local toSell, stale, staleValue = {}, 0, 0
-    local kept = {}
+    local kept, keptSeen = {}, {}
     pcall(ns.RefreshQuestItems)
+    local okP, protected = pcall(ns.ProtectedSet)
+    protected = okP and protected or {}
     for bag = 0, LastBagIndex() do
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             -- bound items can't go on the AH, so there is nothing to compare: leave them alone
-            local quest = info and info.itemID and ns.QuestNeeds(info.itemID)
-            if quest and not info.isBound then kept[#kept + 1] = (info.hyperlink or "item") .. " (" .. quest .. ")" end
             if info and info.itemID and not info.isBound and not info.isLocked and not info.hasNoValue
-                and not ns.IsExcluded(info.itemID) and not quest then
+                and not ns.IsExcluded(info.itemID) then
                 local qty = info.stackCount or 1
                 local vendor = (select(11, C_Item.GetItemInfo(info.itemID)) or 0) * qty
                 if vendor > 0 then
@@ -609,8 +696,17 @@ function ns.AutoVendor()
                         end
                     end
                     if sell then
-                        table.insert(toSell, { bag = bag, slot = slot, itemID = info.itemID, link = info.hyperlink,
-                            qty = qty, vendor = vendor, ah = ahValue })
+                        -- would sell it - unless something you're doing needs it
+                        local why = ns.QuestNeeds(info.itemID) or protected[info.itemID]
+                        if why then
+                            if not keptSeen[info.itemID] then
+                                keptSeen[info.itemID] = true
+                                kept[#kept + 1] = (info.hyperlink or "item") .. " (" .. why .. ")"
+                            end
+                        else
+                            table.insert(toSell, { bag = bag, slot = slot, itemID = info.itemID, link = info.hyperlink,
+                                qty = qty, vendor = vendor, ah = ahValue })
+                        end
                     end
                 end
             end
@@ -644,7 +740,7 @@ function ns.AutoVendor()
         end
     end
     if #kept > 0 then
-        ns.Print("Kept for your quests: " .. table.concat(kept, ", "))
+        ns.Print("Not vendored, you need them: " .. table.concat(kept, ", "))
     end
     if stale > 0 then
         ns.Print(("Skipped %d item%s that look worth vendoring (%s): AH prices are older than %d minutes. Scan the AH, then come back."):format(
@@ -735,43 +831,63 @@ local function ProcessReplicate()
     local ticker
     ns.fullScanStatus = ("Processing 0 / %d auctions..."):format(total)
     ns.UI.Refresh()
+    ns.processingTicker = nil
+    local ticks = 0
+    local hasExist = C_Item.DoesItemExistByID ~= nil
+    local timeLeft = C_AuctionHouse.GetReplicateItemTimeLeft
     ticker = C_Timer.NewTicker(0.01, function()
-        local stop = math.min(total, i + 3000)
+        if not ns.ahOpen then return ns.AbortFullScan("the Auction House was closed.") end
+        ticks = ticks + 1
+        local stop = math.min(total, i + 2000)
         while i < stop do
             -- returns: name, texture, count, quality, usable, level, levelType, minBid, minIncrement,
             --          buyoutPrice, bidAmount, highBidder, bidderFullName, owner, ownerFullName,
             --          saleStatus, itemID, hasAllInfo
             local _, _, count, _, _, _, _, minBid, minInc, buyout, bidAmount, highBidder, _, owner, ownerFull, _, itemID = C_AuctionHouse.GetReplicateItemInfo(i)
-            if itemID and minBid and minBid > 0 and not highBidder then
-                local nextBid = (bidAmount and bidAmount > 0) and (bidAmount + (minInc or 0)) or minBid
-                bids[#bids + 1] = { itemID = itemID, count = math.max(1, count or 1), bid = nextBid,
-                    hasBids = (bidAmount or 0) > 0, buyout = buyout, owner = ownerFull or owner }
-            end
-            if itemID and buyout and buyout > 0 then
-                count = math.max(1, count or 1)
-                local list = raw[itemID]
-                if not list then list = {}; raw[itemID] = list end
-                list[#list + 1] = { math.floor(buyout / count), count, ownerFull or owner }
+            -- the game sometimes returns entries for items that don't exist; skip those
+            if itemID and (not hasExist or C_Item.DoesItemExistByID(itemID)) then
+                local band = timeLeft and timeLeft(i) -- 0 <30m, 1 30m-2h, 2 2h-12h, 3 >12h
+                if minBid and minBid > 0 and not highBidder then
+                    local nextBid = (bidAmount and bidAmount > 0) and (bidAmount + (minInc or 0)) or minBid
+                    bids[#bids + 1] = { itemID = itemID, count = math.max(1, count or 1), bid = nextBid,
+                        hasBids = (bidAmount or 0) > 0, buyout = buyout, owner = ownerFull or owner, timeLeft = band }
+                end
+                if buyout and buyout > 0 then
+                    count = math.max(1, count or 1)
+                    local list = raw[itemID]
+                    if not list then list = {}; raw[itemID] = list end
+                    list[#list + 1] = { math.floor(buyout / count), count, ownerFull or owner, band }
+                end
             end
             i = i + 1
         end
         ns.fullScanStatus = ("Processing %d / %d auctions..."):format(i, total)
-        ns.UI.Refresh()
+        if ticks % 10 == 0 then ns.UI.Refresh() end
         if i >= total then
             ticker:Cancel()
+            ns.processingTicker = nil
+            ns.fullScanFailed = nil
+            if total == 0 then
+                ns.fullScanStatus = "The AH sent an empty full scan - try again in 15 minutes."
+                ns.Print(ns.fullScanStatus)
+                return
+            end
+            for _, entries in pairs(raw) do table.sort(entries, function(a, b) return a[1] < b[1] end) end
             ns.rawScan = raw
             ns.bidRaw = bids
             pcall(ns.Rates_OnFullScan, raw)
-            ns.BuildDeals()
+            ns.BuildDeals(true)
             ns.fullScanStatus = ("Scanned %d auctions. %d deals found."):format(total, #ns.deals)
             -- item names/vendor prices load async; rebuild once they arrive
             C_Timer.After(3, function() ns.BuildDeals(); ns.UI.Refresh() end)
             ns.ReEvaluateAll()
             ns.UI.Refresh()
+            ns.lastFullScanDone = time()
             ns.Print(ns.fullScanStatus)
             if ns.lastRateNote then ns.Print(ns.lastRateNote) end
         end
     end)
+    ns.processingTicker = ticker
 end
 
 ------------------------------------------------------------------------
@@ -793,8 +909,20 @@ ev:SetScript("OnEvent", function(_, event, arg1)
         ns.ahOpen = true
         ns.UI.Show()
         if ns.S.autoScanBags then C_Timer.After(0.5, ns.StartBagScan) end
+        -- keep market data and sell rates learning without having to remember to scan
+        if ns.autoScanTicker then ns.autoScanTicker:Cancel() end
+        ns.autoScanTicker = C_Timer.NewTicker(15, function()
+            if not ns.ahOpen or not ns.S.autoFullScan then return end
+            if ns.scanning or ns.processingTicker or fullScanPending then return end
+            if ns.FullScanCooldownLeft() == 0 then
+                ns.Print("Starting an automatic full scan (/dw autofull off to stop).")
+                ns.StartFullScan()
+            end
+        end)
     elseif event == "AUCTION_HOUSE_CLOSED" then
         ns.ahOpen = false
+        ns.AbortFullScan("the Auction House was closed.")
+        if ns.autoScanTicker then ns.autoScanTicker:Cancel(); ns.autoScanTicker = nil end
         wipe(queue); FinishCurrent(); ns.scanning = false
         ns.UI.Hide()
     elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" then

@@ -37,7 +37,7 @@ local BID_COLS = {
     { key = "qty",     title = "Qty",        w = 35,  j = "RIGHT" },
     { key = "bid",     title = "Bid now",    w = 80,  j = "RIGHT" },
     { key = "worth",   title = "Worth",      w = 80,  j = "RIGHT" },
-    { key = "via",     title = "Sell to",    w = 55,  j = "CENTER" },
+    { key = "ends",    title = "Ends",       w = 55,  j = "CENTER" },
     { key = "speed",   title = "Sells/day",  w = 55,  j = "RIGHT" },
     { key = "profit",  title = "Profit",     w = 80,  j = "RIGHT" },
     { key = "roi",     title = "ROI",        w = 55,  j = "RIGHT" },
@@ -83,8 +83,15 @@ local TABS = {
     { key = "MOVERS",  label = "Movers" },
     { key = "SMELT",   label = "Smelt" },
     { key = "CRAFT",   label = "Craft" },
+    { key = "AUCTIONS", label = "Auctions" },
     { key = "SESSION", label = "Session" },
 }
+
+-- Tabs that live in their own files register here:
+-- { cols, list(), fill(row, data, cells, ItemLabel), tooltip(data), summary() -> text, status,
+--   onClick(data), buttons = { { text, width, onClick, tooltip } } }
+ns.extraTabs = ns.extraTabs or {}
+function UI.RegisterTab(key, def) ns.extraTabs[key] = def end
 local TEXT_TABS = { BRIEF = true, SESSION = true }
 
 local function ColsFor(t)
@@ -92,7 +99,8 @@ local function ColsFor(t)
     elseif t == "DEALS" then return ns.dealView == "BIDS" and BID_COLS or DEAL_COLS
     elseif t == "MOVERS" then return MOVER_COLS
     elseif t == "SMELT" then return SMELT_COLS
-    elseif t == "CRAFT" then return CRAFT_COLS end
+    elseif t == "CRAFT" then return CRAFT_COLS
+    elseif ns.extraTabs[t] then return ns.extraTabs[t].cols end
     return {}
 end
 
@@ -120,6 +128,9 @@ local function ListFor(t)
         return ok and list or {}
     elseif t == "CRAFT" then
         local ok, list = pcall(ns.CraftList)
+        return ok and list or {}
+    elseif ns.extraTabs[t] then
+        local ok, list = pcall(ns.extraTabs[t].list)
         return ok and list or {}
     end
     return {}
@@ -248,6 +259,12 @@ local function RowTooltip(row)
     local d = row.data
     if not d then return end
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    if ns.extraTabs[tab] then
+        Resolve(d); ShowItemTooltip(d)
+        if ns.extraTabs[tab].tooltip then ns.extraTabs[tab].tooltip(d) end
+        GameTooltip:Show()
+        return
+    end
     if tab == "CRAFT" then
         local c = d
         local name = C_Item.GetItemInfo(c.r.out) or c.r.name
@@ -367,6 +384,9 @@ local function RowTooltip(row)
                     ns.DURATION_LABEL[d.relist.d], d.relist.p * 100), ns.Money(d.relist.ev), 1, 1, 1)
             end
             GameTooltip:AddDoubleLine("Profit if you win", ns.Money(d.profit), 1, 1, 1)
+            GameTooltip:AddDoubleLine("Then sell it to", d.sellVia == "vendor" and "a vendor" or "the AH", 1, 1, 1, 1, 1, 1)
+            local ENDS = { [0] = "in under 30 minutes - best snipe", [1] = "within 2 hours", [2] = "within 12 hours", [3] = "in more than 12 hours" }
+            if ENDS[d.timeLeft] then GameTooltip:AddDoubleLine("Ends", ENDS[d.timeLeft], 1, 1, 1, 1, 1, 1) end
             GameTooltip:AddLine(" ")
             if d.conf == "SAFE" then
                 GameTooltip:AddLine("Safe: even selling to a vendor beats the bid.", 0.25, 1, 0.25, true)
@@ -447,6 +467,8 @@ local function CreateRows()
             if tab == "BAGS" then
                 selected = self.data
                 UI.Refresh()
+            elseif ns.extraTabs[tab] and ns.extraTabs[tab].onClick then
+                ns.extraTabs[tab].onClick(self.data)
             elseif ns.ahOpen then
                 if tab == "SMELT" then SearchAHFor({ itemID = self.data.bar })
                 elseif tab == "CRAFT" then SearchAHFor({ itemID = self.data.r.out })
@@ -466,6 +488,8 @@ local function Layout()
     local top = (tab == "DEALS") and 92 or 64
     visible = math.max(3, math.min(ROWS, math.floor((frame:GetHeight() - top - 16 - 60) / ROW_H)))
     frame.filterBar:SetWidth(frame:GetWidth() - 24)
+    local tw = math.max(56, math.min(84, math.floor((frame:GetWidth() - 130 - 36) / #TABS) - 4))
+    for _, b in pairs(frame.tabs) do b:SetWidth(tw) end
     frame.text:SetWidth(frame:GetWidth() - 36)
     BuildHeader()
 end
@@ -484,6 +508,10 @@ local function SetTab(t)
     frame.fullScan:SetShown(t == "DEALS" or t == "MOVERS" or t == "BRIEF" or t == "SMELT" or t == "CRAFT")
     frame.lowBids:SetShown(t == "DEALS")
     frame.buyAll:SetShown(t == "CRAFT")
+    for key, def in pairs(ns.extraTabs) do
+        for _, b in ipairs(def.__buttons or {}) do b:SetShown(key == t) end
+        if key == t and def.onShow then pcall(def.onShow) end
+    end
     frame.cancelBuy:SetShown(t == "CRAFT")
     Layout()
     UI.Refresh()
@@ -642,6 +670,27 @@ local function Create()
     frame.cancelBuy = MakeButton(frame, "Cancel", 70, function() ns.CancelSupplyPurchase() end)
     frame.cancelBuy:SetPoint("LEFT", frame.buyAll, "RIGHT", 6, 0)
 
+    for _, def in pairs(ns.extraTabs) do
+        def.__buttons = {}
+        local prevB
+        for _, bd in ipairs(def.buttons or {}) do
+            local b = MakeButton(frame, bd.text, bd.width or 120, function() bd.onClick(); UI.Refresh() end)
+            if prevB then b:SetPoint("LEFT", prevB, "RIGHT", 6, 0) else b:SetPoint("BOTTOMLEFT", 12, 12) end
+            if bd.tooltip then
+                b:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                    bd.tooltip()
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", GameTooltip_Hide)
+            end
+            b.def = bd
+            b:Hide()
+            def.__buttons[#def.__buttons + 1] = b
+            prevB = b
+        end
+    end
+
     local help = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     help:SetPoint("BOTTOMRIGHT", -14, 18)
     help:SetText("/dw help for settings")
@@ -687,7 +736,8 @@ local function FillBidRow(row, d)
     c[3]:SetText(d.qty)
     c[4]:SetText(ns.Money(d.bid))
     c[5]:SetText(ns.Money(d.worth))
-    c[6]:SetText(d.sellVia == "vendor" and "Vendor" or "AH")
+    local BAND = { [0] = "|cff40ff40<30m|r", [1] = "|cffffd100<2h|r", [2] = "<12h", [3] = "|cff808080>12h|r" }
+    c[6]:SetText(BAND[d.timeLeft] or "?")
     c[7]:SetText(d.speed and ("%.1f"):format(d.speed * 24) or "|cff808080?|r")
     c[8]:SetText(ns.Money(d.profit))
     c[9]:SetText(("%.0f%%"):format(d.roi * 100))
@@ -835,6 +885,39 @@ local function BriefingText()
     end
     L[#L + 1] = ("Tracking %d items, %d with a price from the last 24 hours. Last full scan %s."):format(
         tracked, fresh, Ago(ns.db.lastFullScan))
+    if ns.fullScanFailed then
+        L[#L] = L[#L] .. " |cffff6060" .. (ns.fullScanStatus or "The last full scan didn't finish.") .. "|r"
+    end
+
+    if ns.OwnedSummary and ns.ownedQueried then
+        local active, under, worth = ns.OwnedSummary()
+        if under > 0 then
+            L[#L + 1] = ("|cffff6060%d of your %d auctions are undercut|r%s (Auctions tab)."):format(under, active,
+                worth > 0 and (" - %d worth cancelling and reposting"):format(worth) or "")
+        elseif active > 0 then
+            L[#L + 1] = ("All %d of your auctions are the cheapest of their kind."):format(active)
+        end
+    end
+
+    -- how your own auctions have actually done
+    local mr, s, e = ns.db.myRates or {}, 0, 0
+    local parts = {}
+    for d = 1, 3 do
+        local m = mr[d]
+        if m and (m.s + m.e) > 0 then
+            s, e = s + m.s, e + m.e
+            parts[#parts + 1] = ("%s %d/%d"):format(ns.DURATION_LABEL[d], m.s, m.s + m.e)
+        end
+    end
+    local pending = 0
+    for _, list in pairs(ns.db.pendingPosts or {}) do pending = pending + #list end
+    if s + e > 0 then
+        L[#L + 1] = ("Your auctions: |cff40ff40%d sold|r, %d expired (%.0f%% sell-through; by length %s)%s."):format(
+            s, e, 100 * s / (s + e), table.concat(parts, ", "),
+            pending > 0 and (", %d still listed or waiting in the mail"):format(pending) or "")
+    elseif pending > 0 then
+        L[#L + 1] = ("%d of your auctions are still listed or waiting in the mail. Results are learned from AH mail - open your mailbox now and then."):format(pending)
+    end
 
     if not ns.hasTrendData then
         L[#L + 1] = "No market trend yet: it needs full scans from two different days."
@@ -957,7 +1040,22 @@ local function SessionText()
     return table.concat(L, "\n\n")
 end
 
+-- Many events ask for a redraw; draw at most ~10 times a second and only while visible.
+local refreshQueued, lastRefresh = false, -1
+local RefreshNow
 function UI.Refresh()
+    if not frame or not frame:IsShown() then return end
+    if refreshQueued then return end
+    refreshQueued = true
+    local wait = math.max(0, 0.1 - (GetTime() - lastRefresh))
+    C_Timer.After(wait, function()
+        refreshQueued = false
+        lastRefresh = GetTime()
+        RefreshNow()
+    end)
+end
+
+RefreshNow = function()
     if not frame or not frame:IsShown() then return end
     local list = ListFor(tab)
     for i, row in ipairs(rows) do
@@ -968,6 +1066,11 @@ function UI.Refresh()
             elseif tab == "DEALS" then FillDealRow(row, data)
             elseif tab == "SMELT" then FillSmeltRow(row, data)
             elseif tab == "CRAFT" then FillCraftRow(row, data)
+            elseif ns.extraTabs[tab] then
+                Resolve(data)
+                row.icon:SetTexture(data.icon or 134400)
+                row.sel:Hide()
+                ns.extraTabs[tab].fill(row, data, row.cells, ItemLabel)
             else FillMoverRow(row, data) end
             row:Show()
         else
@@ -1055,6 +1158,15 @@ function UI.Refresh()
             frame.summary:SetText("No ore in your bags - showing what 20 of each ore is worth smelted vs sold.")
         end
         frame.status:SetText("Bar prices are looked up with your bag scan. Open your Mining window once so it knows your exact recipes.")
+    elseif ns.extraTabs[tab] then
+        local def = ns.extraTabs[tab]
+        local okS, summary, status = pcall(def.summary)
+        frame.summary:SetText(okS and summary or "")
+        frame.status:SetText(okS and status or "")
+        for _, b in ipairs(def.__buttons or {}) do
+            if b.def.label then b:SetText(b.def.label()) end
+            if b.def.enabled then b:SetEnabled(b.def.enabled()) end
+        end
     elseif tab == "MOVERS" then
         frame.summary:SetText(("%d items moved 10%% or more since the previous day scanned"):format(#(ns.movers or {})))
         frame.status:SetText(ns.hasTrendData and "Medians from full scans. Run one each day to keep trends fresh."
@@ -1076,7 +1188,12 @@ function UI.Refresh()
             for _, d in ipairs(shown) do if d.conf == "SAFE" then safe = safe + 1 end end
             frame.summary:SetText(("%d extremely low bids (%d safe), about %s profit if you win them all.%s"):format(#shown, safe, ns.Money(st), filterNote))
         else
-            frame.summary:SetText(("%d profitable buys, about %s expected profit.%s"):format(#shown, ns.Money(st), filterNote))
+            if #shown == 0 and #ns.deals > 0 and filterNote ~= "" then
+                frame.summary:SetText(("Nothing matches your filter%s, but there are |cff40ff40%d deals|r (%s) in total - click |cffffd100All|r%s."):format(
+                    filterNote, #ns.deals, ns.Money(total), ns.S.quickOnly and " or untick Quick flips" or ""))
+            else
+                frame.summary:SetText(("%d profitable buys, about %s expected profit.%s"):format(#shown, ns.Money(st), filterNote))
+            end
         end
         local left = ns.FullScanCooldownLeft()
         local cd = left > 0 and ("  |  next full scan in %d:%02d"):format(left / 60, left % 60) or "  |  full scan ready"
@@ -1136,3 +1253,9 @@ end
 function UI.Toggle()
     if frame and frame:IsShown() then UI.Hide() else UI.Show() end
 end
+
+UI.RefreshNow = function() if RefreshNow then RefreshNow() end end
+function UI._rows() return rows end
+
+-- tabs defined in other files (they load before this one)
+for _, register in ipairs(ns.UI_RegisterLater or {}) do register(UI) end

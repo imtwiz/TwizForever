@@ -181,3 +181,22 @@ function ns.CraftAdvice(c)
     end
     return ""
 end
+
+------------------------------------------------------------------------
+-- Cache: the Craft tab, Briefing, supply list and auto-vendor all ask for
+-- this list; work it out at most every 2 seconds, or when bags/prices change.
+------------------------------------------------------------------------
+do
+    local compute = ns.CraftList
+    local cache, cachedAt = nil, -100
+    function ns.CraftList()
+        if cache and GetTime() - cachedAt < 2 then return cache end
+        cache = compute()
+        cachedAt = GetTime()
+        return cache
+    end
+    function ns.InvalidateCraft() cache = nil end
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("BAG_UPDATE_DELAYED")
+    f:SetScript("OnEvent", function() cache = nil end)
+end

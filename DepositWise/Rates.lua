@@ -1,13 +1,12 @@
 -- DepositWise: Rates - learns how fast things actually sell
 --
 -- Two sources, blended per item:
---  1) Market trend: every full scan is compared to the previous one. For each
---     seller, how many units they had listed near the cheapest price and how
---     many are gone now = units bought. (Measured per seller, so cancel-and-
---     repost doesn't count as a sale.) Also counted: how often someone lists
---     below the cheapest price (undercut frequency).
---  2) Your own results: "A buyer has been found..." / "...has expired"
---     messages for items you posted.
+--  1) Market trend: every full scan is compared to the previous one. Units
+--     that vanished from near the cheapest price = units bought (expiring
+--     listings and probable reposts are left out, see below). Also counted:
+--     how often someone lists below the cheapest price (undercut frequency).
+--  2) Your own results: AH mail (sold / expired), your owned-auctions list,
+--     and the "A buyer has been found..." chat message.
 --
 -- Sell chance for a listing of q units lasting T hours:
 --   time you stay cheapest  ~ (1 - e^(-uT)) / u   (u = undercuts per hour)
@@ -15,7 +14,7 @@
 --   chance                  = expected share of your q units that sell
 local ADDON, ns = ...
 
-local HOURS = { 12, 24, 48 }
+local HOURS = ns.DURATION_HOURS or { 2, 8, 24 }
 local MIN_GAP, MAX_GAP = 5 * 60, 6 * 3600   -- scan pairs further apart than 6h are too noisy
 local CHEAP_BAND = 1.25                      -- "near the cheapest" = within 25% of the lowest price
 local DECAY = 0.85                           -- older scan pairs fade out
@@ -32,61 +31,95 @@ end
 
 ------------------------------------------------------------------------
 -- Snapshots and diffs
+--
+-- Forever's full scan doesn't name sellers, so a sale can't be told apart
+-- from a listing that expired or was cancelled and reposted. To stay honest:
+--  * every listing carries its time-left band; listings that could have
+--    expired between the two scans don't count as sales when they vanish
+--  * new listings that appear below the old cheapest price are treated as
+--    probable reposts and half their amount is taken off the "bought" count
+-- That under-counts a little, which is the safe direction: deposits are only
+-- risked on items that really sell.
+--
+-- A snapshot is stored per item as one compact string:
+--   "min|unit,qty,short,medium,long;unit,qty,short,medium,long;..."
 ------------------------------------------------------------------------
--- raw[itemID] = { {unit, count, owner}, ... } from the replicate scan
+local BAND_MAX_HOURS = { [0] = 0.5, [1] = 2, [2] = 12, [3] = 48 } -- longest time left in each band
+
+-- raw[itemID] = { {unit, count, owner, timeLeftBand}, ... }
+-- Returns the full snapshot (used now, in memory) and a trimmed one to save:
+-- the next comparison only looks at listings within CHEAP_BAND of the cheapest.
 local function BuildSnapshot(raw)
-    local items = {}
+    local items, saved = {}, {}
     for itemID, entries in pairs(raw) do
-        local s = { min = math.huge, L = {}, o = {} }
-        local ownersOK = true
+        local levels, min = {}, math.huge
         for _, e in ipairs(entries) do
-            local u, q, owner = e[1], e[2], e[3]
-            if u < s.min then s.min = u end
-            s.L[u] = (s.L[u] or 0) + q
-            if owner and owner ~= "" then
-                local o = s.o[owner]
-                if not o then o = { q = 0, m = u }; s.o[owner] = o end
-                o.q = o.q + q
-                if u < o.m then o.m = u end
-            else
-                ownersOK = false
-            end
+            local u, q, band = e[1], e[2], e[4]
+            if u < min then min = u end
+            local l = levels[u]
+            if not l then l = { u, 0, 0, 0, 0 }; levels[u] = l end
+            l[2] = l[2] + q
+            if band == 0 then l[3] = l[3] + q elseif band == 1 then l[4] = l[4] + q elseif band == 2 then l[5] = l[5] + q end
         end
-        if not ownersOK then s.o = nil end
-        items[itemID] = s
+        local parts, cheapParts = {}, {}
+        local limit = min * CHEAP_BAND
+        for u, l in pairs(levels) do
+            local s = table.concat(l, ",")
+            parts[#parts + 1] = s
+            if u <= limit then cheapParts[#cheapParts + 1] = s end
+        end
+        items[itemID] = min .. "|" .. table.concat(parts, ";")
+        saved[itemID] = min .. "|" .. table.concat(cheapParts, ";")
     end
-    return items
+    return items, saved
 end
 
-local EMPTY = { min = math.huge, L = {}, o = {} }
+-- returns min, { [unit] = { qty, short, medium, long } }
+local function ParseSnap(v)
+    if type(v) == "table" then -- older format: { min, L = { [unit] = qty } }
+        local L = {}
+        for u, q in pairs(v.L or {}) do L[u] = { q, 0, 0, 0 } end
+        return v.min or math.huge, L
+    end
+    local min, rest = v:match("^([^|]*)|(.*)$")
+    local L = {}
+    for u, q, s, m, l in (rest or ""):gmatch("([%d%.]+),(%d+),(%d+),(%d+),(%d+)") do
+        L[tonumber(u)] = { tonumber(q), tonumber(s), tonumber(m), tonumber(l) }
+    end
+    return tonumber(min) or math.huge, L
+end
 
-local function DiffItem(prev, cur)
-    local cheap = prev.min * CHEAP_BAND
+local function DiffItem(prevV, curV, gapHours)
+    local pmin, pL = ParseSnap(prevV)
+    local cmin, cL = math.huge, {}
+    if curV then cmin, cL = ParseSnap(curV) end
+    local cheap = pmin * CHEAP_BAND
     local bought = 0
-    if prev.o and (cur.o or cur == EMPTY) then
-        for owner, po in pairs(prev.o) do
-            if po.m <= cheap then
-                local co = cur.o[owner]
-                local left = co and co.q or 0
-                if po.q > left then bought = bought + (po.q - left) end
-            end
-        end
-    else
-        for u, q in pairs(prev.L) do
-            if u <= cheap then
-                local left = cur.L[u] or 0
-                if q > left then bought = bought + (q - left) end
+    for u, p in pairs(pL) do
+        if u <= cheap then
+            local left = cL[u] and cL[u][1] or 0
+            local gone = p[1] - left
+            if gone > 0 then
+                -- listings whose time could have run out since the last scan may simply have expired
+                local couldExpire = p[2]
+                if gapHours >= BAND_MAX_HOURS[1] then couldExpire = couldExpire + p[3] end
+                if gapHours >= BAND_MAX_HOURS[2] then couldExpire = couldExpire + p[4] end
+                bought = bought + math.max(0, gone - couldExpire)
             end
         end
     end
-    local undercut = (cur.min < prev.min) and 1 or 0
+    -- new listings below the old cheapest: probably reposts of cancelled ones
+    local newBelow = 0
+    for u, c in pairs(cL) do if u < pmin then newBelow = newBelow + c[1] end end
+    bought = math.max(0, bought - 0.5 * newBelow)
+    local undercut = (cmin < pmin) and 1 or 0
     return bought, undercut
 end
 
 function ns.Rates_OnFullScan(raw)
     local db = DB()
     local now = time()
-    local cur = BuildSnapshot(raw)
+    local cur, toSave = BuildSnapshot(raw)
     local prev = db.snap
     local learned = 0
     if prev and prev.items and prev.t then
@@ -94,15 +127,17 @@ function ns.Rates_OnFullScan(raw)
         if gap >= MIN_GAP and gap <= MAX_GAP then
             local hours = gap / 3600
             for itemID, p in pairs(prev.items) do
-                local bought, undercut = DiffItem(p, cur[itemID] or EMPTY)
-                local r = db.rates[itemID]
-                if not r then r = { u = 0, h = 0, x = 0, n = 0 }; db.rates[itemID] = r end
-                r.u = r.u * DECAY + bought
-                r.h = r.h * DECAY + hours
-                r.x = r.x * DECAY + undercut
-                r.n = r.n + 1
-                r.t = now
-                learned = learned + 1
+                local ok, bought, undercut = pcall(DiffItem, p, cur[itemID], hours)
+                if ok then
+                    local r = db.rates[itemID]
+                    if not r then r = { u = 0, h = 0, x = 0, n = 0 }; db.rates[itemID] = r end
+                    r.u = r.u * DECAY + bought
+                    r.h = r.h * DECAY + hours
+                    r.x = r.x * DECAY + undercut
+                    r.n = r.n + 1
+                    r.t = now
+                    learned = learned + 1
+                end
             end
             ns.lastRateNote = ("Learned sell rates from a %d-minute scan gap (%d items)."):format(gap / 60, learned)
         elseif gap > MAX_GAP then
@@ -111,7 +146,7 @@ function ns.Rates_OnFullScan(raw)
     else
         ns.lastRateNote = "First scan saved. Scan again in 15+ minutes to start learning sell rates."
     end
-    db.snap = { t = now, items = cur }
+    db.snap = { t = now, items = toSave }
 end
 
 ------------------------------------------------------------------------
@@ -218,16 +253,40 @@ function ns.Rates_RecordPost(it, r)
     while list[1] and time() - list[1].t > 3 * 86400 do table.remove(list, 1) end
 end
 
-local function Resolve(name, sold)
+local function CleanName(name)
+    if not name then return nil end
+    name = name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
+    name = name:gsub("%s*%(%d+%)%s*$", "") -- "Linen Cloth (20)" -> "Linen Cloth"
+    return name
+end
+
+-- itemID for a name we've seen (pending posts, saved names, bags)
+local function IDForName(name)
     local db = DB()
-    name = name and name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
-    local list = name and db.pendingPosts[name]
-    if not list or #list == 0 then return end
-    local post = table.remove(list, 1) -- first result decides; later partial-sale messages are ignored
-    local o = db.outcomes[post.id]
-    if not o then o = { s = 0, e = 0 }; db.outcomes[post.id] = o end
-    local m = db.myRates[post.d or 2]
-    if sold then o.s = o.s + 1; m.s = m.s + 1 else o.e = o.e + 1; m.e = m.e + 1 end
+    local list = db.pendingPosts[name]
+    if list and list[1] then return list[1].id end
+    for id, n in pairs(db.names or {}) do if n == name then return id end end
+end
+
+-- kind = "sold" | "expired" | "cancelled". Each posted auction is resolved once (first result wins).
+function ns.RecordOutcome(name, kind)
+    local db = DB()
+    name = CleanName(name)
+    if not name then return end
+    local list = db.pendingPosts[name]
+    local post = list and table.remove(list, 1)
+    if list and #list == 0 then db.pendingPosts[name] = nil end
+    if kind == "cancelled" then return end
+    local id = post and post.id or IDForName(name)
+    if not id then return end
+    local o = db.outcomes[id]
+    if not o then o = { s = 0, e = 0 }; db.outcomes[id] = o end
+    if kind == "sold" then o.s = o.s + 1 else o.e = o.e + 1 end
+    if post then
+        local m = db.myRates[post.d or 2]
+        if m then if kind == "sold" then m.s = m.s + 1 else m.e = m.e + 1 end end
+    end
+    ns.outcomeChanged = true
 end
 
 local soldPat, expiredPat
@@ -241,13 +300,44 @@ ev:SetScript("OnEvent", function(_, event, msg)
         return
     end
     if not ns.db or type(msg) ~= "string" then return end
-    local ok, err = pcall(function()
+    pcall(function()
+        -- chat messages only mark the mail we'll see later as already counted
         local name = soldPat and msg:match(soldPat)
-        if name then return Resolve(name, true) end
+        if name then ns.MarkChatOutcome(name, "sold"); return end
         name = expiredPat and msg:match(expiredPat)
-        if name then return Resolve(name, false) end
+        if name then ns.MarkChatOutcome(name, "expired") end
     end)
 end)
+
+-- The same sale shows up as a chat message (if you're online) and later as a
+-- mail. Count it once: chat counts immediately; the matching mail is skipped.
+-- (saved, so a sale seen in chat today isn't counted again from tomorrow's mail)
+local function ChatCounted()
+    local db = DB()
+    db.chatCounted = db.chatCounted or {} -- [kind:name] = { time, time, ... }
+    return db.chatCounted
+end
+function ns.MarkChatOutcome(name, kind)
+    name = CleanName(name)
+    if not name then return end
+    ns.RecordOutcome(name, kind)
+    local c = ChatCounted()
+    local key = kind .. ":" .. name
+    c[key] = c[key] or {}
+    table.insert(c[key], time())
+end
+function ns.ConsumeChatOutcome(name, kind)
+    local c = ChatCounted()
+    local key = kind .. ":" .. (CleanName(name) or "")
+    local list = c[key]
+    -- forget chat notes older than 3 days (AH mail lasts 30 days, but sale mail arrives within an hour)
+    while list and list[1] and time() - list[1] > 3 * 86400 do table.remove(list, 1) end
+    if list and list[1] then
+        table.remove(list, 1)
+        if #list == 0 then c[key] = nil end
+        return true
+    end
+end
 
 ------------------------------------------------------------------------
 -- Helpers for the profit finder
@@ -274,8 +364,9 @@ function ns.BestListing(itemID, qty, unit)
         if estimated then dep = S.fallbackDeposit end
         local p = rates[d]
         local ev = net - dep * (1 - p) / p
-        if not best or ev > best.ev then
-            best = { ev = ev, d = d, dep = dep, p = p, estimated = estimated }
+        local score = ev - (1 / p - 1) * (ns.RelistEffort and ns.RelistEffort(net) or 0)
+        if not best or score > best.score then
+            best = { ev = ev, d = d, dep = dep, p = p, estimated = estimated, score = score }
         end
     end
     best.net, best.info = net, info

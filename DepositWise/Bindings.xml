@@ -11,4 +11,7 @@
     <Binding name="DEPOSITWISE_TOGGLE" category="ADDONS">
         DepositWise.UI.Toggle()
     </Binding>
+    <Binding name="DEPOSITWISE_CANCELUNDERCUT" category="ADDONS">
+        DepositWise.CancelNextUndercut()
+    </Binding>
 </Bindings>

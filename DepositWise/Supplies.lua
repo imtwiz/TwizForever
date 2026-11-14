@@ -101,7 +101,7 @@ function ns.BuyAllSupplies()
         ns.Print("All AH supplies bought." .. (vend > 0 and (" %d more are cheaper from a vendor - open a merchant."):format(vend) or ""))
         ns.UI.Refresh(); return
     end
-    ns.buy = { itemID = e.itemID, qty = e.toBuy, stage = "quote" }
+    ns.buy = { itemID = e.itemID, qty = e.toBuy, stage = "quote", at = GetTime() }
     C_AuctionHouse.StartCommoditiesPurchase(e.itemID, e.toBuy)
     C_Timer.After(5, function()
         local cur = ns.buy
@@ -206,7 +206,8 @@ end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
     local b = ns.buy
     if event == "COMMODITY_PRICE_UPDATED" then
-        if b and b.stage == "quote" then
+        -- CraftRoute buys the same way; only take quotes for the purchase we just started
+        if b and b.stage == "quote" and GetTime() - (b.at or 0) < 10 then
             b.unit, b.total, b.stage = a1, a2, "ready"
             local m = ns.db.market[b.itemID]
             local ref = (m and m.med) or ns.KnownPrice(b.itemID)
@@ -225,6 +226,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
     elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
         if b then
             ns.Print(("Bought %dx %s for %s."):format(b.qty, C_Item.GetItemInfo(b.itemID) or "item", ns.Money(b.total)))
+            if ns.NoteBought then ns.NoteBought(b.itemID) end
             ns.buy = nil
         end
         C_Timer.After(0.5, ns.UI.Refresh)
