@@ -6,6 +6,7 @@ BINDING_HEADER_DEPOSITWISE = "DepositWise"
 BINDING_NAME_DEPOSITWISE_POSTBEST = "Post next best item"
 BINDING_NAME_DEPOSITWISE_POSTMARGINAL = "Post next marginal item (profitable only)"
 BINDING_NAME_DEPOSITWISE_TOGGLE = "Toggle DepositWise window"
+BINDING_NAME_DEPOSITWISE_BUYSUPPLIES = "Buy All Supplies (next step)"
 
 ns.DURATION_LABEL = { [1] = "12h", [2] = "24h", [3] = "48h" }
 
@@ -418,6 +419,7 @@ local HELP = {
     "/dw - toggle the window",
     "/dw scan - rescan your bags (AH must be open)",
     "/dw fullscan - full AH scan for deals (once per 15 min)",
+    "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
     "/dw cut 5 - AH cut in percent",
 "/dw rates 45 60 75 - starting sell chance % for 12h/24h/48h (used until rates are learned)",
@@ -455,6 +457,8 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ns.UI.Toggle()
     elseif cmd == "scan" then
         ns.StartBagScan()
+    elseif cmd == "buysupplies" then
+        ns.BuyAllSupplies()
     elseif cmd == "postmarginal" then
         ns.PostNextMarginal()
     elseif cmd == "postbest" then

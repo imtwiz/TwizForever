@@ -1,0 +1,14 @@
+<Bindings>
+    <Binding name="DEPOSITWISE_POSTBEST" header="DEPOSITWISE" category="ADDONS">
+        DepositWise.PostNextBest()
+    </Binding>
+    <Binding name="DEPOSITWISE_POSTMARGINAL" category="ADDONS">
+        DepositWise.PostNextMarginal()
+    </Binding>
+    <Binding name="DEPOSITWISE_BUYSUPPLIES" category="ADDONS">
+        DepositWise.BuyAllSupplies()
+    </Binding>
+    <Binding name="DEPOSITWISE_TOGGLE" category="ADDONS">
+        DepositWise.UI.Toggle()
+    </Binding>
+</Bindings>

@@ -483,6 +483,8 @@ local function SetTab(t)
     frame.scanBags:SetShown(t == "BAGS")
     frame.fullScan:SetShown(t == "DEALS" or t == "MOVERS" or t == "BRIEF" or t == "SMELT" or t == "CRAFT")
     frame.lowBids:SetShown(t == "DEALS")
+    frame.buyAll:SetShown(t == "CRAFT")
+    frame.cancelBuy:SetShown(t == "CRAFT")
     Layout()
     UI.Refresh()
 end
@@ -621,6 +623,24 @@ local function Create()
         GameTooltip:Show()
     end)
     frame.lowBids:SetScript("OnLeave", GameTooltip_Hide)
+
+    frame.buyAll = MakeButton(frame, "Buy All Supplies", 260, function() ns.BuyAllSupplies() end)
+    frame.buyAll:SetPoint("LEFT", frame.fullScan, "RIGHT", 6, 0)
+    frame.buyAll:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Buy All Supplies")
+        GameTooltip:AddLine("Buys what every profitable craft on this tab is missing (Craft from bags + Buy & craft), minus what's already in your bags and bank.", 1, 1, 1, true)
+        GameTooltip:AddLine("The game needs two clicks per reagent: one gets the price, one confirms. A red price means over 1.5x its usual market price.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Reagents that are cheaper from a vendor get a 'Buy Craft Supplies' button on the merchant window instead.", 0.7, 0.7, 0.7, true)
+        local ah, ahCost, vend, vendCost = ns.SupplySummary()
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddDoubleLine(("From the AH (%d)"):format(ah), ns.Money(ahCost), 1, 1, 1)
+        GameTooltip:AddDoubleLine(("From vendors (%d)"):format(vend), ns.Money(vendCost), 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    frame.buyAll:SetScript("OnLeave", GameTooltip_Hide)
+    frame.cancelBuy = MakeButton(frame, "Cancel", 70, function() ns.CancelSupplyPurchase() end)
+    frame.cancelBuy:SetPoint("LEFT", frame.buyAll, "RIGHT", 6, 0)
 
     local help = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     help:SetPoint("BOTTOMRIGHT", -14, 18)
@@ -1011,7 +1031,14 @@ function UI.Refresh()
             frame.summary:SetText(("From your bags: craft |cff40ff40%d|r recipe%s for |cff40ff40+%s|r.  Buy & craft: |cff40c0ff%d|r for about |cff40c0ff+%s|r."):format(
                 craft, craft == 1 and "" or "s", ns.Money(gain), flips, ns.Money(fgain)))
         end
-        frame.status:SetText("Product prices are looked up with your bag scan; a full scan prices everything.")
+        frame.buyAll:SetText(ns.BuyButtonText())
+        frame.cancelBuy:SetEnabled(ns.buy ~= nil)
+        local ah, ahCost, vend, vendCost = ns.SupplySummary()
+        if ah + vend > 0 then
+            frame.status:SetText(("Supplies to buy: %d from the AH (%s), %d from vendors (%s)."):format(ah, ns.Money(ahCost), vend, ns.Money(vendCost)))
+        else
+            frame.status:SetText("Product prices are looked up with your bag scan; a full scan prices everything.")
+        end
     elseif tab == "SMELT" then
         local smelt, gain, sell, total = 0, 0, 0, 0
         for _, c in ipairs(list) do

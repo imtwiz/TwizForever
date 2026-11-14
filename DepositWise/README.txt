@@ -163,3 +163,14 @@ SETTINGS (slash commands)
       sized to what sells in about 2 days once sell speed is learned.
     Products are priced during your bag scan; a full scan prices the rest.
     /dw craft prints the list in chat. Click a row to search the AH.
+
+  Buy All Supplies (Craft tab, new in 2.1)
+    Totals what every Craft and Buy & craft row needs, subtracts what's in
+    your bags and bank, and buys the rest from wherever it's cheapest:
+      AH: click "Buy All Supplies" - first click gets the price, second
+      confirms (the game requires both), then it moves to the next reagent.
+      A red price means over 1.5x its usual market price; Cancel skips it.
+      Vendor: a "Buy Craft Supplies" button appears on the merchant window
+      for thread, vials, flux, spices, etc. that the merchant sells.
+    Key binding: Options > Keybindings > AddOns > DepositWise > Buy All
+    Supplies. Macro: /dw buysupplies.
