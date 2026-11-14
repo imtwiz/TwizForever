@@ -51,9 +51,9 @@ SIM.quests[1].objectives = { { type = "item", text = "Wool Cloth: 2/10" } }
 
 if USE_REAL_SV then dofile(USE_REAL_SV) end
 
-local ns = SIM.LoadAddon(ADDON_DIR, "DepositWise")
+local ns = SIM.LoadAddon(ADDON_DIR, "TwizAH")
 local T0 = os.clock()
-SIM.Fire("ADDON_LOADED", "DepositWise")
+SIM.Fire("ADDON_LOADED", "TwizAH")
 SIM.Fire("PLAYER_LOGIN")
 SIM.Fire("PLAYER_ENTERING_WORLD", true, false)
 SIM.Advance(2)

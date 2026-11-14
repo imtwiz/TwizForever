@@ -14,8 +14,8 @@ for id = 100000, 105999 do
 end
 for i = 1, 60 do SIM.PutInBags(100000 + i * 7, 5) end
 
-local ns = SIM.LoadAddon(ADDON_DIR, "DepositWise")
-SIM.Fire("ADDON_LOADED", "DepositWise")
+local ns = SIM.LoadAddon(ADDON_DIR, "TwizAH")
+SIM.Fire("ADDON_LOADED", "TwizAH")
 SIM.Fire("PLAYER_LOGIN")
 SIM.Advance(1)
 

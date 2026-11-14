@@ -7,7 +7,7 @@ in LuaJIT (Lua 5.1 - the same language version WoW uses).
 
 ```
 pip install lupa
-python3 tools/wowsim/run.py          # DepositWise end-to-end
+python3 tools/wowsim/run.py          # TwizAH end-to-end
 python3 tools/wowsim/run.py --perf   # big auction house stress test
 python3 tools/wowsim/run.py --all    # every addon in the repo loaded together
 ```

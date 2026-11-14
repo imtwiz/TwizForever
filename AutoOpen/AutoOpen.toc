@@ -1,9 +1,0 @@
-## Interface: 16001
-## Title: AutoOpen
-## Notes: Automatically opens chests, boxes, gifts, clams, shells and other openable containers in your bags. Skips locked lockboxes and never opens while you're in combat, looting, or at a vendor, bank, mailbox, trade or Auction House.
-## Author: Alan Sherbourne
-## Version: 1.0.0
-## SavedVariables: AutoOpenDB
-## IconTexture: Interface\Icons\INV_Box_02
-
-AutoOpen.lua

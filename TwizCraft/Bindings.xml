@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="CRAFTROUTE_NEXT" header="CRAFTROUTE" category="ADDONS">
+        if TwizCraft and TwizCraft.CraftNext then TwizCraft.CraftNext() end
+    </Binding>
+</Bindings>
