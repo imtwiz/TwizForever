@@ -5,6 +5,7 @@ TwizAH = ns
 BINDING_HEADER_DEPOSITWISE = "TwizAH"
 BINDING_NAME_DEPOSITWISE_POSTBEST = "Post next best item"
 BINDING_NAME_DEPOSITWISE_POSTMARGINAL = "Post next marginal item (profitable only)"
+BINDING_NAME_DEPOSITWISE_POSTALL = "Post All: next item worth posting (best, then marginal)"
 BINDING_NAME_DEPOSITWISE_TOGGLE = "Toggle TwizAH window"
 BINDING_NAME_DEPOSITWISE_BUYSUPPLIES = "Buy All Supplies (next step)"
 BINDING_NAME_DEPOSITWISE_CANCELUNDERCUT = "Cancel next undercut auction"
@@ -186,47 +187,108 @@ function ns.Print(msg)
 end
 
 ------------------------------------------------------------------------
--- Exclusions: profession tools are never bought, bid on, posted or vendored
+-- Profession tools: you always keep at least one of each kind (the best one
+-- you carry). Spare copies may be sold. Tools are never bought from the AH.
 ------------------------------------------------------------------------
-local TOOL_IDS = {
-    [2901] = true,  -- Mining Pick
-    [5956] = true,  -- Blacksmith Hammer
-    [7005] = true,  -- Skinning Knife
-    [6219] = true,  -- Arclight Spanner
-    [10498] = true, -- Gyromatic Micro-Adjustor
-    [6256] = true, [6365] = true, [6366] = true, [6367] = true, [12225] = true, [19022] = true, [19970] = true, -- fishing poles
-    [6218] = true, [6339] = true, [11130] = true, [11145] = true, [16207] = true, -- runed enchanting rods
-    [9149] = true,  -- Philosopher's Stone
-    [40772] = true, -- Gnomish Army Knife
+-- tool kinds each item covers
+local TOOL_KINDS = {
+    [2901] = { "mining" },                 -- Mining Pick
+    [5956] = { "smithing" },               -- Blacksmith Hammer
+    [7005] = { "skinning" },               -- Skinning Knife
+    [6219] = { "wrench" },                 -- Arclight Spanner
+    [10498] = { "microadjustor" },         -- Gyromatic Micro-Adjustor
+    [4471] = { "fire" },                   -- Flint and Tinder
+    [5060] = { "lockpicks" },              -- Thieves' Tools
+    [15846] = { "salt" },                  -- Salt Shaker
+    [9149] = { "transmute" },              -- Philosopher's Stone
+    [40772] = { "mining", "smithing", "skinning", "wrench", "fire" }, -- Gnomish Army Knife
 }
+for _, id in ipairs({ 6256, 6365, 6366, 6367, 12225, 19022, 19970 }) do TOOL_KINDS[id] = { "fishing" } end
+for _, id in ipairs({ 6218, 6339, 11130, 11145, 16207 }) do TOOL_KINDS[id] = { "enchanting" } end
 local TOOL_PATTERNS = {
-    "^mining pick$", "blacksmith hammer", "skinning knife", "fishing pole", "arclight spanner",
-    "micro%-adjustor", "^runed .+ rod$", "gnomish army knife", "^philosopher's stone$",
+    { "^mining pick$", "mining" }, { "blacksmith hammer", "smithing" },
+    { "skinning knife", "skinning" }, { "fishing pole", "fishing" }, { "fishing rod", "fishing" },
+    { "arclight spanner", "wrench" }, { "micro%-adjustor", "microadjustor" }, { "^runed .+ rod$", "enchanting" },
+    { "^philosopher's stone$", "transmute" }, { "flint and", "fire" }, { "tinderbox", "fire" },
+    { "thieves' tools", "lockpicks" }, { "salt shaker", "salt" },
 }
-local excludeCache = {}
+local kindCache = {}
 
+-- The tool kinds an item covers, or nil if it isn't a profession tool
+function ns.ToolKinds(itemID)
+    if not itemID then return nil end
+    local cached = kindCache[itemID]
+    if cached ~= nil then return cached or nil end
+    local kinds = TOOL_KINDS[itemID]
+    local name = C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID) or C_Item.GetItemInfo(itemID)
+    if not kinds and name then
+        local lname = name:lower()
+        if lname == "gnomish army knife" then kinds = TOOL_KINDS[40772] end
+        for _, p in ipairs(TOOL_PATTERNS) do
+            if not kinds and lname:find(p[1]) then kinds = { p[2] } end
+        end
+    end
+    if not kinds then
+        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(itemID)
+        if classID and Enum.ItemClass and Enum.ItemClass.Profession and classID == Enum.ItemClass.Profession then
+            kinds = { "item" .. itemID } -- modern profession tools & accessories: keep one of each
+        end
+    end
+    if name or kinds then kindCache[itemID] = kinds or false end -- cache once the name has loaded
+    return kinds
+end
+
+function ns.IsTool(itemID) return ns.ToolKinds(itemID) ~= nil end
+
+-- Your /dw exclude list
+function ns.IsUserExcluded(itemID)
+    local user = itemID and ns.S and ns.S.excluded
+    return user and user[itemID] == true or false
+end
+
+-- Never bought, bid on or flipped: your exclude list and profession tools
 function ns.IsExcluded(itemID)
     if not itemID then return false end
     local user = ns.S and ns.S.excluded
     if user and user[itemID] ~= nil then return user[itemID] end -- your /dw exclude / include wins
-    local cached = excludeCache[itemID]
-    if cached ~= nil then return cached end
-    local result = TOOL_IDS[itemID] or false
-    if not result then
-        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(itemID)
-        if classID and Enum.ItemClass and Enum.ItemClass.Profession and classID == Enum.ItemClass.Profession then
-            result = true -- modern profession tools & accessories
+    return ns.IsTool(itemID)
+end
+
+-- Which bag slots hold the tools you keep: one item per tool kind. A tool you
+-- have equipped or soulbound counts first; otherwise the copy that covers the
+-- most kinds, then the best quality. Returns { ["bag:slot"] = true }.
+function ns.ToolReserve()
+    local covered, reserve, spare = {}, {}, {}
+    local function cover(kinds) for _, k in ipairs(kinds) do covered[k] = true end end
+    for _, invSlot in ipairs({ 16, 17 }) do
+        local id = GetInventoryItemID and GetInventoryItemID("player", invSlot)
+        local kinds = id and ns.ToolKinds(id)
+        if kinds then cover(kinds) end
+    end
+    for bag = 0, (NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local kinds = info and info.itemID and ns.ToolKinds(info.itemID)
+            if kinds then
+                if info.isBound then cover(kinds)
+                else spare[#spare + 1] = { key = bag .. ":" .. slot, kinds = kinds, q = info.quality or 1 } end
+            end
         end
     end
-    local name = C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID) or C_Item.GetItemInfo(itemID)
-    if not result and name then
-        local lname = name:lower()
-        for _, p in ipairs(TOOL_PATTERNS) do
-            if lname:find(p) then result = true; break end
+    while true do
+        local best, bestN
+        for _, t in ipairs(spare) do
+            if not reserve[t.key] then
+                local n = 0
+                for _, k in ipairs(t.kinds) do if not covered[k] then n = n + 1 end end
+                if n > 0 and (not best or n > bestN or (n == bestN and t.q > best.q)) then best, bestN = t, n end
+            end
         end
+        if not best then break end
+        reserve[best.key] = true
+        cover(best.kinds)
     end
-    if name then excludeCache[itemID] = result end -- only cache once the name has loaded
-    return result
+    return reserve
 end
 
 ------------------------------------------------------------------------
@@ -409,6 +471,8 @@ end
 function ns.KnownPrice(itemID)
     local p = ns.db.prices[itemID]
     local m = ns.db.market[itemID]
+    if type(p) ~= "table" or not p.t then p = nil end
+    if type(m) ~= "table" or not m.t then m = nil end
     if p and m then
         if p.t >= m.t then return p.p, p.t end
         return m.min, m.t
@@ -503,6 +567,7 @@ local HELP = {
     "/dw scan - rescan your bags (AH must be open)",
     "/dw fullscan - full AH scan for deals (once per 15 min)",
     "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
+    "/dw postall - post everything worth posting, one item per press",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
     "/dw cut 5 - AH cut in percent",
 "/dw rates 30 55 75 - starting sell chance % for 2h/8h/24h (used until rates are learned)",
@@ -511,7 +576,7 @@ local HELP = {
     "/dw minprofit 10s, /dw minroi 10 - hide deals below these",
     "/dw bidpct 35 - low bids: max bid as % of item value; /dw bidunknown on|off",
     "/dw filter cloth|gems|metal|herbs|leather|enchanting|elemental|cooking|firstaid|engineering|materials|gear|all, /dw quick on|off",
-    "/dw exclude [item] / /dw include [item] - never touch an item (profession tools are excluded already)",
+    "/dw exclude [item] / /dw include [item] - never touch an item (one of each profession tool is always kept)",
     "/dw autoscan on|off, /dw tooltip on|off",
     "/dw autofull on|off - full AH scan on opening the AH and every 15 min while open",
     "/dw auctions - your auctions and undercuts; /dw cancel - cancel next undercut (bindable)",
@@ -546,6 +611,8 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ns.StartBagScan()
     elseif cmd == "buysupplies" then
         ns.BuyAllSupplies()
+    elseif cmd == "postall" then
+        ns.PostAll()
     elseif cmd == "postmarginal" then
         ns.PostNextMarginal()
     elseif cmd == "postbest" then

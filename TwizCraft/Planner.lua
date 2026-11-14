@@ -10,13 +10,17 @@ local FARM_MIN = 500 -- 5s: rough value for something you'd have to gather yours
 ------------------------------------------------------------------------
 local memo, producers
 
-local function BuildProducers()
+-- Recipes that can make an item: learned ones, plus trainer recipes (no recipe
+-- item to find) in the profession being planned that you can learn by the target.
+local function BuildProducers(planLine, cap)
     producers = {}
     for line, p in pairs(NS.Char().profs) do
         for id, r in pairs(p.recipes) do
-            if r.learned and r.out then
+            local trainable = line == planLine and not r.learned and not r.recipeItem and not r.guess
+                and (r.orange or 0) <= (cap or 0)
+            if r.out and (r.learned or trainable) then
                 producers[r.out] = producers[r.out] or {}
-                table.insert(producers[r.out], { id = id, r = r, line = line })
+                table.insert(producers[r.out], { id = id, r = r, line = line, learn = not r.learned })
             end
         end
     end
@@ -47,9 +51,11 @@ UnitCost = function(id, depth)
     if a and (not best or a < best) then best, src, extra = a, "AH", nil end
     if canCraft then
         for _, pr in ipairs(producers[id] or {}) do
-            local mats, farm = RecipeMats(pr.r, depth)
-            local per = mats / math.max(1, pr.r.made or 1)
-            if not farm and (not best or per < best) then best, src, extra = per, "craft", pr end
+            if not pr.learn then
+                local mats, farm = RecipeMats(pr.r, depth)
+                local per = mats / math.max(1, pr.r.made or 1)
+                if not farm and (not best or per < best) then best, src, extra = per, "craft", pr end
+            end
         end
     end
     if not best then
@@ -93,7 +99,7 @@ function NS.PlanFor(line)
     end
 
     memo = {}
-    BuildProducers()
+    BuildProducers(line, target)
     for _, r in pairs(p.recipes) do r._cost = nil end
 
     -- usable: learned, or a trainer recipe (no recipe item) you can learn by then
@@ -133,17 +139,52 @@ function NS.PlanFor(line)
     end
     -- cost of `crafts` crafts right now, drawing on your stock first
     -- also returns how many of your own items it uses (to stretch them furthest)
-    local function CostNow(r, crafts)
+    local function CostNow(r, crafts, make)
         local total, used = 0, 0
         for _, g in ipairs(r.reagents) do
             local need = g.qty * crafts
             local sid = SlotId(g)
             local mine = math.min(Stock(sid), need)
             used = used + mine
-            total = total + mine * OwnValue(sid) + (need - mine) * (UnitCost(g.id, 0))
+            local m = make and make[g.id]
+            local unit = m and m.unit or (UnitCost(g.id, 0))
+            total = total + mine * OwnValue(sid) + (need - mine) * unit
         end
         local resale = r.out and NS.Resale(r.out, (r.made or 1) * crafts) or 0
         return total - resale, used
+    end
+
+    -- Reagents of r you could make yourself at skill s, and the skill points that
+    -- making them gives. Returns nil if none would give points.
+    local makeMemo = {}
+    local function MakeOptions(r, s)
+        local key = tostring(r) .. ":" .. s
+        if makeMemo[key] ~= nil then return makeMemo[key] or nil end
+        local make, pts = nil, 0
+        for _, g in ipairs(r.reagents) do
+            if not g.alts then
+                local bestPr, bestUnit, bestCh
+                for _, pr in ipairs(producers[g.id] or {}) do
+                    if pr.r ~= r and s >= (pr.r.orange or 0) then
+                        local ch = NS.Chance(pr.r, s)
+                        local mats, farm = RecipeMats(pr.r, 1)
+                        if ch > 0 and not farm then
+                            local unit = mats / math.max(1, pr.r.made or 1)
+                            if not bestUnit or unit < bestUnit then bestPr, bestUnit, bestCh = pr, unit, ch end
+                        end
+                    end
+                end
+                if bestPr then
+                    -- if you already hold enough of it, you'd use that instead of making more
+                    local short = (Stock(g.id) >= g.qty) and 0 or g.qty
+                    make = make or {}
+                    make[g.id] = { pr = bestPr, unit = bestUnit }
+                    pts = pts + short / math.max(1, bestPr.r.made or 1) * bestCh
+                end
+            end
+        end
+        makeMemo[key] = make and { make = make, pts = pts } or false
+        return make and makeMemo[key] or nil
     end
     local function Consume(r, crafts)
         for _, g in ipairs(r.reagents) do
@@ -155,13 +196,20 @@ function NS.PlanFor(line)
     local steps, cur = {}, nil
     local stuck
     for s = skill, target - 1 do
-        local best, bestPer, bestChance, bestUsed
+        local best, bestPer, bestChance, bestUsed, bestMake
         for _, e in ipairs(pool) do
             local r = e.r
             if s >= r.orange then
                 local ch = NS.Chance(r, s)
                 if ch > 0 then
                     local per, used = CostNow(r, 1 / ch)
+                    local make, pts = nil, ch
+                    -- or make the craftable reagents yourself: their crafts give points too
+                    local opt = MakeOptions(r, s)
+                    if opt and opt.pts > 0 then
+                        local mper, mused = CostNow(r, 1 / (ch + opt.pts), opt.make)
+                        if mper < per then per, used, make, pts = mper, mused, opt.make, ch + opt.pts end
+                    end
                     -- ties: use fewer of your own materials per point, then the faster craft
                     local tol = bestPer and math.max(5, math.abs(bestPer) * 0.1) or 0
                     local better = not bestPer or per < bestPer - tol
@@ -170,17 +218,21 @@ function NS.PlanFor(line)
                         elseif math.abs(used - bestUsed) <= 0.01 and r.cast < best.r.cast then better = true end
                     end
                     if better then
-                        best, bestPer, bestChance, bestUsed = e, per, ch, used
+                        best, bestPer, bestChance, bestUsed, bestMake = e, per, pts, used, make
                     end
                 end
             end
         end
         if not best then stuck = s; break end
-        if cur and cur.id == best.id then
+        if cur and cur.id == best.id and (cur.make ~= nil) == (bestMake ~= nil) then
             cur.to = s + 1
         else
             cur = { id = best.id, r = best.r, from = s, to = s + 1, crafts = 0, cost = 0, learn = not best.r.learned }
             steps[#steps + 1] = cur
+        end
+        if bestMake then
+            cur.make = cur.make or {}
+            for rid, m in pairs(bestMake) do cur.make[rid] = m end
         end
         cur.crafts = cur.crafts + 1 / bestChance
         cur.cost = cur.cost + bestPer
@@ -238,6 +290,7 @@ function NS.PlanFor(line)
     for _, st in ipairs(steps) do
         for _, g in ipairs(st.r.reagents) do
             local _, src, extra = UnitCost(g.id, 0)
+            if st.make and st.make[g.id] then src, extra = "craft", st.make[g.id].pr end
             local qty = g.qty * st.n
             if src == "craft" and extra then
                 local use = math.min(qty, Have(g.id))
@@ -247,7 +300,7 @@ function NS.PlanFor(line)
                 if toMake > 0 then
                     local crafts = math.ceil(toMake / math.max(1, extra.r.made or 1))
                     sub[extra.r.name] = sub[extra.r.name] or { name = extra.r.name, n = 0, out = g.id,
-                                                               id = extra.id, line = extra.line }
+                                                               id = extra.id, line = extra.line, learn = extra.learn }
                     sub[extra.r.name].n = sub[extra.r.name].n + crafts
                     for _, sg in ipairs(extra.r.reagents) do Add(sg.id, sg.qty * crafts, extra.r.name) end
                 end
@@ -259,6 +312,11 @@ function NS.PlanFor(line)
     for _, v in pairs(sub) do
         plan.subcrafts = plan.subcrafts or {}
         table.insert(plan.subcrafts, v)
+        -- make-first crafts count toward the total crafts and time too
+        local p2 = NS.Char().profs[v.line]
+        local sr = p2 and p2.recipes[v.id]
+        plan.crafts = plan.crafts + v.n
+        plan.time = plan.time + v.n * ((sr and sr.cast) or 3)
     end
     local shop = {}
     for id, n in pairs(need) do

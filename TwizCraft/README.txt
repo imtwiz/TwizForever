@@ -1,5 +1,11 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.6.0
+- Makes intermediates when that's cheaper per skill point: e.g. Coarse
+  Blasting Powder from Coarse Stone for Coarse Dynamite, because making the
+  powder gives skill-ups too. Counts trainer recipes you can learn along the
+  way (marked [learn]); switches back to buying once the intermediate goes gray.
+
 NEW IN 1.5.1
 - Fixed vendor overbuying: buying stops once your bags hold what the list needs
   (counted live, so extra clicks or TwizChef buying first never double up).

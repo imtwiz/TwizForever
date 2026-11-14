@@ -5,6 +5,9 @@
     <Binding name="DEPOSITWISE_POSTMARGINAL" category="ADDONS">
         TwizAH.PostNextMarginal()
     </Binding>
+    <Binding name="DEPOSITWISE_POSTALL" category="ADDONS">
+        TwizAH.PostAll()
+    </Binding>
     <Binding name="DEPOSITWISE_BUYSUPPLIES" category="ADDONS">
         TwizAH.BuyAllSupplies()
     </Binding>

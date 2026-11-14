@@ -29,12 +29,13 @@ end
 
 local function CollectBags()
     local groups, list = {}, {}
+    local keepTools = ns.ToolReserve()
     for bag = 0, LastBagIndex() do
         local slots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, slots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID and not info.isBound and not ns.IsExcluded(info.itemID)
-                and not ns.QuestNeeds(info.itemID) then
+            if info and info.itemID and not info.isBound and not ns.IsUserExcluded(info.itemID)
+                and not keepTools[bag .. ":" .. slot] and not ns.QuestNeeds(info.itemID) then
                 local loc = ItemLocation:CreateFromBagAndSlot(bag, slot)
                 if loc and loc:IsValid() and SafeCall(C_AuctionHouse.IsSellItemValid, loc, false) then
                     local status = SafeCall(C_AuctionHouse.GetItemCommodityStatus, loc)
@@ -310,6 +311,7 @@ StaticPopupDialogs["DEPOSITWISE_CONFIRM_POST"] = {
         ns.RecordPost(p.it, p.it.result)
         ns.UI.Refresh()
     end,
+    OnCancel = function() pendingConfirm = nil end,
     timeout = 0, whileDead = true, hideOnEscape = true,
 }
 
@@ -376,6 +378,34 @@ function ns.PostNextBest()
         end
     end
     ns.Print("Nothing left that beats vendoring. Rescan if prices changed.")
+end
+
+-- Everything in your bags worth posting: the best items first, then the
+-- marginal ones that still turn a profit. Never items better vendored,
+-- unpriced items, quest items or tools (those never get a POST verdict).
+function ns.PostAllQueue()
+    local q = {}
+    for _, it in ipairs(ns.items) do
+        if not it.posted and it.result and it.result.verdict == "POST" then q[#q + 1] = it end
+    end
+    for _, it in ipairs(ns.MarginalQueue()) do q[#q + 1] = it end
+    return q
+end
+
+-- One post per click or key press (the game requires it), working down the whole list.
+function ns.PostAll()
+    if not ns.ahOpen then ns.Print("Open the Auction House first."); return end
+    if pendingConfirm then ns.Print("Confirm or cancel the open post first."); return end
+    if Debounced() then return end
+    local it = ns.PostAllQueue()[1]
+    if not it then ns.Print("Everything worth posting is posted. Rescan if prices changed."); return end
+    ns.Post(it)
+    local left = #ns.PostAllQueue()
+    if left > 0 then
+        ns.Print(("%d item%s left to post - keep clicking Post All or press your hotkey."):format(left, left == 1 and "" or "s"))
+    else
+        ns.Print("All done - everything worth posting is up.")
+    end
 end
 
 ------------------------------------------------------------------------
@@ -664,6 +694,7 @@ function ns.AutoVendor()
     if not S.autoVendor or IsShiftKeyDown() then return end
     local now = time()
     local fresh = now - S.freshMinutes * 60
+    local keepTools = ns.ToolReserve()
     local toSell, stale, staleValue = {}, 0, 0
     local kept, keptSeen = {}, {}
     pcall(ns.RefreshQuestItems)
@@ -674,7 +705,7 @@ function ns.AutoVendor()
             local info = C_Container.GetContainerItemInfo(bag, slot)
             -- bound items can't go on the AH, so there is nothing to compare: leave them alone
             if info and info.itemID and not info.isBound and not info.isLocked and not info.hasNoValue
-                and not ns.IsExcluded(info.itemID) then
+                and not ns.IsUserExcluded(info.itemID) and not keepTools[bag .. ":" .. slot] then
                 local qty = info.stackCount or 1
                 local vendor = (select(11, C_Item.GetItemInfo(info.itemID)) or 0) * qty
                 if vendor > 0 then

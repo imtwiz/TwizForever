@@ -171,7 +171,7 @@ function NS.ShoppingRoute(plan)
 
     -- things to make and gather come after shopping
     for _, sc in ipairs(plan.subcrafts or {}) do
-        stops[#stops + 1] = { kind = "make", label = ("Make %d %s"):format(sc.n, sc.name), items = {}, cost = 0, sub = sc }
+        stops[#stops + 1] = { kind = "make", label = ("%sMake %d %s"):format(sc.learn and "Learn at trainer, then " or "", sc.n, sc.name), items = {}, cost = 0, sub = sc }
     end
     if #farm > 0 then
         local s = { kind = "farm", label = "Gather / farm", items = {}, cost = 0 }

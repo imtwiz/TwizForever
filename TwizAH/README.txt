@@ -88,6 +88,17 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.3.0
+- Post All button (My Bags): works down everything worth posting - the best
+  items first, then marginal ones that still turn a profit. The game allows one
+  post per click, so keep clicking or bind "Post All" in Options > Keybindings >
+  AddOns and tap it. /dw postall does the same. Items better vendored, quest
+  items and items with no AH price are skipped.
+- Profession tools: one of each kind is always kept (your best one - soulbound
+  or equipped counts first; a Gnomish Army Knife covers several kinds). Spare
+  copies can be sold. Added Flint and Tinder, Thieves' Tools and Salt Shaker.
+  Tools are still never bought from the AH.
+
 WHAT'S NEW IN 2.2.2
 - Page buttons: when a list (My Bags, Deals, Movers...) has more items than fit
   in the window, "< Prev  Page 1/3  Next >" appears at the bottom right.

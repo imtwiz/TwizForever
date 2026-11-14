@@ -144,7 +144,7 @@ local function Refresh()
     local subNote = ""
     if plan.subcrafts and #plan.subcrafts > 0 then
         local parts = {}
-        for _, sc in ipairs(plan.subcrafts) do parts[#parts + 1] = ("%d %s"):format(sc.n, sc.name) end
+        for _, sc in ipairs(plan.subcrafts) do parts[#parts + 1] = ("%s%d %s"):format(sc.learn and "[learn] " or "", sc.n, sc.name) end
         subNote = "  |cff40ff40make first: " .. table.concat(parts, ", ") .. "|r"
     end
     frame.shopTitle:SetText(("Shopping list  (buy ~%s)%s"):format(NS.Money(plan.buyCost), subNote))
