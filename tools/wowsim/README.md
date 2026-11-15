@@ -14,3 +14,14 @@ python3 tools/wowsim/run.py --all    # every addon in the repo loaded together
 
 It catches Lua errors, wrong API use and logic bugs. It can't catch problems that
 only the real client shows (layout, Blizzard restrictions), so still test in game.
+
+## Without Python
+
+The scenarios also run with plain LuaJIT:
+
+```
+sh tools/wowsim/all.sh                        # every scenario, ok / FAIL per line
+luajit tools/wowsim/sim.lua partynames.lua    # one scenario, with its log
+```
+
+`partynames.lua` checks party sync with Forever's surnames ("First Last"); its checks fail the run.
