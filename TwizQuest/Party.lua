@@ -6,6 +6,7 @@
 local ADDON, NS = ...
 
 local PREFIX = "TWZQ"
+local soloChosen = false     -- you clicked Solo: no group plan until you regroup
 local VERSION = 1
 NS.partyStats = { sent = 0, recv = 0 }
 NS.party = {}            -- [name] = { quests = { [id] = { c = bool, o = { {t, f, r}, ... } } }, level, step, synced, at }
@@ -228,6 +229,7 @@ local function OnMessage(msg, sender)
         local first = not p.synced
         p.synced = true
         Changed()
+        C_Timer.After(2, NS.AutoGroupPlan)
         if first then
             NS.Print(("party sync with %s: %d quests."):format(who, NS.Count(p.quests)))
             C_Timer.After(1, function() AutoShare(who) end)
@@ -254,6 +256,8 @@ local function OnMessage(msg, sender)
                 NS.Print(who .. " ended the group plan - back to your own route.")
                 NS.cache = nil; if NS.Replan then NS.Replan() end
             end
+        elseif soloChosen then
+            -- you chose Solo: keep your own route
         else
             local set = {}
             for i, id in ipairs(ids) do set[id] = i end
@@ -297,7 +301,10 @@ end
 
 local members = {}
 local function RosterChanged()
-    if NS.groupMode and not InGroup() then NS.EndGroupPlan(true) end
+    if not InGroup() then
+        soloChosen = false
+        if NS.groupMode then NS.EndGroupPlan(true) end
+    end
     Prune()
     if not InGroup() then
         wipe(members); wipe(sendQ); mine = {}
@@ -498,6 +505,7 @@ end
 
 -- while you're synced with your party, no quest is dropped or suggested for dropping
 function NS.KeepAllQuests()
+    if not (NS.db and NS.db.party) then return false end
     if NS.groupMode then return true end
     if not InGroup() then return false end
     for _, p in pairs(NS.party) do if p.synced then return true end end
@@ -532,12 +540,46 @@ function NS.SendGroupPlan(route)
     end)
 end
 
+-- Automatic group plan: as soon as someone in your party syncs, one person
+-- plans for the group and everyone follows. That's the party leader if they
+-- run TwizQuest, otherwise the synced member whose name sorts first - every
+-- copy of TwizQuest picks the same person.
+local function Planner()
+    local names = { Short(UnitName("player")) }
+    local leader
+    for _, m in ipairs(Roster()) do
+        local p = NS.party[m.name]
+        if p and p.synced then
+            names[#names + 1] = m.name
+            if UnitIsGroupLeader and UnitIsGroupLeader(m.unit) then leader = m.name end
+        end
+    end
+    if UnitIsGroupLeader and UnitIsGroupLeader("player") then leader = names[1] end
+    if leader then return leader end
+    table.sort(names)
+    return names[1]
+end
+
+function NS.AutoGroupPlan()
+    if not (NS.db and NS.db.party and NS.db.autoGroup ~= false) or soloChosen then return end
+    if not InGroup() or NS.SyncedCount() == 0 then return end
+    if NS.groupMode then return end
+    if Planner() == Short(UnitName("player")) then
+        NS.groupMode, NS.groupPlan = true, nil
+        NS.Print("party synced - planning the fastest XP for your group (click Solo to plan just for you).")
+        NS.cache = nil
+        if NS.Replan then NS.Replan() end
+    end
+    -- everyone else follows the plan when it arrives
+end
+
 function NS.StartGroupPlan()
     if not InGroup() then NS.Print("join a party first."); return end
     if NS.SyncedCount() == 0 then
         NS.Print("no one in your party is syncing TwizQuest yet (/tq party).")
         return
     end
+    soloChosen = false
     NS.groupMode, NS.groupPlan = true, nil
     NS.Print("planning the fastest XP for your group...")
     NS.cache = nil
@@ -545,6 +587,7 @@ function NS.StartGroupPlan()
 end
 
 function NS.EndGroupPlan(quiet)
+    if not quiet then soloChosen = true end
     local mine = NS.groupMode and not NS.groupPlan
     NS.groupMode, NS.groupPlan = false, nil
     if mine and InGroup() then Send("G|") end

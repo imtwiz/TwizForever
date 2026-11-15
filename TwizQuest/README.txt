@@ -1,5 +1,18 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.10.0 - AUTOMATIC GROUP SYNC
+- As soon as someone in your party syncs, the group plan starts by itself:
+  one person plans the fastest XP for the whole group and everyone's
+  TwizQuest follows it. That's the party leader if they run TwizQuest,
+  otherwise the synced member whose name sorts first (every copy agrees).
+  Click Solo to plan just for yourself until you next join a group.
+  /tq party auto turns the automatic start off.
+- TwizQuest never removes quests while you're synced: Drop All is hidden and
+  both Drop All and /tq abandon refuse, even from an open popup
+  (/tq party off turns sync off if you really want to drop quests).
+- Drop All keeps dungeon and raid quests. Shift-click Drop All (or
+  /tq dropall dungeons) to drop those too.
+
 NEW IN 1.9.2
 - When you're in a group and pick up a new quest, it's shared with the group
   right away (skipped if everyone's synced and already has it). Nothing else

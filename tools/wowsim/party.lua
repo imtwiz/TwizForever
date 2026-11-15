@@ -91,10 +91,12 @@ L("Share All offered: " .. table.concat(shared, ","))
 SIM.calls = {}
 local popupArgs
 local realShow = StaticPopup_Show
-StaticPopup_Show = function(which, a1, a2) popupArgs = { which, a1, a2 } end
+StaticPopup_Show = function(which, a1, a2) popupArgs = { which, a1, a2 } return popupArgs end
+SlashCmdList.QUESTROUTE("party off")   -- Drop All is refused while synced
 TwizQuestFrame.dropAll:Click()
 L(("Drop All asks: %s, %s quests%s"):format(popupArgs[1], tostring(popupArgs[2]), (popupArgs[3] or ""):gsub("|c%x+", ""):gsub("|r", ""):gsub("\n", " ")))
-StaticPopupDialogs[popupArgs[1]].OnAccept(); SIM.Advance(1)
+StaticPopupDialogs[popupArgs[1]].OnAccept(nil, popupArgs.data); SIM.Advance(1)
+SlashCmdList.QUESTROUTE("party on")
 local ab = 0
 for _, c in ipairs(SIM.calls) do if c[1] == "AbandonQuest" then ab = ab + 1 end end
 L("abandon calls: " .. ab)

@@ -18,6 +18,7 @@ NS.DEFAULTS = {
     party     = true,  -- sync quests with party members who run TwizQuest
     autoShare = false, -- don't share your log when someone joins (/tq party share to turn on)
     shareOnAccept = true, -- share a quest with the group when you pick it up (/tq party pickup)
+    autoGroup = true,  -- plan for the whole group automatically when someone in your party syncs
     partyHelp = true,  -- stay to help party members finish kills on shared quests
     partyXP   = true,  -- show XP bars for you and party members who run TwizQuest
     autoAccept = true, -- accept every quest offered (hold Shift to skip)

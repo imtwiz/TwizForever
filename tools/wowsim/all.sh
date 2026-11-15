@@ -5,7 +5,7 @@
 # scenario stops instead of taking the computer down with it.
 here=$(dirname "$0")
 # realcraft.lua needs real saved data, so it is not part of this list
-scenarios="scenario postall paging tools vendorbuy quest accept party partynames groupplan pickup minimap planmake craftall craftmail craftparty openwin chef"
+scenarios="scenario postall paging tools vendorbuy quest accept party partynames groupplan pickup autogroup dropall minimap planmake craftall craftmail craftparty openwin chef"
 failed=0
 for name in $scenarios; do
     result=$( (ulimit -v 2000000; timeout 90 luajit "$here/sim.lua" "$name.lua" 2>&1) | grep '^errors:' )

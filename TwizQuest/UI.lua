@@ -178,6 +178,7 @@ end
 
 local function Refresh()
     if not frame then return end
+    if frame.dropAll then frame.dropAll:SetShown(not (NS.KeepAllQuests and NS.KeepAllQuests())) end
     if frame.groupBtn then
         local can = NS.groupMode or (IsInGroup() and NS.SyncedCount and NS.SyncedCount() > 0)
         frame.groupBtn:SetShown(can and true or false)
@@ -319,8 +320,8 @@ local function Build()
     frame.dropAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.dropAll:SetSize(80, 22); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -6, 0)
     frame.dropAll:SetText("Drop All")
-    frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd() end)
-    Tip(frame.dropAll, "Drop All", "Abandons every quest (asks first)\nLow-value quests only: /tq cleanup")
+    frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd(IsShiftKeyDown()) end)
+    Tip(frame.dropAll, "Drop All", "Abandons every quest except dungeon quests (asks first)\nShift-click: dungeon quests too\nLow-value quests only: /tq cleanup")
     frame.groupBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.groupBtn:SetSize(84, 22); frame.groupBtn:SetPoint("RIGHT", frame.dropAll, "LEFT", -6, 0)
     frame.groupBtn:SetText("Group")
@@ -581,41 +582,86 @@ function NS.ShareAllCmd()
     else NS.Print(("sharing %d quest%s with your party (one every 0.5s)."):format(n, n == 1 and "" or "s")) end
 end
 
+-- dungeon and raid quests: Questie's database first, then the game's quest tag
+local function IsDungeonQuest(id)
+    local B = NS.Bridge and NS.Bridge()
+    local DB = B and B.DB
+    if DB then
+        for _, fn in ipairs({ "IsDungeonQuest", "IsRaidQuest" }) do
+            if DB[fn] then
+                local ok, v = pcall(DB[fn], id)
+                if ok and v then return true end
+            end
+        end
+    end
+    if C_QuestLog.GetQuestTagInfo then
+        local ok, tag = pcall(C_QuestLog.GetQuestTagInfo, id)
+        local t = ok and type(tag) == "table" and NS.safe(tag.tagID)
+        if t == 81 or t == 62 or t == 88 or t == 89 then return true end   -- dungeon, raid, raid (10/25)
+    end
+    return false
+end
+NS.IsDungeonQuest = IsDungeonQuest
+
+-- the quests Drop All would remove: everything, or everything but dungeon/raid quests
+local function DropList(withDungeons)
+    local ids, kept, done = {}, 0, 0
+    for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
+        local info = C_QuestLog.GetInfo(i)
+        local id = info and NS.safe(info.questID)
+        if id and id > 0 and not NS.safe(info.isHeader) then
+            if not withDungeons and IsDungeonQuest(id) then
+                kept = kept + 1
+            else
+                ids[#ids + 1] = id
+                if C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) then done = done + 1 end
+            end
+        end
+    end
+    return ids, kept, done
+end
+
 StaticPopupDialogs.TWIZQUEST_ABANDON_ALL = {
-    text = "Abandon ALL %d quests in your log?%s\n\nThis can't be undone.",
+    text = "Abandon %d quests?%s\n\nThis can't be undone.",
     button1 = YES or "Yes", button2 = NO or "No", timeout = 0, hideOnEscape = true, preferredIndex = 3,
     showAlert = true,
-    OnAccept = function()
-        local ids = {}
-        for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
-            local info = C_QuestLog.GetInfo(i)
-            local id = info and NS.safe(info.questID)
-            if id and id > 0 and not NS.safe(info.isHeader) then ids[#ids + 1] = id end
+    OnAccept = function(_, withDungeons)
+        if NS.KeepAllQuests and NS.KeepAllQuests() then
+            NS.Print("you're synced with your party - TwizQuest never removes quests while synced.")
+            return
         end
+        local ids, kept = DropList(withDungeons)
         for _, id in ipairs(ids) do
             pcall(C_QuestLog.SetSelectedQuest, id)
             pcall(C_QuestLog.SetAbandonQuest)
             pcall(C_QuestLog.AbandonQuest)
         end
-        NS.Print(("abandoned %d quest(s)."):format(#ids))
+        NS.Print(("abandoned %d quest(s)%s."):format(#ids,
+            kept > 0 and (", kept %d dungeon quest%s (shift-click Drop All to drop those too)"):format(kept, kept == 1 and "" or "s") or ""))
         NS.cache = nil
         NS.Replan()
     end,
 }
 
-function NS.DropAllCmd()
-    local n, done = 0, 0
-    for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
-        local info = C_QuestLog.GetInfo(i)
-        local id = info and NS.safe(info.questID)
-        if id and id > 0 and not NS.safe(info.isHeader) then
-            n = n + 1
-            if C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) then done = done + 1 end
-        end
+-- Drop All keeps dungeon and raid quests; shift-click drops those too
+function NS.DropAllCmd(withDungeons)
+    if NS.KeepAllQuests and NS.KeepAllQuests() then
+        NS.Print("you're synced with your party - TwizQuest never removes quests while synced. Leave the group or /tq party off first.")
+        return
     end
-    if n == 0 then NS.Print("your quest log is already empty."); return end
-    StaticPopup_Show("TWIZQUEST_ABANDON_ALL", n,
-        done > 0 and ("\n|cffff5555%d of them are complete and ready to turn in!|r"):format(done) or "")
+    if withDungeons == nil then withDungeons = IsShiftKeyDown() end
+    local ids, kept, done = DropList(withDungeons)
+    if #ids == 0 then
+        NS.Print(kept > 0 and ("only dungeon quests left (%d) - shift-click Drop All to drop them."):format(kept)
+            or "your quest log is already empty.")
+        return
+    end
+    local notes = ""
+    if withDungeons then notes = notes .. "\n|cffff9933Including dungeon quests.|r"
+    elseif kept > 0 then notes = notes .. ("\nKeeping %d dungeon quest%s."):format(kept, kept == 1 and "" or "s") end
+    if done > 0 then notes = notes .. ("\n|cffff5555%d of them are complete and ready to turn in!|r"):format(done) end
+    local dialog = StaticPopup_Show("TWIZQUEST_ABANDON_ALL", #ids, notes)
+    if dialog then dialog.data = withDungeons end
 end
 
 local function Help()
@@ -633,14 +679,15 @@ local function Help()
     print("  /tq size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /tq relearn      - forget learned speeds and rates")
     print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
-    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party pickup (share quests you pick up, on), /tq party share (share your log on join, off), /tq party help (stay to help)")
+    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party auto (group plan on sync, on), /tq party pickup (share quests you pick up, on), /tq party share (share your log on join, off), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
     print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
     print("  /tq solo         - back to your own route")
     print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
-    print("  /tq dropall      - abandon every quest in your log, asks first (Drop All button)")
+    print("  /tq dropall      - abandon every quest except dungeon quests, asks first (Drop All button)")
+    print("  /tq dropall dungeons - same, including dungeon quests (shift-click Drop All)")
     print("  /tq service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end
@@ -667,6 +714,10 @@ SlashCmdList.QUESTROUTE = function(msg)
                 text = "Abandon %d quest(s) that aren't worth it?\n(See chat for the list.)",
                 button1 = YES or "Yes", button2 = NO or "No", timeout = 0, hideOnEscape = true, preferredIndex = 3,
                 OnAccept = function(_, list)
+                    if NS.KeepAllQuests and NS.KeepAllQuests() then
+                        NS.Print("you're synced with your party - TwizQuest never removes quests while synced.")
+                        return
+                    end
                     for _, d in ipairs(list) do
                         pcall(C_QuestLog.SetSelectedQuest, d.id)
                         pcall(C_QuestLog.SetAbandonQuest)
@@ -696,7 +747,7 @@ SlashCmdList.QUESTROUTE = function(msg)
     elseif cmd == "shareall" then
         NS.ShareAllCmd(); return
     elseif cmd == "dropall" then
-        NS.DropAllCmd(); return
+        NS.DropAllCmd((rest or ""):lower() == "dungeons" or nil); return
     elseif cmd == "party" then
         local arg = (rest or ""):lower()
         if arg == "off" or arg == "on" then
@@ -707,6 +758,9 @@ SlashCmdList.QUESTROUTE = function(msg)
             NS.db.partyXP = not NS.db.partyXP
             NS.Print("party XP bars " .. (NS.db.partyXP and "on" or "off"))
             Refresh()
+        elseif arg == "auto" then
+            NS.db.autoGroup = NS.db.autoGroup == false
+            NS.Print("plan for the group automatically when someone syncs: " .. (NS.db.autoGroup and "on" or "off"))
         elseif arg == "pickup" then
             NS.db.shareOnAccept = NS.db.shareOnAccept == false
             NS.Print("share new quests with the group when you pick them up: " .. (NS.db.shareOnAccept and "on" or "off"))
