@@ -1,6 +1,6 @@
 -- TwizCraft party crafters: party members running TwizCraft share their
 -- professions, skill levels and learned recipes. Browse them in the Party
--- window (/cr party or the Party button), and item tooltips tell you who in
+-- window (/tc party or the Party button), and item tooltips tell you who in
 -- your party can make that item.
 local ADDON, NS = ...
 
@@ -121,7 +121,7 @@ local function OnMessage(msg, sender)
             local names = {}
             for _, p in pairs(m.profs) do names[#names + 1] = ("%s %d"):format(p.name, p.skill) end
             table.sort(names)
-            NS.Print(("%s's professions: %s (/cr party to browse)."):format(who, #names > 0 and table.concat(names, ", ") or "none"))
+            NS.Print(("%s's professions: %s (/tc party to browse)."):format(who, #names > 0 and table.concat(names, ", ") or "none"))
         end
         if NS.RefreshPartyCrafters then NS.RefreshPartyCrafters() end
         if NS.RefreshUI then NS.RefreshUI() end

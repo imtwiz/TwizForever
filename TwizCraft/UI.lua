@@ -82,7 +82,7 @@ local function Refresh()
         return
     end
     if plan.done then
-        frame.summary:SetText(("%s %d/%d - at your cap. Train the next rank to keep going (/cr target to set a goal)."):format(
+        frame.summary:SetText(("%s %d/%d - at your cap. Train the next rank to keep going (/tc target to set a goal)."):format(
             plan.name, plan.skill, plan.max))
         if not NS.db.sized then frame:SetHeight(90) end
         return
@@ -542,9 +542,10 @@ ev:SetScript("OnEvent", function()
     C_Timer.After(2, function() NS.Replan(true) end)
 end)
 
-SLASH_CRAFTROUTE1 = "/cr"
+SLASH_CRAFTROUTE1 = "/tc"
 SLASH_CRAFTROUTE2 = "/twizcraft"
-SLASH_CRAFTROUTE3 = "/craftroute"
+SLASH_CRAFTROUTE3 = "/cr"          -- old shortcut still works
+SLASH_CRAFTROUTE4 = "/craftroute"
 SlashCmdList.CRAFTROUTE = function(msg)
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
     cmd = (cmd or ""):lower()
@@ -583,22 +584,22 @@ SlashCmdList.CRAFTROUTE = function(msg)
             o.yellow.a, o.yellow.p, o.green.a, o.green.p))
     else
         NS.Print("commands:")
-        print("  /cr            show or hide the window")
-        print("  /cr party      professions and recipes of party members running TwizCraft")
-        print("  /cr craftall   craft the next batch of everything you can make (Craft All button)")
-        print("  /cr wheel      mouse wheel presses Craft All while a profession window is open (on)")
-        print("  /cr target 225 plan up to this skill instead of your cap (/cr target to clear)")
-        print("  /cr resell     count AH resale of what you craft (default: vendor value)")
-        print("  /cr odds       skill-up odds learned from your crafting")
-        print("  /cr buy        at a vendor: buy everything on your list it sells")
-        print("  /cr refresh    re-read recipes (profession window open) and re-plan")
-        print("  /cr find fish  everything TwizCraft knows about matching recipes/ingredients")
-        print("  /cr size       reset the window size (drag the bottom-right corner to resize)")
+        print("  /tc            show or hide the window")
+        print("  /tc party      professions and recipes of party members running TwizCraft")
+        print("  /tc craftall   craft the next batch of everything you can make (Craft All button)")
+        print("  /tc wheel      mouse wheel presses Craft All while a profession window is open (on)")
+        print("  /tc target 225 plan up to this skill instead of your cap (/tc target to clear)")
+        print("  /tc resell     count AH resale of what you craft (default: vendor value)")
+        print("  /tc odds       skill-up odds learned from your crafting")
+        print("  /tc buy        at a vendor: buy everything on your list it sells")
+        print("  /tc refresh    re-read recipes (profession window open) and re-plan")
+        print("  /tc find fish  everything TwizCraft knows about matching recipes/ingredients")
+        print("  /tc size       reset the window size (drag the bottom-right corner to resize)")
     end
 end
 
 ------------------------------------------------------------------------
--- /cr find <text>: what TwizCraft knows about matching recipes, and why
+-- /tc find <text>: what TwizCraft knows about matching recipes, and why
 -- each one is or isn't showing
 ------------------------------------------------------------------------
 function NS.Find(text)

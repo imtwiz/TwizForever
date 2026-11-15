@@ -1,10 +1,13 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.8.1
+- Shortcut is now /tc (/cr still works). /tc help lists everything.
+
 NEW IN 1.8.0 - PARTY CRAFTERS
 - When you group with someone who also runs TwizCraft, you swap professions,
   skill levels and known recipes automatically (hidden addon messages; only
   changes are re-sent after you open a profession window).
-- Party button (top of the window) or /cr party: browse each member's
+- Party button (top of the window) or /tc party: browse each member's
   professions and recipes, click a profession to expand it, search by name.
   Recipes you don't know are marked. Hover a recipe for the item; shift-click
   to link it in chat.
@@ -31,14 +34,14 @@ NEW IN 1.7.1
   All to make those too.
 
 NEW IN 1.7.0
-- Craft All button (next to Craft next, or /cr craftall): crafts everything
+- Craft All button (next to Craft next, or /tc craftall): crafts everything
   you can make right now in plan order - make-first items, then each step.
   Each press crafts a whole batch of one recipe (as many as your materials
   and the plan allow). The game needs a fresh click to start each different
   recipe, so press again - or just spin your mouse wheel while the profession
   window is open. Chat tells you when a batch is done and what's next.
   Right-click stops. Bindable in Options > Keybindings > AddOns.
-  /cr wheel turns the mouse-wheel shortcut off.
+  /tc wheel turns the mouse-wheel shortcut off.
 
 NEW IN 1.6.1
 - Requires TomTom (for the waypoint arrow on shopping and mailbox stops).
@@ -61,7 +64,7 @@ NEW IN 1.5 - mailbox
   Opening the mailbox reads the real inbox (mats mailed from alts count too).
 
 Open each profession's window once (and after learning new recipes) so
-TwizCraft can read your recipes. Then /cr shows, for the selected
+TwizCraft can read your recipes. Then /tc shows, for the selected
 profession, from your current skill to your cap:
   - which recipe to craft at each skill range, and about how many
   - the expected net cost (materials minus what the results sell back for)
@@ -120,18 +123,18 @@ Crafting from the window
 
 It learns
   Every yellow or green craft is compared with the predicted skill-up
-  chance, and the odds adjust to what you actually get (/cr odds).
+  chance, and the odds adjust to what you actually get (/tc odds).
 
-Commands (/cr or /craftroute)
-  /cr             show/hide
-  /cr target 225  plan to this skill instead of your cap (/cr target clears)
-  /cr resell      also count AH resale of what you craft (default: vendor)
-  /cr odds        skill-up odds learned so far
-  /cr refresh     re-read recipes (with the profession window open) and re-plan
-  /cr find fish   everything known about matching recipes/ingredients, and why
+Commands (/tc - /cr and /twizcraft also work)
+  /tc             show/hide
+  /tc target 225  plan to this skill instead of your cap (/tc target clears)
+  /tc resell      also count AH resale of what you craft (default: vendor)
+  /tc odds        skill-up odds learned so far
+  /tc refresh     re-read recipes (with the profession window open) and re-plan
+  /tc find fish   everything known about matching recipes/ingredients, and why
                   each is or isn't in the plan
-  /cr buy         at a vendor: buy everything on your list it sells
-  /cr size        reset the window size (drag the corner to resize)
+  /tc buy         at a vendor: buy everything on your list it sells
+  /tc size        reset the window size (drag the corner to resize)
 Hover a step for skill colors, chances and per-craft costs; click it to
 open the recipe. Hover a shopping item for where to get it; click it at
 the AH to search for it.

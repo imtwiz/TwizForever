@@ -1,0 +1,5 @@
+local f = io.open(REPO .. "/tools/wowsim/planmake.lua"); local src = f:read("*a"); f:close()
+src = src:sub(1, src:find("local plan, why") - 1)
+assert(loadstring(src))()
+SIM.log[#SIM.log + 1] = ("slash: %s %s %s %s"):format(SLASH_CRAFTROUTE1, SLASH_CRAFTROUTE2, SLASH_CRAFTROUTE3, SLASH_CRAFTROUTE4)
+SlashCmdList.CRAFTROUTE("help")
