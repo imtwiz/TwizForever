@@ -18,6 +18,7 @@ NS.DEFAULTS = {
     party     = true,  -- sync quests with party members who run TwizQuest
     partyShare = true, -- share quests a party member doesn't have when they join
     partyHelp = true,  -- stay to help party members finish kills on shared quests
+    partyXP   = true,  -- show XP bars for you and party members who run TwizQuest
     shown     = true,
     learn = {
         runSpeed    = 7.0,  -- yards/sec on foot

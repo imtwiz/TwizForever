@@ -124,6 +124,39 @@ local function PartyTooltip(self)
     GameTooltip:Show()
 end
 
+local BAR_H = 13
+local function XPRow(row, name, xp, classFile, isMe)
+    row.name:SetText((isMe and "|cff66ff66" or "") .. name .. (isMe and "|r" or ""))
+    if not xp or not xp.max or xp.max <= 0 then
+        row.bar:SetValue(0); row.rest:SetValue(0)
+        row.right:SetText("|cff999999waiting for data|r")
+        return
+    end
+    row.bar:SetMinMaxValues(0, xp.max); row.bar:SetValue(xp.cur)
+    row.rest:SetMinMaxValues(0, xp.max); row.rest:SetValue(math.min(xp.max, xp.cur + (xp.rest or 0)))
+    local color = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+    if color then row.bar:SetStatusBarColor(color.r, color.g, color.b) else row.bar:SetStatusBarColor(0.58, 0.0, 0.55) end
+    local left = xp.max - xp.cur
+    local eta = (xp.rate or 0) > 0 and (" ~" .. NS.FormatTime(left / xp.rate * 3600)) or ""
+    row.text:SetText(("%d%%"):format(math.floor(xp.cur / xp.max * 100)))
+    row.right:SetText(("L%d  %s to go%s%s"):format(xp.level or 0, NS.FormatNum(left),
+        (xp.rest or 0) > 0 and (" |cff6699ff+" .. NS.FormatNum(xp.rest) .. " rested|r") or "", "|cff999999" .. eta .. "|r"))
+end
+
+local function MyXP()
+    local plan = NS._plan and NS._plan()
+    return { level = UnitLevel("player"), cur = UnitXP("player") or 0, max = UnitXPMax("player") or 0,
+             rest = (GetXPExhaustion and GetXPExhaustion()) or 0, rate = plan and plan.rate or 0 }
+end
+
+local function UnitClassFile(name)
+    for i = 1, 4 do
+        local u = "party" .. i
+        local n = UnitName(u)
+        if n and (Ambiguate and Ambiguate(n, "none") or n) == name then return select(2, UnitClass(u)) end
+    end
+end
+
 local function RowsFit()
     if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - 66 - partyOffset) / ROW_H))) end
     return DEFAULT_ROWS
@@ -142,15 +175,28 @@ end
 local function Refresh()
     if not frame then return end
     local ptext = NS.db.party and NS.PartyStatus and PartyText(NS.PartyStatus()) or nil
+    local nbars = 0
     if ptext then
         frame.partyLine.text:SetText(ptext); frame.partyLine:Show()
         local st = NS.PartyStatus()
         frame.share:SetText(("Share (%d)"):format(#st.missing))
         frame.share:SetShown(#st.missing > 0)
         partyOffset = 16
+        if NS.db.partyXP and #st.members > 0 then
+            nbars = 1
+            XPRow(frame.xpRows[1], UnitName("player"), MyXP(), select(2, UnitClass("player")), true)
+            for _, m in ipairs(st.members) do
+                if nbars < #frame.xpRows then
+                    nbars = nbars + 1
+                    XPRow(frame.xpRows[nbars], m, NS.party[m].xp, UnitClassFile(m))
+                end
+            end
+        end
+        partyOffset = partyOffset + nbars * BAR_H + (nbars > 0 and 2 or 0)
     else
         frame.partyLine:Hide(); partyOffset = 0
     end
+    for i, r in ipairs(frame.xpRows) do r:SetShown(i <= nbars) end
     frame.listTop:SetPoint("TOPLEFT", 10, -46 - partyOffset)
     if not plan then
         frame.summary:SetText(NS.IsPlanning() and "Planning..." or (frame.status or "No plan yet. Click Plan."))
@@ -249,6 +295,33 @@ local function Build()
         NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
     end)
     frame.partyLine:Hide()
+    -- party XP bars (you + up to 4 friends)
+    frame.xpRows = {}
+    for i = 1, 5 do
+        local r = CreateFrame("Frame", nil, frame)
+        r:SetHeight(BAR_H - 1)
+        r:SetPoint("TOPLEFT", frame.partyLine, "BOTTOMLEFT", 0, -2 - (i - 1) * BAR_H)
+        r:SetPoint("RIGHT", frame, "RIGHT", -10, 0)
+        r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.name:SetPoint("LEFT"); r.name:SetWidth(70); r.name:SetJustifyH("LEFT"); r.name:SetWordWrap(false)
+        r.rest = CreateFrame("StatusBar", nil, r)
+        r.rest:SetPoint("LEFT", 74, 0); r.rest:SetSize(120, BAR_H - 3)
+        r.rest:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        r.rest:SetStatusBarColor(0.25, 0.4, 0.9, 0.45)
+        r.bar = CreateFrame("StatusBar", nil, r)
+        r.bar:SetAllPoints(r.rest)
+        r.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        r.bar:SetFrameLevel(r.rest:GetFrameLevel() + 1)
+        local bg = r.rest:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 0.6)
+        r.text = r.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.text:SetPoint("CENTER")
+        r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.right:SetPoint("LEFT", r.rest, "RIGHT", 6, 0); r.right:SetPoint("RIGHT")
+        r.right:SetJustifyH("LEFT"); r.right:SetWordWrap(false)
+        r:Hide()
+        frame.xpRows[i] = r
+    end
     frame.listTop = CreateFrame("Frame", nil, frame)
     frame.listTop:SetSize(1, 1)
     frame.listTop:SetPoint("TOPLEFT", 10, -46)
@@ -449,7 +522,7 @@ local function Help()
     print("  /qr size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /qr relearn      - forget learned speeds and rates")
     print("  /qr cleanup      - quests in your log that aren't worth their slot; /qr abandon drops them")
-    print("  /qr party        - party sync status; /qr party on|off, /qr party share (auto-share), /qr party help (stay to help)")
+    print("  /qr party        - party sync status; /qr party on|off, /qr party xp (XP bars), /qr party share (auto-share), /qr party help (stay to help)")
     print("  /qr share        - share your quests that party members don't have")
     print("  /qr service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
@@ -490,6 +563,10 @@ SlashCmdList.QUESTROUTE = function(msg)
         if arg == "off" or arg == "on" then
             NS.db.party = arg == "on"
             NS.Print("party sync " .. (NS.db.party and "on" or "off"))
+            Refresh()
+        elseif arg == "xp" then
+            NS.db.partyXP = not NS.db.partyXP
+            NS.Print("party XP bars " .. (NS.db.partyXP and "on" or "off"))
             Refresh()
         elseif arg == "share" then
             NS.db.partyShare = not NS.db.partyShare

@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.5.2
+- Party XP bars: under the party line, a bar for you and each friend running
+  TwizQuest - level, % through the level, XP to go, rested XP (blue), and
+  roughly how long until they level at their plan's pace. Bars use class
+  colors. Chat tells you when a friend levels. /qr party xp to hide them.
+
 NEW IN 1.5.1
 - Requires TomTom (the waypoint arrow for each step).
 

@@ -56,6 +56,18 @@ L(("auto-share: %d push(es), quest(s) %s"):format(pushes, table.concat(selected,
 fromBob("N|100|Kill Kobold Vermin")
 route("Bob synced, behind on kobolds")
 
+-- XP bars: Bob reports his XP, then levels up
+fromBob("X|19|4200|9000|1500|5400"); SIM.Advance(1)
+local function bars()
+  local out = {}
+  for i, r in ipairs(TwizQuestFrame.xpRows) do
+    if r.__shown then out[#out + 1] = (r.name:GetText() or "") .. " [" .. (r.text:GetText() or "") .. "] " .. (r.right:GetText() or "") end
+  end
+  return table.concat(out, "  ||  ")
+end
+L("xp bars: " .. bars())
+fromBob("X|20|300|9800|0|5600"); SIM.Advance(1)
+L("after Bob levels: " .. bars())
 -- Bob finishes the kobolds -> help stop goes away, ready to turn in together
 fromBob("Q|100|1|m8/8"); SIM.Advance(1)
 route("Bob caught up")

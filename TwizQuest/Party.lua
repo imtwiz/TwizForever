@@ -59,7 +59,21 @@ local function Snapshot()
     return out
 end
 
+-- your XP: "X|level|xp|max|rested|xp per hour from your plan"
+local xpTimer
+local function SendXP()
+    local plan = NS._plan and NS._plan()
+    Send(("X|%d|%d|%d|%d|%d"):format(UnitLevel("player") or 0, UnitXP("player") or 0, UnitXPMax("player") or 0,
+        (GetXPExhaustion and GetXPExhaustion()) or 0, math.floor(plan and plan.rate or 0)))
+end
+function NS.QueueXP()
+    if xpTimer or not InGroup() then return end
+    xpTimer = true
+    C_Timer.After(2, function() xpTimer = nil; SendXP() end)
+end
+
 local function SendFull()
+    SendXP()
     local snap = Snapshot()
     Send("B|" .. VERSION .. "|" .. (UnitLevel("player") or 0))
     for _, enc in pairs(snap) do Send("Q|" .. enc) end
@@ -136,6 +150,18 @@ local function OnMessage(msg, sender)
         if first then
             NS.Print(("party sync with %s: %d quests."):format(who, NS.Count(p.quests)))
             C_Timer.After(1, function() AutoShare(who) end)
+        end
+    elseif kind == "X" then
+        local lvl, cur, max, rest, rate = rest:match("^(%d+)|(%d+)|(%d+)|(%d+)|(%d+)")
+        if lvl then
+            lvl = tonumber(lvl)
+            if p.xp and p.xp.level and lvl > p.xp.level then
+                NS.Print(("%s reached level %d!"):format(who, lvl))
+            end
+            p.xp = { level = lvl, cur = tonumber(cur), max = tonumber(max), rest = tonumber(rest),
+                     rate = tonumber(rate), at = GetTime() }
+            p.level = lvl
+            if NS.RefreshParty then NS.RefreshParty() end
         end
     elseif kind == "N" then
         local id, step = rest:match("^(%d+)|(.*)$")
@@ -303,6 +329,7 @@ function NS.PartyStep(s)
     if not (s and s.q and s.q.id) then return end
     local txt = (s.role == 1 and "pick up " or s.role == 3 and "turn in " or "") .. (s.q.name or "")
     Send(("N|%d|%s"):format(s.q.id, txt:sub(1, 120)))
+    NS.QueueXP()
 end
 
 ------------------------------------------------------------------------
@@ -313,6 +340,9 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("GROUP_ROSTER_UPDATE")
 ev:RegisterEvent("QUEST_LOG_UPDATE")
 ev:RegisterEvent("CHAT_MSG_ADDON")
+ev:RegisterEvent("PLAYER_XP_UPDATE")
+ev:RegisterEvent("PLAYER_LEVEL_UP")
+ev:RegisterEvent("UPDATE_EXHAUSTION")
 local logTimer
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if event == "PLAYER_LOGIN" then
@@ -325,6 +355,9 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
             logTimer = true
             C_Timer.After(0.8, function() logTimer = nil; SendChanges() end)
         end
+    elseif event == "PLAYER_XP_UPDATE" or event == "PLAYER_LEVEL_UP" or event == "UPDATE_EXHAUSTION" then
+        NS.QueueXP()
+        if NS.RefreshParty then NS.RefreshParty() end
     elseif event == "CHAT_MSG_ADDON" then
         if a1 == PREFIX and (a3 == "PARTY" or a3 == "RAID") and NS.db and NS.db.party then OnMessage(a2, a4) end
     end
