@@ -1,5 +1,12 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.7.1
+- Craft All works on the profession window you have open (not just the one
+  selected in TwizCraft), and after the plan's crafts it also makes anything
+  else you can that still gives skill-ups - without touching materials the
+  plan needs. If only gray recipes are left it names them; shift-click Craft
+  All to make those too.
+
 NEW IN 1.7.0
 - Craft All button (next to Craft next, or /cr craftall): crafts everything
   you can make right now in plan order - make-first items, then each step.

@@ -39,3 +39,24 @@ for _, c in ipairs(SIM.calls) do if c[1] == "CraftRecipe" then crafts[#crafts + 
 L("crafted: " .. table.concat(crafts, ", "))
 L(("bags: stone %d, powder %d, dynamite %d, linen %d"):format(NS.BagCount(2836), NS.BagCount(4364), NS.BagCount(4365), NS.BagCount(2589)))
 L("wheel after: " .. tostring(SIM.overrides["MOUSEWHEELDOWN"]))
+
+-- case 2: TwizCraft window set to another profession (no engineering plan), skill 80
+L("=== plan for another profession, engineering window open")
+SIM.PutInBags(2836, 5)
+NS.currentPlan = nil; NS.current = 185
+NS.SkillFor = function() return 80, 150 end
+SIM.calls = {}
+NS.CraftAll(); SIM.Advance(2)
+for _, c in ipairs(SIM.calls) do if c[1] == "CraftRecipe" then L("crafted: " .. NS.Char().profs[202].recipes[c[2]].name .. " x" .. c[3]) end end
+-- case 3: skill 96 -> powder is gray
+L("=== skill 96, powder gray")
+SIM.PutInBags(2836, 4)
+NS.SkillFor = function() return 96, 150 end
+SIM.calls = {}
+NS.CraftAll(); SIM.Advance(2)
+local n = 0 for _, c in ipairs(SIM.calls) do if c[1] == "CraftRecipe" then n = n + 1 end end
+L("crafts without shift: " .. n)
+IsShiftKeyDown = function() return true end
+NS.CraftAll(); SIM.Advance(2)
+IsShiftKeyDown = function() return false end
+for _, c in ipairs(SIM.calls) do if c[1] == "CraftRecipe" then L("shift-click crafted: " .. NS.Char().profs[202].recipes[c[2]].name .. " x" .. c[3]) end end

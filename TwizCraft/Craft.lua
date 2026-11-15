@@ -72,7 +72,7 @@ local function DoCraft(id, r, count)
 end
 
 -- line: profession skill line; id: recipe id; r: recipe; want: how many the plan needs
-function NS.CraftRecipeNow(line, id, r, want, profName, button)
+function NS.CraftRecipeNow(line, id, r, want, profName, button, wholeBatch)
     if button == "RightButton" then
         if C_TradeSkillUI and C_TradeSkillUI.StopRecipeRepeat then pcall(C_TradeSkillUI.StopRecipeRepeat) end
         if SpellStopCasting then pcall(SpellStopCasting) end
@@ -87,7 +87,7 @@ function NS.CraftRecipeNow(line, id, r, want, profName, button)
         NS.Print(("missing materials for %s: %s"):format(r.name, Missing(r)))
         return
     end
-    local count = IsShiftKeyDown() and 1 or math.max(1, math.min(can, want or can))
+    local count = (IsShiftKeyDown() and not wholeBatch) and 1 or math.max(1, math.min(can, want or can))
     if DoCraft(id, r, count) then
         NS.Print(("crafting %d %s%s"):format(count, r.name,
             (want and count < want) and (" (materials for %d of %d)"):format(count, want) or ""))
@@ -127,20 +127,44 @@ end
 -- many as your materials and the plan allow); the game needs a fresh click,
 -- key or wheel notch to start the next recipe.
 ------------------------------------------------------------------------
-function NS.CraftAllQueue()
+-- the profession whose window is open (Craft All works on that one)
+local function OpenLine()
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo) then return nil end
+    local ok, info = pcall(C_TradeSkillUI.GetBaseProfessionInfo)
+    if not ok or type(info) ~= "table" then return nil end
+    local frame = ProfessionsFrame or TradeSkillFrame
+    if frame and not frame:IsShown() then return nil end
+    return NS.safe(info.professionID)
+end
+
+-- all = also gray recipes (no skill-ups). Returns the queue and a list of
+-- gray recipes you could make (for the "nothing left" message).
+function NS.CraftAllQueue(all)
+    local q, grays = {}, {}
+    local line = OpenLine()
     local plan = NS.currentPlan
-    local q = {}
-    if not plan then return q end
-    for _, sc in ipairs(plan.subcrafts or {}) do
-        local p = NS.Char().profs[sc.line]
-        local r = p and p.recipes[sc.id]
-        if r and r.learned and CanMake(r) > 0 then
-            q[#q + 1] = { line = sc.line, id = sc.id, r = r, want = sc.n, prof = p.name }
-        end
+    if line and (not plan or plan.line ~= line) then
+        local ok, p = pcall(NS.PlanFor, line)
+        plan = ok and p or nil
     end
-    for _, st in ipairs(plan.steps or {}) do
-        if st.r and st.r.learned and CanMake(st.r) > 0 then
-            q[#q + 1] = { line = plan.line, id = st.id, r = st.r, want = st.n, prof = plan.name }
+    line = line or (plan and plan.line)
+    local prof = line and NS.Char().profs[line]
+    if not prof then return q, grays end
+    local reserve = {}   -- materials the plan still needs: extras never touch them
+    if plan and plan.line == line then
+        for _, sc in ipairs(plan.subcrafts or {}) do
+            local r = prof.recipes[sc.id]
+            if r and r.learned and CanMake(r) > 0 then
+                q[#q + 1] = { line = line, id = sc.id, r = r, want = sc.n, prof = prof.name }
+            end
+        end
+        for _, st in ipairs(plan.steps or {}) do
+            if st.r and st.r.learned and CanMake(st.r) > 0 then
+                q[#q + 1] = { line = line, id = st.id, r = st.r, want = st.n, prof = prof.name }
+            end
+            for _, g in ipairs(st.r and st.r.reagents or {}) do
+                reserve[g.id] = (reserve[g.id] or 0) + g.qty * (st.n or 0)
+            end
         end
     end
     -- the same recipe in several places (e.g. two skill ranges): one batch
@@ -150,7 +174,30 @@ function NS.CraftAllQueue()
         if m then m.want = (m.want or 0) + (e.want or 0)
         else at[e.id] = e; merged[#merged + 1] = e end
     end
-    return merged
+    -- then anything else you can make that still gives skill-ups (or anything, with all)
+    local skill = NS.SkillFor(line, prof.name) or 0
+    local extras = {}
+    for id, r in pairs(prof.recipes) do
+        if r.learned and not at[id] and r.reagents and #r.reagents > 0 then
+            local n = math.huge
+            for _, g in ipairs(r.reagents) do
+                local free = NS.SlotBags(g) - (reserve[g.id] or 0)
+                n = math.min(n, math.floor(free / math.max(1, g.qty)))
+            end
+            if n ~= math.huge and n > 0 then
+                local ch = (r.gray and NS.Chance(r, skill)) or 0
+                if ch > 0 or all then
+                    extras[#extras + 1] = { line = line, id = id, r = r, want = n, prof = prof.name, ch = ch }
+                else
+                    grays[#grays + 1] = r.name
+                end
+            end
+        end
+    end
+    table.sort(extras, function(x, y) return x.ch > y.ch end)
+    for _, e in ipairs(extras) do merged[#merged + 1] = e end
+    table.sort(grays)
+    return merged, grays
 end
 
 local function Busy()
@@ -177,15 +224,23 @@ function NS.CraftAll(button)
         return
     end
     if NS.PlanNow then NS.PlanNow() end
-    local q = NS.CraftAllQueue()
+    local all = IsShiftKeyDown()
+    local q, grays = NS.CraftAllQueue(all)
     local first = q[1]
     if not first then
-        NS.Print("nothing you can craft with what's in your bags right now.")
+        if not OpenLine() and not NS.currentPlan then
+            NS.Print("open a profession window first.")
+        elseif #grays > 0 then
+            NS.Print(("nothing that gives skill-ups. You can make (gray): %s%s - shift-click Craft All to make them anyway."):format(
+                table.concat(grays, ", ", 1, math.min(#grays, 5)), #grays > 5 and ", ..." or ""))
+        else
+            NS.Print("nothing you can craft with what's in your bags right now.")
+        end
         NS.UpdateCraftWheel()
         return
     end
     current = first.r.name
-    NS.CraftRecipeNow(first.line, first.id, first.r, first.want, first.prof, button)
+    NS.CraftRecipeNow(first.line, first.id, first.r, first.want, first.prof, button, true)
     if #q > 1 then
         NS.Print(("%d more recipe%s after this batch - press Craft All again or spin your mouse wheel."):format(
             #q - 1, #q == 2 and "" or "s"))
@@ -199,7 +254,7 @@ local wheelOwner = CreateFrame("Frame")
 local wheelBound = false
 function NS.UpdateCraftWheel()
     local plan = NS.currentPlan
-    local want = NS.db and NS.db.wheelCraft ~= false and plan and ProfessionOpen(plan.line)
+    local want = NS.db and NS.db.wheelCraft ~= false and OpenLine() ~= nil
         and #NS.CraftAllQueue() > 0 and true or false
     if want == wheelBound or InCombatLockdown() then return end
     if want then

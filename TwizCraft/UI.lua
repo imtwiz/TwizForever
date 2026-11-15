@@ -354,11 +354,12 @@ local function Build()
     allBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("Craft All")
-        local q = NS.CraftAllQueue()
+        local q, grays = NS.CraftAllQueue(IsShiftKeyDown())
         if #q == 0 then
-            GameTooltip:AddLine("Nothing you can craft with what's in your bags right now.", 1, 1, 1, true)
+            GameTooltip:AddLine(#grays > 0 and ("Only gray recipes (no skill-ups): " .. table.concat(grays, ", ") .. ". Shift-click to make them anyway.")
+                or "Nothing you can craft with what's in your bags right now.", 1, 1, 1, true)
         else
-            GameTooltip:AddLine("Crafts everything you can make now, in plan order:", 1, 1, 1, true)
+            GameTooltip:AddLine("Crafts everything you can make now in the open profession - plan first, then anything else that still gives skill-ups:", 1, 1, 1, true)
             for _, e in ipairs(q) do
                 local can = math.huge
                 for _, g in ipairs(e.r.reagents) do can = math.min(can, math.floor(NS.SlotBags(g) / math.max(1, g.qty))) end
@@ -366,7 +367,7 @@ local function Build()
             end
         end
         GameTooltip:AddLine("Each press crafts a whole batch of one recipe. The game needs a new click to start the next one - press again, or spin your mouse wheel while the profession window is open.", 0.4, 1, 0.4, true)
-        GameTooltip:AddLine("Right-click: stop. Bind a key in Options > Keybindings > AddOns.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Shift-click: include gray recipes too. Right-click: stop. Bind a key in Options > Keybindings > AddOns.", 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
