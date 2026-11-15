@@ -311,6 +311,24 @@ function NS.ShareMissing(who)
     return NS.Count(seen)
 end
 
+-- share every quest in your log that can be shared (party members who already
+-- have one, or can't take it, simply get told so by the game)
+function NS.ShareAll()
+    if not InGroup() then return 0, "join a party first" end
+    local n = 0
+    local count = C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries() or 0
+    for i = 1, count do
+        local info = C_QuestLog.GetInfo(i)
+        local id = info and NS.safe(info.questID)
+        if id and id > 0 and not NS.safe(info.isHeader)
+            and C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id) then
+            shareQ[#shareQ + 1] = id; n = n + 1
+        end
+    end
+    if n > 0 and not sharing then sharing = true; ShareNext() end
+    return n
+end
+
 AutoShare = function(who)
     if not (NS.db and NS.db.party and NS.db.partyShare) then return end
     local st = NS.PartyStatus()

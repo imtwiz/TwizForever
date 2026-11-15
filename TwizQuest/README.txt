@@ -1,5 +1,12 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.5.3
+- Share All button (title bar, or /qr shareall): offers every shareable quest
+  in your log to your party, one every 1.5 seconds.
+- Drop All button (or /qr dropall): abandons every quest in your log after a
+  confirmation - it warns you if any are complete and ready to turn in.
+  To drop only quests not worth doing, use /qr cleanup.
+
 NEW IN 1.5.2
 - Party XP bars: under the party line, a bar for you and each friend running
   TwizQuest - level, % through the level, XP to go, rested XP (blue), and

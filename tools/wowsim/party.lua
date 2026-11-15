@@ -79,6 +79,24 @@ SIM.sent = {}
 SIM.quests[2].objectives[1].numFulfilled = 5
 SIM.Fire("QUEST_LOG_UPDATE"); SIM.Advance(2)
 L("after my kill: sent " .. table.concat(SIM.sent, "  ||  "))
+-- Share All button: offers every shareable quest
+SIM.calls = {}
+TwizQuestFrame.shareAll:Click(); SIM.Advance(5)
+local shared = {}
+for _, c in ipairs(SIM.calls) do if c[1] == "SetSelectedQuest" then shared[#shared + 1] = c[2] end end
+L("Share All offered: " .. table.concat(shared, ","))
+-- Drop All button: asks, then abandons everything
+SIM.calls = {}
+local popupArgs
+local realShow = StaticPopup_Show
+StaticPopup_Show = function(which, a1, a2) popupArgs = { which, a1, a2 } end
+TwizQuestFrame.dropAll:Click()
+L(("Drop All asks: %s, %s quests%s"):format(popupArgs[1], tostring(popupArgs[2]), (popupArgs[3] or ""):gsub("|c%x+", ""):gsub("|r", ""):gsub("\n", " ")))
+StaticPopupDialogs[popupArgs[1]].OnAccept(); SIM.Advance(1)
+local ab = 0
+for _, c in ipairs(SIM.calls) do if c[1] == "AbandonQuest" then ab = ab + 1 end end
+L("abandon calls: " .. ab)
+StaticPopup_Show = realShow
 -- Bob leaves
 SIM.inGroup, SIM.partyNames = false, {}
 SIM.Fire("GROUP_ROSTER_UPDATE"); SIM.Advance(1)

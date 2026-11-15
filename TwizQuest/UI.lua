@@ -274,6 +274,29 @@ local function Build()
     btn:SetText("Plan")
     btn:SetScript("OnClick", function() NS.Replan() end)
 
+    local function Tip(b, title, text)
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(title, 1, 0.82, 0)
+            GameTooltip:AddLine(type(text) == "function" and text() or text, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    frame.shareAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.shareAll:SetSize(64, 18); frame.shareAll:SetPoint("RIGHT", btn, "LEFT", -4, 0)
+    frame.shareAll:SetText("Share All")
+    frame.shareAll:SetScript("OnClick", function() NS.ShareAllCmd() end)
+    Tip(frame.shareAll, "Share All", function()
+        return IsInGroup() and "Offer every shareable quest in your log to your party, one after another."
+            or "Join a party first - then this offers every shareable quest in your log to them."
+    end)
+    frame.dropAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.dropAll:SetSize(60, 18); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -4, 0)
+    frame.dropAll:SetText("Drop All")
+    frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd() end)
+    Tip(frame.dropAll, "Drop All", "Abandon every quest in your log (asks first). To drop only the ones not worth doing, use /qr cleanup.")
+
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.summary:SetPoint("TOPLEFT", 10, -28)
     frame.summary:SetPoint("RIGHT", -10, 0)
@@ -507,6 +530,50 @@ end)
 ------------------------------------------------------------------------
 -- Slash commands
 ------------------------------------------------------------------------
+function NS.ShareAllCmd()
+    local n, why = NS.ShareAll()
+    if why then NS.Print(why .. ".")
+    elseif n == 0 then NS.Print("none of your quests can be shared.")
+    else NS.Print(("sharing %d quest%s with your party (one every 1.5s)."):format(n, n == 1 and "" or "s")) end
+end
+
+StaticPopupDialogs.TWIZQUEST_ABANDON_ALL = {
+    text = "Abandon ALL %d quests in your log?%s\n\nThis can't be undone.",
+    button1 = YES or "Yes", button2 = NO or "No", timeout = 0, hideOnEscape = true, preferredIndex = 3,
+    showAlert = true,
+    OnAccept = function()
+        local ids = {}
+        for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
+            local info = C_QuestLog.GetInfo(i)
+            local id = info and NS.safe(info.questID)
+            if id and id > 0 and not NS.safe(info.isHeader) then ids[#ids + 1] = id end
+        end
+        for _, id in ipairs(ids) do
+            pcall(C_QuestLog.SetSelectedQuest, id)
+            pcall(C_QuestLog.SetAbandonQuest)
+            pcall(C_QuestLog.AbandonQuest)
+        end
+        NS.Print(("abandoned %d quest(s)."):format(#ids))
+        NS.cache = nil
+        NS.Replan()
+    end,
+}
+
+function NS.DropAllCmd()
+    local n, done = 0, 0
+    for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
+        local info = C_QuestLog.GetInfo(i)
+        local id = info and NS.safe(info.questID)
+        if id and id > 0 and not NS.safe(info.isHeader) then
+            n = n + 1
+            if C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) then done = done + 1 end
+        end
+    end
+    if n == 0 then NS.Print("your quest log is already empty."); return end
+    StaticPopup_Show("TWIZQUEST_ABANDON_ALL", n,
+        done > 0 and ("\n|cffff5555%d of them are complete and ready to turn in!|r"):format(done) or "")
+end
+
 local function Help()
     NS.Print("commands:")
     print("  /qr              - show or hide the route window")
@@ -524,6 +591,8 @@ local function Help()
     print("  /qr cleanup      - quests in your log that aren't worth their slot; /qr abandon drops them")
     print("  /qr party        - party sync status; /qr party on|off, /qr party xp (XP bars), /qr party share (auto-share), /qr party help (stay to help)")
     print("  /qr share        - share your quests that party members don't have")
+    print("  /qr shareall     - offer every shareable quest to your party (Share All button)")
+    print("  /qr dropall      - abandon every quest in your log, asks first (Drop All button)")
     print("  /qr service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end
@@ -558,6 +627,10 @@ SlashCmdList.QUESTROUTE = function(msg)
             StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
         end
         return
+    elseif cmd == "shareall" then
+        NS.ShareAllCmd(); return
+    elseif cmd == "dropall" then
+        NS.DropAllCmd(); return
     elseif cmd == "party" then
         local arg = (rest or ""):lower()
         if arg == "off" or arg == "on" then
