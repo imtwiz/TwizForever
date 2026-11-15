@@ -1,5 +1,12 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.10.2
+- Party sync shares every profession you have - Mining, Herbalism,
+  Skinning, Blacksmithing, and the rest - not just the ones whose window
+  you've opened. Professions you haven't opened show with their skill level
+  and 0 recipes until you open them.
+- Skill-ups and newly learned professions are sent to the party right away.
+
 NEW IN 1.10.1 (with LeetStick's party-sync work)
 - Party crafters understand Forever surnames ("Bob Stone", "Bob-Stone",
   with or without realm), ignore your own messages and strangers, and keep

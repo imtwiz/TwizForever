@@ -31,18 +31,41 @@ local function Guess(diff, skill)
     return { orange = skill - 40, yellow = skill - 30, green = skill - 20, gray = skill - 10, guess = true }
 end
 
--- Your professions and skill, even with the window closed
+-- every profession (gathering and secondary too) by name -> skill line id
+local LINES = {
+    Alchemy = 171, Blacksmithing = 164, Enchanting = 333, Engineering = 202, Herbalism = 182,
+    Leatherworking = 165, Mining = 186, Skinning = 393, Tailoring = 197, Jewelcrafting = 755,
+    Inscription = 773, Cooking = 185, ["First Aid"] = 129, Fishing = 356, Archaeology = 794,
+}
+NS.PROFESSION_LINES = LINES
+
+-- Your professions and skill, even with the window closed: every one you
+-- have, not just the ones whose window you've opened
 function NS.Professions()
-    local out = {}
-    if not GetProfessions then return out end
-    local list = { GetProfessions() }
-    for i = 1, 5 do
-        local idx = list[i]
-        if idx then
-            local name, icon, rank, maxRank, _, _, skillLine = GetProfessionInfo(idx)
-            if name then
-                out[#out + 1] = { name = name, icon = icon, skill = rank or 0, max = maxRank or 0, line = skillLine }
+    local out, seen = {}, {}
+    local function add(name, icon, rank, maxRank, line)
+        if not name or name == "" then return end
+        line = line or LINES[name]
+        local key = line or name
+        if seen[key] then return end
+        seen[key] = true
+        out[#out + 1] = { name = name, icon = icon, skill = rank or 0, max = maxRank or 0, line = line }
+    end
+    if GetProfessions and GetProfessionInfo then
+        local list = { GetProfessions() }
+        for i = 1, 5 do
+            local idx = list[i]
+            if idx then
+                local ok, name, icon, rank, maxRank, _, _, skillLine = pcall(GetProfessionInfo, idx)
+                if ok then add(name, icon, rank, maxRank, skillLine) end
             end
+        end
+    end
+    -- Classic-style skill list: catches anything GetProfessions misses
+    if GetNumSkillLines and GetSkillLineInfo then
+        for i = 1, GetNumSkillLines() do
+            local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
+            if not isHeader and name and LINES[name] then add(name, nil, rank, maxRank, LINES[name]) end
         end
     end
     return out
@@ -169,6 +192,8 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3)
     end
     if event == "SKILL_LINES_CHANGED" or event == "CHAT_MSG_SKILL" or event == "BAG_UPDATE_DELAYED" then
         if NS.Replan then NS.Replan() end
+        -- a skill-up or a newly learned profession: tell the party
+        if event ~= "BAG_UPDATE_DELAYED" and NS.PartyRecipesChanged then NS.PartyRecipesChanged() end
         return
     end
     if queued then return end
