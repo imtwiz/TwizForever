@@ -24,6 +24,8 @@ local TRADE_SLOTS = 6
 local req   -- asking side: { id, crafter, line, recipe, out, made, n, need = { {id, qty} }, name, stage }
 local order -- crafting side: { id, from, line, recipe, n, name, out, made, stage, before }
 
+-- automatic: trades accepted, items crafted and sent back by themselves (/tc orders manual to turn off)
+local function Auto() return not NS.db or NS.db.ordersAuto ~= false end
 local function Me() return NS.safe and NS.safe(UnitName("player")) or UnitName("player") end
 local function IsMe(name) return name and NS._nameFits(name, Me()) or false end
 local function ItemName(id) return (NS.ItemName and NS.ItemName(id)) or C_Item.GetItemInfo(id) or ("item " .. id) end
@@ -164,9 +166,9 @@ local function DrawAsker()
     p.main:SetEnabled(r.stage ~= "trading" and r.stage ~= "waiting" and near and enough)
     p.second:SetText("Cancel")
     if r.stage == "waiting" then
-        p.status:SetText(r.crafter .. " has your materials and is crafting. Accept their trade when it comes.")
+        p.status:SetText(r.crafter .. " has your materials and is crafting. " .. (Auto() and "It comes back to you by itself." or "Accept their trade when it comes."))
     elseif r.stage == "trading" then
-        p.status:SetText("Click Trade in the trade window to send the materials.")
+        p.status:SetText(Auto() and "Sending the materials..." or "Click Trade in the trade window to send the materials.")
     elseif not unit then
         p.status:SetText(r.crafter .. " isn't in your group.")
     elseif not near then
@@ -174,7 +176,8 @@ local function DrawAsker()
     elseif not enough then
         p.status:SetText("You don't have the materials for that many in your bags.")
     else
-        p.status:SetText("Opens a trade with the materials in it - you click Trade.")
+        p.status:SetText(Auto() and ("Trades the materials to %s; they craft it and it comes back to you by itself."):format(r.crafter)
+            or "Opens a trade with the materials in it - you click Trade.")
     end
 end
 
@@ -188,11 +191,11 @@ local function DrawCrafter()
     local unit = UnitFor(o.from)
     if o.stage == "trade" then
         p.main:SetText("Waiting for materials..."); p.main:SetEnabled(false)
-        p.status:SetText("Accept " .. o.from .. "'s trade.")
+        p.status:SetText(Auto() and ("Waiting for %s's trade - it's accepted by itself."):format(o.from) or ("Accept " .. o.from .. "'s trade."))
     elseif o.stage == "craft" then
         local r = NS.Char().profs[o.line] and NS.Char().profs[o.line].recipes[o.recipe]
         local done = o.out and o.before and BagCount(o.out) >= o.before + (o.made or 1) * o.n
-        if done then o.stage = "back" end
+        if done then o.stage = "back"; o.autoTries = 0 end
         p.main:SetText("Craft " .. o.name); p.main:SetEnabled(r ~= nil)
         p.status:SetText(r and "Click to craft (the first click may open your profession window)." or "You don't know this recipe any more.")
     end
@@ -205,8 +208,47 @@ local function DrawCrafter()
         p.main:SetText("Trading..."); p.main:SetEnabled(false)
         p.status:SetText("Click Trade in the trade window.")
     end
-    p.second:SetText(o.stage == "trade" and "Decline" or "Close")
+    p.second:SetText(o.stage == "trade" and "Decline" or "Hide")
 end
+
+-- Crafted: open the trade back to the asker by itself, as soon as they're in range.
+-- If the game won't let an addon start the trade, the "Trade to" button does it.
+local autoBlocked = false
+local function AutoTradeBack()
+    local o = order
+    if not o or o.stage ~= "back" or autoBlocked then return end
+    if (o.autoTries or 0) >= 3 or (o.nextAuto and GetTime() < o.nextAuto) then return end
+    if TradeFrame and TradeFrame:IsShown() then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    local unit = UnitFor(o.from)
+    if not InRange(unit) then return end
+    o.autoTries = (o.autoTries or 0) + 1
+    o.nextAuto = GetTime() + 10
+    o.stage, o.auto = "giving", true
+    NS.Print(("Crafted %s - opening a trade with %s."):format(o.name, o.from))
+    InitiateTrade(unit)
+    C_Timer.After(6, function()
+        if order == o and o.stage == "giving" and not o.tradeOpen then
+            o.stage = "back"
+            if o.autoTries >= 3 then NS.Print("Couldn't open the trade - click \"Trade to " .. o.from .. "\".") end
+            NS.RefreshOrderPanel()
+        end
+    end)
+end
+
+local ticker = CreateFrame("Frame")
+local tick = 0
+ticker:SetScript("OnUpdate", function(_, e)
+    tick = tick + e
+    if tick < 0.5 then return end
+    tick = 0
+    local o = order
+    if o and o.stage == "craft" and o.out and o.before and BagCount(o.out) >= o.before + (o.made or 1) * o.n then
+        o.stage, o.autoTries = "back", 0
+        if panel and not panel:IsShown() then panel:Show() end
+    end
+    if o and o.stage == "back" then AutoTradeBack() end
+end)
 
 function NS.RefreshOrderPanel()
     if not panel or not panel:IsShown() then return end
@@ -285,8 +327,10 @@ local function ShowOrder()
     p.mode = "crafter"
     p.main:SetScript("OnClick", function() NS.OrderMainClick() end)
     p.second:SetScript("OnClick", function()
-        if order and order.stage == "trade" then NS._partySend(("X|%s|%s"):format(order.from, order.id)) end
-        order = nil; p:Hide()
+        if order and order.stage == "trade" then
+            NS._partySend(("X|%s|%s"):format(order.from, order.id)); order = nil
+        end
+        p:Hide() -- an order you have the materials for stays: it comes back when the items are crafted
     end)
     p:Show(); DrawCrafter()
 end
@@ -328,7 +372,8 @@ function NS.OnOrderMessage(kind, rest, who)
             NS._partySend(("X|%s|%s"):format(who, id)); return
         end
         order = { id = id, from = who, line = line, recipe = recipe, n = n, name = r.name, out = r.out, made = r.made or 1, stage = "trade" }
-        NS.Print(("%s asks you to craft %d %s - accept their trade to get the materials."):format(who, n, r.name))
+        NS.Print(("%s asks you to craft %d %s - %s"):format(who, n, r.name,
+            Auto() and "TwizCraft takes their materials, crafts it and trades it back by itself." or "accept their trade to get the materials."))
         if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
         ShowOrder()
     elseif kind == "X" then
@@ -354,6 +399,100 @@ end
 -- Trade events (both sides)
 ------------------------------------------------------------------------
 local accepted = { player = false, target = false }
+
+
+local function TradeSide(side)
+    local t, any = {}, false
+    for i = 1, TRADE_SLOTS do
+        local link = (side == "player" and GetTradePlayerItemLink or GetTradeTargetItemLink)(i)
+        local id = link and tonumber(link:match("item:(%d+)"))
+        if id then
+            local _, _, q = (side == "player" and GetTradePlayerItemInfo or GetTradeTargetItemInfo)(i)
+            t[id] = (t[id] or 0) + (q or 1); any = true
+        end
+    end
+    return t, any
+end
+local function MoneyOut() return (GetPlayerTradeMoney and GetPlayerTradeMoney() or 0) end
+
+-- Is this trade exactly the order step we expect? (never auto-accept anything else)
+local function TradeMatchesOrder()
+    if placing then return false end
+    if MoneyOut() > 0 then return false end
+    local mine, mineAny = TradeSide("player")
+    local theirs = TradeSide("target")
+    local function exactly(want)
+        for id, n in pairs(want) do if (mine[id] or 0) ~= n then return false end end
+        for id in pairs(mine) do if not want[id] then return false end end
+        return true
+    end
+    if req and req.tradeOpen and req.stage == "trading" then
+        local want = {}
+        for _, g in ipairs(req.need) do want[g.id] = g.qty * req.n end
+        return exactly(want)
+    end
+    if req and req.tradeOpen and req.stage == "waiting" then
+        return not mineAny and (theirs[req.out] or 0) > 0
+    end
+    if order and order.tradeOpen and order.stage == "trade" then
+        if mineAny then return false end
+        local prof = NS.Char().profs[order.line]
+        local r = prof and prof.recipes[order.recipe]
+        if not r then return false end
+        for _, g in ipairs(r.reagents or {}) do
+            local have = 0
+            for _, aid in ipairs(g.alts or { g.id }) do have = have + (theirs[aid] or 0) end
+            if have < (g.qty or 1) * order.n then return false end
+        end
+        return true
+    end
+    if order and order.tradeOpen and order.stage == "giving" then
+        return order.placed and exactly({ [order.out] = order.placed })
+    end
+    return false
+end
+
+local acceptBlocked, acceptPending = false, false
+local function TryAccept()
+    if acceptPending or acceptBlocked or not Auto() then return end
+    acceptPending = true
+    C_Timer.After(0.4, function()
+        acceptPending = false
+        if not (TradeFrame and TradeFrame:IsShown()) or accepted.player then return end
+        if TradeMatchesOrder() then
+            NS.acceptingTrade = true
+            AcceptTrade()
+            C_Timer.After(0.2, function() NS.acceptingTrade = nil end)
+        end
+    end)
+end
+
+-- ---- auto craft once the materials are in
+local craftBlocked = false
+local function AutoCraft()
+    local o = order
+    if not o or o.stage ~= "craft" or craftBlocked or not Auto() then return end
+    local prof = NS.Char().profs[o.line]
+    local r = prof and prof.recipes[o.recipe]
+    if not r then return end
+    if InCombatLockdown and InCombatLockdown() then C_Timer.After(3, AutoCraft); return end
+    o.out, o.made = r.out, r.made or 1
+    o.before = o.before or BagCount(r.out)
+    o.crafting = true
+    NS.craftingOrder = true
+    NS.CraftRecipeNow(o.line, o.recipe, r, o.n, prof.name, "LeftButton", true) -- opens the profession if needed
+    C_Timer.After(1.5, function()
+        NS.craftingOrder = nil
+        -- the first call only opened the window: craft now (unless it already started)
+        if order ~= o or o.stage ~= "craft" then return end
+        if UnitCastingInfo and UnitCastingInfo("player") then return end
+        if BagCount(r.out) > o.before then return end
+        NS.craftingOrder = true
+        NS.CraftRecipeNow(o.line, o.recipe, r, o.n, prof.name, "LeftButton", true)
+        C_Timer.After(0.3, function() NS.craftingOrder = nil end)
+    end)
+end
+
 local function TradeDone()
     -- the materials reached the crafter
     if req and req.stage == "trading" and req.tradeOpen then
@@ -366,7 +505,8 @@ local function TradeDone()
     end
     if order and order.stage == "trade" and order.tradeOpen then
         order.stage, order.tradeOpen = "craft", nil
-        NS.Print(("Got the materials from %s - click Craft."):format(order.from))
+        C_Timer.After(1, AutoCraft)
+        NS.Print(("Got the materials from %s - %s"):format(order.from, Auto() and "crafting." or "click Craft."))
     elseif order and order.stage == "giving" and order.tradeOpen then
         NS._partySend(("D|%s|%s"):format(order.from, order.id))
         NS.Print(("Traded %s to %s - order done."):format(order.name, order.from))
@@ -386,9 +526,36 @@ local function TradeFailed(why)
     NS.RefreshOrderPanel()
 end
 
+local blockEv = CreateFrame("Frame")
+pcall(blockEv.RegisterEvent, blockEv, "ADDON_ACTION_BLOCKED")
+pcall(blockEv.RegisterEvent, blockEv, "ADDON_ACTION_FORBIDDEN")
+blockEv:SetScript("OnEvent", function(_, _, addon, fn)
+    if addon ~= ADDON then return end
+    if NS.acceptingTrade and not acceptBlocked then
+        acceptBlocked = true
+        NS.Print("The game won't let addons accept trades by themselves - click Trade in the trade window (everything else stays automatic).")
+        return
+    end
+    if NS.craftingOrder and not craftBlocked then
+        craftBlocked = true
+        NS.Print("The game won't let addons craft by themselves - click \"Craft\" on the order (one click).")
+        if panel then panel:Show() end
+        NS.RefreshOrderPanel()
+        return
+    end
+    if order and order.auto and not autoBlocked then
+        autoBlocked = true
+        order.stage, order.auto = "back", nil
+        NS.Print(("The game won't let addons start trades by themselves - click \"Trade to %s\" (or have them open the trade; the items go in either way)."):format(order.from))
+        if panel then panel:Show() end
+        NS.RefreshOrderPanel()
+    end
+end)
+
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "TRADE_SHOW", "TRADE_CLOSED", "TRADE_REQUEST_CANCEL", "TRADE_ACCEPT_UPDATE",
-    "UI_INFO_MESSAGE", "UI_ERROR_MESSAGE", "BAG_UPDATE_DELAYED" }) do
+    "UI_INFO_MESSAGE", "UI_ERROR_MESSAGE", "BAG_UPDATE_DELAYED",
+    "TRADE_TARGET_ITEM_CHANGED", "TRADE_PLAYER_ITEM_CHANGED", "TRADE_MONEY_CHANGED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 local closeTimer
@@ -398,24 +565,32 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         local partner = TradePartner()
         if req and (req.stage == "trading" or req.stage == "waiting") and NS._nameFits(partner or "", req.crafter) then
             req.tradeOpen = true
+            if req.stage == "waiting" then TryAccept() end
             if req.stage == "trading" then
                 local list = {}
                 for _, g in ipairs(req.need) do list[#list + 1] = { id = g.id, qty = g.qty * req.n } end
-                local ok, why = PlaceItems(list, function() NS.Print("Materials are in the trade - click Trade.") end)
+                local ok, why = PlaceItems(list, function() TryAccept() end)
                 if not ok then NS.Print("Can't put the materials in: " .. why); if CancelTrade then CancelTrade() end end
             end
         end
+        if order and order.stage == "back" and NS._nameFits(partner or "", order.from) then order.stage = "giving" end
         if order and (order.stage == "trade" or order.stage == "giving") and NS._nameFits(partner or "", order.from) then
             order.tradeOpen = true
+            if order.stage == "trade" then TryAccept() end
             if order.stage == "giving" then
                 local qty = math.min(BagCount(order.out), (order.made or 1) * order.n)
-                local ok, why = PlaceItems({ { id = order.out, qty = qty } }, function() NS.Print("Crafted items are in the trade - click Trade.") end)
+                order.placed = qty
+                local ok, why = PlaceItems({ { id = order.out, qty = qty } }, function() TryAccept() end)
                 if not ok then NS.Print("Can't put the items in: " .. why) end
             end
         end
         NS.RefreshOrderPanel()
     elseif event == "TRADE_ACCEPT_UPDATE" then
         accepted.player, accepted.target = a1 == 1, a2 == 1
+        if not accepted.player then TryAccept() end
+    elseif event == "TRADE_TARGET_ITEM_CHANGED" or event == "TRADE_PLAYER_ITEM_CHANGED" or event == "TRADE_MONEY_CHANGED" then
+        accepted.player = false
+        TryAccept()
     elseif event == "UI_INFO_MESSAGE" then
         if a2 == ERR_TRADE_COMPLETE or a1 == ERR_TRADE_COMPLETE then TradeDone() end
     elseif event == "UI_ERROR_MESSAGE" then

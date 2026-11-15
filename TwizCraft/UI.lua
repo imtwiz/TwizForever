@@ -560,6 +560,10 @@ SlashCmdList.CRAFTROUTE = function(msg)
         NS.db.wheelCraft = NS.db.wheelCraft == false
         NS.Print("mouse wheel = Craft All while a profession window is open: " .. (NS.db.wheelCraft and "on" or "off"))
         NS.UpdateCraftWheel()
+    elseif cmd == "orders" then
+        if rest == "manual" or rest == "off" then NS.db.ordersAuto = false elseif rest == "auto" or rest == "on" then NS.db.ordersAuto = true end
+        NS.Print("craft orders: " .. (NS.db.ordersAuto == false and "manual (you click Trade and Craft)"
+            or "automatic (trades accepted and items crafted and sent back by themselves)") .. ". /tc orders auto|manual")
     elseif cmd == "readall" then
         if rest == "off" or rest == "on" then
             NS.db.autoRead = rest == "on"
@@ -602,6 +606,7 @@ SlashCmdList.CRAFTROUTE = function(msg)
         print("  /tc buy        at a vendor: buy everything on your list it sells")
         print("  /tc refresh    re-read recipes (profession window open) and re-plan")
         print("  /tc readall    read every crafting profession now (on|off: do it at login)")
+        print("  /tc orders     craft orders automatic (default) or manual")
         print("  /tc find fish  everything TwizCraft knows about matching recipes/ingredients")
         print("  /tc size       reset the window size (drag the bottom-right corner to resize)")
     end

@@ -25,6 +25,18 @@ C_Container.PickupContainerItem = function(bag, slot) local s = SIM.bags[bag .. 
 C_Container.SplitContainerItem = function(bag, slot, n) local s = SIM.bags[bag .. ":" .. slot] SIM.cursor = { id = s.id, n = n } end
 function ClickTradeButton(i) SIM.tradeSlots[i] = SIM.cursor; SIM.cursor = nil end
 function CancelTrade() L("CancelTrade") end
+SIM.targetSlots = {}
+local function linkOf(id) return ("|Hitem:%d::|h[x]|h"):format(id) end
+GetTradePlayerItemLink = function(i) local s = SIM.tradeSlots[i] return s and linkOf(s.id) end
+GetTradeTargetItemLink = function(i) local s = SIM.targetSlots[i] return s and linkOf(s.id) end
+GetTradePlayerItemInfo = function(i) local s = SIM.tradeSlots[i] if s then return "x", 1, s.n end end
+GetTradeTargetItemInfo = function(i) local s = SIM.targetSlots[i] if s then return "x", 1, s.n end end
+GetPlayerTradeMoney = function() return 0 end
+TradeFrame = CreateFrame("Frame", "TradeFrame"); TradeFrame.__shown = false
+SIM.accepts = 0
+function AcceptTrade() SIM.accepts = SIM.accepts + 1; L("AcceptTrade (auto)") end
+local function complete() SIM.Fire("TRADE_ACCEPT_UPDATE", 1, 1); SIM.Fire("UI_INFO_MESSAGE", 0, ERR_TRADE_COMPLETE or "Trade complete."); TradeFrame.__shown = false; SIM.Fire("TRADE_CLOSED") end
+SIM.complete = complete
 local f = io.open(REPO .. "/tools/wowsim/planmake.lua"); local src = f:read("*a"); f:close()
 src = src:sub(1, src:find("local plan, why") - 1)
 assert(loadstring(src))()
@@ -59,17 +71,24 @@ p.main:Click(); SIM.Advance(0.3)
 L("sent: " .. table.concat(SIM.sent, " ; "))
 local orderMsg = SIM.sent[#SIM.sent]
 -- Bob accepts the trade request: the trade window opens on Alan's side
-SIM.tradePartner = "Bob"; SIM.Fire("TRADE_SHOW"); SIM.Advance(2)
+SIM.tradePartner = "Bob"; TradeFrame.__shown = true; SIM.Fire("TRADE_SHOW"); SIM.Advance(2)
 L("trade slots: " .. slots())
 -- first try fails (Bob closes the window)
-SIM.Fire("TRADE_CLOSED"); SIM.Advance(1)
+TradeFrame.__shown = false; SIM.Fire("TRADE_CLOSED"); SIM.Advance(1)
 L("after cancel: main=" .. p.main:GetText() .. " enabled=" .. tostring(p.main.__enabled) .. " sent=" .. SIM.sent[#SIM.sent])
 -- Alan clicks again; this time both accept
 SIM.sent = {}; SIM.tradeSlots = {}
 p.main:Click(); SIM.Advance(0.3)
-SIM.Fire("TRADE_SHOW"); SIM.Advance(2)
-SIM.Fire("TRADE_ACCEPT_UPDATE", 1, 1); SIM.Fire("UI_INFO_MESSAGE", 0, ERR_TRADE_COMPLETE or "Trade complete."); SIM.Fire("TRADE_CLOSED"); SIM.Advance(1)
+TradeFrame.__shown = true; SIM.Fire("TRADE_SHOW"); SIM.Advance(2)
+L("Alan auto-accepted: " .. SIM.accepts)
+complete(); SIM.Advance(1)
 L("after trade: " .. p.status:GetText() .. " | sent " .. table.concat(SIM.sent, " ; "))
+-- Bob trades the potions back: Alan's side accepts by itself
+SIM.accepts, SIM.tradeSlots = 0, {}
+SIM.targetSlots = { { id = 118, n = 3 } }
+TradeFrame.__shown = true; SIM.Fire("TRADE_SHOW"); SIM.Advance(1)
+L("Alan auto-accepted the potions: " .. SIM.accepts)
+SIM.targetSlots = {}; TradeFrame.__shown = false; SIM.Fire("TRADE_CLOSED"); SIM.Advance(1) -- (not completed here; Bob's side is played next)
 local secondOrder = nil
 for _, m in ipairs(SIM.sent) do end
 
@@ -81,16 +100,18 @@ NS.Char().profs[171] = { name = "Alchemy", line = 171, count = 1, recipes = { [2
 local q = orderMsg:gsub("^Q|Bob|", "Q|Bob|")
 SIM.Fire("CHAT_MSG_ADDON", "TWZC", q, "PARTY", "Alan-Realm"); SIM.Advance(0.6)
 L("Bob's panel: " .. p.title:GetText() .. " | " .. p.what:GetText() .. " | " .. p.main:GetText())
-SIM.tradePartner = "Alan"; SIM.Fire("TRADE_SHOW"); SIM.Advance(0.5)
-SIM.Fire("TRADE_ACCEPT_UPDATE", 1, 1); SIM.Fire("UI_INFO_MESSAGE", 0, ERR_TRADE_COMPLETE or "Trade complete."); SIM.Fire("TRADE_CLOSED"); SIM.Advance(1)
-L("Bob after mats: " .. p.main:GetText())
-local crafted = false
-NS.CraftRecipeNow = function(line, id, r, n) crafted = n; SIM.PutInBags(118, n) end
-p.main:Click(); SIM.Advance(1)
-L("Bob crafted " .. tostring(crafted) .. " -> " .. p.main:GetText())
-SIM.tradeSlots, SIM.sent = {}, {}
-p.main:Click(); SIM.Advance(0.3)
-SIM.Fire("TRADE_SHOW"); SIM.Advance(1)
-L("Bob's trade slots: " .. slots())
-SIM.Fire("TRADE_ACCEPT_UPDATE", 1, 1); SIM.Fire("UI_INFO_MESSAGE", 0, ERR_TRADE_COMPLETE or "Trade complete."); SIM.Fire("TRADE_CLOSED"); SIM.Advance(1)
+local craftedN = false
+NS.CraftRecipeNow = function(line, id, r, n) craftedN = n; SIM.PutInBags(118, n) end
+SIM.accepts = 0; SIM.tradeSlots = {}
+SIM.targetSlots = { { id = 2447, n = 3 }, { id = 765, n = 3 } }   -- Alan's materials arrive
+SIM.tradePartner = "Alan"; TradeFrame.__shown = true; SIM.Fire("TRADE_SHOW"); SIM.Advance(1)
+L("Bob auto-accepted mats: " .. SIM.accepts)
+complete(); SIM.targetSlots = {}; SIM.Advance(3)
+L("Bob crafted by itself: " .. tostring(craftedN))
+SIM.sent = {}
+SIM.Advance(1)   -- crafted -> trade back opens by itself
+L("trade back asked: " .. tostring(SIM.tradeAsked))
+TradeFrame.__shown = true; SIM.Fire("TRADE_SHOW"); SIM.Advance(1.5)
+L("Bob's trade slots: " .. slots() .. " | accepts " .. SIM.accepts)
+complete(); SIM.Advance(1)
 L("Bob done: sent " .. table.concat(SIM.sent, " ; ") .. " panel shown=" .. tostring(p.__shown))

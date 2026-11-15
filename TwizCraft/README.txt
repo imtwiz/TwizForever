@@ -1,5 +1,21 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.13.1 - CRAFT ORDERS RUN BY THEMSELVES
+- After you click "Trade mats to <friend>", the rest is automatic: your
+  TwizCraft accepts the trade once the materials are in, your friend's
+  TwizCraft accepts it once all the materials have arrived, crafts the
+  items, opens a trade back to you as soon as you're in range, puts them in
+  and accepts, and yours accepts the crafted items.
+- Trades are only accepted automatically when they hold exactly what the
+  order says (no gold from you, nothing extra), with the friend on the
+  order.
+- If the game won't let an addon accept a trade or craft, TwizCraft says so
+  once and that step becomes one click (Trade in the trade window, or Craft
+  on the order). If a trade fails, the asker clicks the button again.
+- Hiding the order popup no longer drops an order you have materials for.
+- /tc orders manual turns the automatic steps off; /tc orders auto turns
+  them back on.
+
 NEW IN 1.13.0 - CRAFT ORDERS FROM FRIENDS
 - Ask a friend to craft something: in the Friends' crafting window
   (/tc party) click one of their recipes, pick how many, stand next to them
