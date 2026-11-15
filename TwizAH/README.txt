@@ -88,6 +88,15 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.9
+  - Recipes in your bank are remembered: every time you open the bank,
+    TwizAH notes the recipes stored there (per character) and never offers
+    or buys them again, even when you're away from the bank.
+  - At the bank, recipes you can learn right now are taken out to your bags
+    automatically (if there's room) and learned as soon as you close it.
+    Recipes you need more skill for stay in the bank until you can learn
+    them. /dw autolearn off stops this.
+
 WHAT'S NEW IN 2.4.8
   - The Recipes tab only shows recipes you can learn right now. A recipe is
     left out if your skill is below what it needs, if the game shows its

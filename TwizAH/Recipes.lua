@@ -11,7 +11,27 @@ local function DB()
     ns.db.recipeSpent = ns.db.recipeSpent or 0
     ns.db.recipeBought = ns.db.recipeBought or {}
     ns.db.recipeMail = ns.db.recipeMail or {}
+    ns.db.recipeBank = ns.db.recipeBank or {}
     return ns.db
+end
+
+------------------------------------------------------------------------
+-- Bank memory: the game only shows the bank while it's open, so every time you
+-- open it the recipes stored there are remembered (per character) and counted
+-- as "already have" - never bought again.
+------------------------------------------------------------------------
+local function CharKey() return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?") end
+local function BankRecipes()
+    local b = DB().recipeBank
+    b[CharKey()] = b[CharKey()] or {}
+    return b[CharKey()]
+end
+function ns.BankBags()
+    local list = { BANK_CONTAINER or -1 }
+    local first = (NUM_BAG_SLOTS or 4) + 1
+    for bag = first, first + (NUM_BANKBAGSLOTS or 7) - 1 do list[#list + 1] = bag end
+    if REAGENTBANK_CONTAINER then list[#list + 1] = REAGENTBANK_CONTAINER end
+    return list
 end
 
 -- Recipes in your mailbox (read whenever the mailbox is open)
@@ -40,6 +60,7 @@ local function OwnedNames()
     local function add(id) local n = C_Item.GetItemInfo(id); if n then ownedNames[n] = true end end
     for id in pairs(db.recipeBought) do add(id) end
     for id in pairs(db.recipeMail) do add(id) end
+    for id in pairs(BankRecipes()) do add(id) end
     for bag = 0, 4 do
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local id = C_Container.GetContainerItemID(bag, slot)
@@ -56,6 +77,7 @@ end
 local function AlreadyHave(itemID)
     local db = DB()
     if db.recipeBought[itemID] or (db.recipeMail[itemID] or 0) > 0 then return true end
+    if (BankRecipes()[itemID] or 0) > 0 then return true end
     if (C_Item.GetItemCount(itemID, true) or 0) > 0 then return true end
     if TwizCraft and TwizCraft.MailCount then
         local ok, n = pcall(TwizCraft.MailCount, itemID)
@@ -934,4 +956,70 @@ auto:SetScript("OnEvent", function(_, event, a1)
         return
     end
     ScheduleLearn(1)
+end)
+
+------------------------------------------------------------------------
+-- At the bank: remember every recipe stored there, and take out the ones you
+-- can learn right now so they get learned when you walk away.
+------------------------------------------------------------------------
+local bankOpen = false
+local function ScanBankRecipes()
+    if not bankOpen then return end
+    local found, any, learnable = {}, false, {}
+    local profs = MyProfessions()
+    for _, bag in ipairs(ns.BankBags()) do
+        local ok, n = pcall(C_Container.GetContainerNumSlots, bag)
+        if ok and n and n > 0 then
+            any = true
+            for slot = 1, n do
+                local id = C_Container.GetContainerItemID(bag, slot)
+                if id then
+                    local _, _, subType, _, _, classID, subID = C_Item.GetItemInfoInstant(id)
+                    if classID == RECIPE_CLASS and subID ~= 0 then
+                        found[id] = (found[id] or 0) + 1
+                        local info = RecipeInfo(id)
+                        local p = info and profs[(info.prof or subType or ""):lower()]
+                        if info and not info.known and p and info.level and p.skill >= info.level and not info.tooLow then
+                            learnable[#learnable + 1] = { bag = bag, slot = slot, itemID = id }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if not any then return end -- the bank wasn't readable yet
+    local store = BankRecipes()
+    wipe(store)
+    for id, n in pairs(found) do store[id] = n end
+    ns.InvalidateRecipes()
+    -- move learnable ones to your bags (the bank is open, so this moves them rather than using them)
+    if ns.S.autoLearn ~= false and #learnable > 0 then
+        local free = 0
+        for bag = 0, (NUM_BAG_SLOTS or 4) do free = free + (C_Container.GetContainerNumFreeSlots(bag) or 0) end
+        local moved, names = 0, {}
+        for _, e in ipairs(learnable) do
+            if moved >= free then break end
+            C_Container.UseContainerItem(e.bag, e.slot)
+            moved = moved + 1
+            names[#names + 1] = Name(e.itemID)
+        end
+        if moved > 0 then
+            ns.Print(("Took %d recipe%s you can learn out of your bank: %s. They'll be learned when you close the bank."):format(
+                moved, moved == 1 and "" or "s", table.concat(names, ", ")))
+        end
+        if moved < #learnable then ns.Print("Your bags are full - make room to take the rest out.") end
+    end
+end
+
+local bev = CreateFrame("Frame")
+for _, e in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED", "PLAYERREAGENTBANKSLOTS_CHANGED" }) do
+    pcall(bev.RegisterEvent, bev, e)
+end
+local bankPending
+bev:SetScript("OnEvent", function(_, event)
+    if event == "BANKFRAME_OPENED" then bankOpen = true
+    elseif event == "BANKFRAME_CLOSED" then bankOpen = false; return end
+    if bankPending then return end
+    bankPending = true
+    C_Timer.After(0.6, function() bankPending = false; pcall(ScanBankRecipes) end)
 end)
