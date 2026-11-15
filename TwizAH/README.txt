@@ -88,6 +88,19 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.1
+  - Buy All Recipes keeps going by itself: one click starts it, prices are
+    looked up automatically, and each click, mouse-wheel notch or key press
+    buys the next recipe. The game requires a real click, notch or key for
+    every purchase, so it can't confirm with no input at all.
+  - Recipes that sold since your scan are skipped and the run moves on. If
+    someone buys the listing while you're buying it, it looks for the next
+    listing of that recipe. Recipes over 1.5x their usual price are skipped
+    (click the row to buy one anyway). It stops at your max spend, when
+    you're out of gold, or when you click Cancel.
+  - New key binding: Options > Keybindings > AddOns > TwizAH > Buy All
+    Recipes.
+
 WHAT'S NEW IN 2.4.0
   - Recipes tab: the cheapest recipes you're missing for your professions,
     from your full-scan prices. Recipes you already know, have in your bags,

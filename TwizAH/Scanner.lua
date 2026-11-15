@@ -421,13 +421,19 @@ end
 local wheelOwner = CreateFrame("Frame")
 local wheelBound = false
 function ns.UpdateWheelPost()
-    local want = ns.ahOpen and ns.S and ns.S.wheelPost and #ns.PostAllQueue() > 0
+    local cmd
+    if ns.ahOpen and ns.S and ns.S.wheelPost then
+        if ns.recipeRun then cmd = "DEPOSITWISE_BUYRECIPES" -- a Buy All Recipes run takes the wheel while it lasts
+        elseif #ns.PostAllQueue() > 0 then cmd = "DEPOSITWISE_POSTALL" end
+    end
+    local want = cmd or false
     if want == wheelBound then return end
     if InCombatLockdown and InCombatLockdown() then return end
+    if wheelBound then ClearOverrideBindings(wheelOwner) end
     if want then
-        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELUP", "DEPOSITWISE_POSTALL")
-        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELDOWN", "DEPOSITWISE_POSTALL")
-        if not ns.wheelHinted then
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELUP", cmd)
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELDOWN", cmd)
+        if cmd == "DEPOSITWISE_POSTALL" and not ns.wheelHinted then
             ns.wheelHinted = true
             ns.Print(("%d item%s ready - spin your mouse wheel (or click Post All) to post them all. /dw wheel off to disable."):format(
                 #ns.PostAllQueue(), #ns.PostAllQueue() == 1 and "" or "s"))
@@ -435,7 +441,7 @@ function ns.UpdateWheelPost()
     else
         ClearOverrideBindings(wheelOwner)
     end
-    wheelBound = want and true or false
+    wheelBound = want
 end
 
 ------------------------------------------------------------------------

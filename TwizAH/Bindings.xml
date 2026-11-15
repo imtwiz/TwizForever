@@ -11,6 +11,9 @@
     <Binding name="DEPOSITWISE_BUYSUPPLIES" category="ADDONS">
         TwizAH.BuyAllSupplies()
     </Binding>
+    <Binding name="DEPOSITWISE_BUYRECIPES" category="ADDONS">
+        TwizAH.BuyAllRecipes()
+    </Binding>
     <Binding name="DEPOSITWISE_TOGGLE" category="ADDONS">
         TwizAH.UI.Toggle()
     </Binding>

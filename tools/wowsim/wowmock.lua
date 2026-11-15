@@ -422,7 +422,8 @@ function SetOverrideBinding(owner, prio, key, cmd) rec("SetOverrideBinding", key
 function ClearOverrideBindings(owner) rec("ClearOverrideBindings") SIM.overrides = {} end
 function SIM.Wheel()   -- a mouse-wheel notch outside any scrolling frame
     local cmd = SIM.overrides["MOUSEWHEELDOWN"]
-    if cmd == "DEPOSITWISE_POSTALL" then TwizAH.PostAll() end
+    if cmd == "DEPOSITWISE_POSTALL" then TwizAH.PostAll()
+    elseif cmd == "DEPOSITWISE_BUYRECIPES" then TwizAH.BuyAllRecipes() end
 end
 
 -- addon messaging / groups (party sync)

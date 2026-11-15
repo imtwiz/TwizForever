@@ -150,10 +150,28 @@ ns.recipeBuy = nil -- { itemID, stage = "quote" | "ready" | "buying", price, auc
 
 local function Name(id) return C_Item.GetItemInfo(id) or ("item " .. id) end
 
-local function Done(msg)
+-- Buy All run: once started, prices are looked up automatically and each
+-- click / wheel notch / key press buys one recipe. Gone or pricier-than-usual
+-- recipes are skipped and the run moves on by itself.
+ns.recipeRun = nil -- { n, spent }
+local Continue
+
+local function StopRun(msg)
+    local run = ns.recipeRun
+    ns.recipeRun = nil
+    if run and msg ~= false then
+        ns.Print(msg or ("Buy All finished: %d recipe%s for %s."):format(run.n, run.n == 1 and "" or "s", ns.Money(run.spent)))
+    end
+    if ns.UpdateWheelPost then ns.UpdateWheelPost() end
+end
+ns.StopRecipeRun = StopRun
+
+local function Done(msg, stop)
     if msg then ns.Print(msg) end
     ns.recipeBuy = nil
     ns.InvalidateRecipes()
+    if stop and ns.recipeRun then StopRun() end
+    if ns.recipeRun then C_Timer.After(0.3, function() if ns.recipeRun and not ns.recipeBuy then Continue() end end) end
     ns.UI.Refresh()
 end
 
@@ -162,6 +180,7 @@ local function Bought(b)
     db.recipeSpent = db.recipeSpent + (b.price or 0)
     db.recipeBought[b.itemID] = true
     if TwizCraft and TwizCraft.NoteMailed then pcall(TwizCraft.NoteMailed, b.itemID, 1) end
+    if ns.recipeRun and b.all then ns.recipeRun.n = ns.recipeRun.n + 1; ns.recipeRun.spent = ns.recipeRun.spent + (b.price or 0) end
     Done(("Bought %s for %s (recipes spent: %s of %s). It's in your mailbox - learn it from your bags."):format(
         Name(b.itemID), ns.Money(b.price or 0), ns.Money(db.recipeSpent), ns.Money(ns.S.recipeBudget or 0)))
 end
@@ -175,18 +194,23 @@ local function Ready(b, price, auctionID)
         return Done(("%s costs %s now - more than is left of your recipe budget. Skipped."):format(Name(b.itemID), ns.Money(price)))
     end
     if b.expensive then
+        if b.all then
+            skipped[b.itemID] = true
+            return Done(("%s is %s right now, over 1.5x its usual %s. Skipped (click its row to buy it anyway)."):format(
+                Name(b.itemID), ns.Money(price), ns.Money(ref)))
+        end
         ns.Print(("Careful: %s is %s right now, over 1.5x its usual %s. Click again to buy anyway."):format(
             Name(b.itemID), ns.Money(price), ns.Money(ref)))
     end
     ns.UI.Refresh()
 end
 
-local function Quote(r, all)
-    if not ns.ahOpen then ns.Print("Open the Auction House first."); return end
+local function Quote(r, all, retried)
+    if not ns.ahOpen then ns.Print("Open the Auction House first."); StopRun(false); return end
     -- recipes are normally single items; trust the item key when the game knows
     local okK, keyInfo = pcall(C_AuctionHouse.GetItemKeyInfo, C_AuctionHouse.MakeItemKey(r.itemID))
     local commodity = okK and type(keyInfo) == "table" and keyInfo.isCommodity == true
-    local b = { itemID = r.itemID, stage = "quote", commodity = commodity, all = all, med = r.med, at = GetTime() }
+    local b = { itemID = r.itemID, r = r, retried = retried, stage = "quote", commodity = commodity, all = all, med = r.med, at = GetTime() }
     ns.recipeBuy = b
     if commodity then
         C_AuctionHouse.StartCommoditiesPurchase(r.itemID, 1)
@@ -210,7 +234,7 @@ local function Quote(r, all)
 end
 
 local function Confirm(b)
-    if b.price > GetMoney() then return Done("Not enough gold for " .. Name(b.itemID) .. ".") end
+    if b.price > GetMoney() then return Done("Not enough gold for " .. Name(b.itemID) .. ".", true) end
     b.stage, b.at = "buying", GetTime()
     if b.commodity then
         C_AuctionHouse.ConfirmCommoditiesPurchase(b.itemID, 1)
@@ -219,7 +243,7 @@ local function Confirm(b)
     end
     C_Timer.After(8, function()
         if ns.recipeBuy == b and b.stage == "buying" then
-            Done("No answer from the AH about " .. Name(b.itemID) .. " - check your mailbox before buying it again.")
+            Done("No answer from the AH about " .. Name(b.itemID) .. " - check your mailbox before buying it again.", true)
         end
     end)
     ns.UI.Refresh()
@@ -236,22 +260,36 @@ function ns.BuyRecipe(r)
     Quote(r, false)
 end
 
+Continue = function()
+    local plan = ns.RecipePlan()
+    if not plan[1] then return StopRun() end
+    Quote(plan[1], true)
+end
+
+-- each press: buys the recipe whose price is ready, or starts the run
 function ns.BuyAllRecipes()
     local b = ns.recipeBuy
     if b and b.stage == "ready" then return Confirm(b) end
     if b then return end
+    if ns.recipeRun then return Continue() end
     local plan = ns.RecipePlan()
     if not plan[1] then
         if (ns.S.recipeBudget or 0) <= 0 then ns.Print("Set a max spend first (the box next to Buy All, or /dw recipemax 10g).")
         else ns.Print("Nothing else fits in your recipe budget.") end
         return
     end
-    Quote(plan[1], true)
+    ns.recipeRun = { n = 0, spent = 0 }
+    if ns.UpdateWheelPost then ns.UpdateWheelPost() end
+    if ns.S.wheelPost then
+        ns.Print("Buying recipes: each click, mouse-wheel notch or key press buys the next one (the game needs one per purchase). Cancel to stop.")
+    end
+    Continue()
 end
 
 function ns.CancelRecipeBuy()
     local b = ns.recipeBuy
     if b and b.commodity then pcall(C_AuctionHouse.CancelCommoditiesPurchase) end
+    StopRun("Buy All stopped.")
     Done()
 end
 
@@ -270,7 +308,8 @@ end
 
 local function BuyAllText()
     local b = ns.recipeBuy
-    if b and b.stage ~= "ready" then return "Working..." end
+    if b and b.stage == "quote" then return "Finding price..." end
+    if b and b.stage == "buying" then return "Buying..." end
     if b and b.stage == "ready" then
         return ("%sConfirm %s|r"):format(b.expensive and "|cffff6060" or "", ns.Money(b.price))
     end
@@ -410,13 +449,18 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
     elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
         if b and b.commodity and b.stage == "buying" then Bought(b) end
     elseif event == "COMMODITY_PURCHASE_FAILED" then
-        if b and b.commodity and b.stage == "buying" then Done("Purchase failed - click again for a new price.") end
+        if b and b.commodity and b.stage == "buying" then skipped[b.itemID] = true; Done("Purchase failed for " .. Name(b.itemID) .. " - skipped.") end
     elseif event == "AUCTION_HOUSE_PURCHASE_COMPLETED" then
         if b and not b.commodity and b.stage == "buying" and (not a1 or a1 == b.auctionID) then Bought(b) end
     elseif event == "AUCTION_HOUSE_SHOW_ERROR" then
         if b and not b.commodity and b.stage == "buying" then
+            if not b.retried then
+                ns.Print(Name(b.itemID) .. " was just sold to someone else - looking for another listing.")
+                ns.recipeBuy = nil
+                return Quote(b.r, b.all, true)
+            end
             skipped[b.itemID] = true
-            Done("The AH said no to " .. Name(b.itemID) .. " (someone else bought it?). Skipped.")
+            Done("The AH said no to " .. Name(b.itemID) .. " again. Skipped.")
         end
     elseif event == "CHAT_MSG_SYSTEM" then
         -- "You won an auction for X"
@@ -426,6 +470,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         end
     elseif event == "AUCTION_HOUSE_CLOSED" then
         ns.recipeBuy = nil; wipe(skipped)
+        if ns.recipeRun then StopRun() end
     else
         ns.InvalidateRecipes(); wipe(infoCache)
     end
