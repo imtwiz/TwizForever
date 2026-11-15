@@ -7,13 +7,33 @@ local ADDON, NS = ...
 
 local PREFIX = "TWZQ"
 local VERSION = 1
+NS.partyStats = { sent = 0, recv = 0 }
 NS.party = {}            -- [name] = { quests = { [id] = { c = bool, o = { {t, f, r}, ... } } }, level, step, synced, at }
 local mine = {}          -- [id] = encoded string last sent
 local sendQ, sending = {}, false
 local offered = {}       -- [name .. id] = true: quests already shared with that member this session
 
 local function Me() return UnitName("player") end
-local function Short(name) return Ambiguate and Ambiguate(name, "none") or name end
+-- names are compared without the realm: "Bob-SomeRealm" and "Bob" are the same person
+local function Short(name) return name and (name:gsub("%-.*$", "")) or name end
+-- party members' names right now (short)
+local function PartyNames()
+    local t = {}
+    for i = 1, 4 do
+        local n = UnitName("party" .. i)
+        if n and n ~= "" then t[Short(n)] = true end
+    end
+    return t
+end
+-- dungeon-finder groups talk on INSTANCE_CHAT, normal parties on PARTY
+local function Channel()
+    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
+        and not (LE_PARTY_CATEGORY_HOME and IsInGroup(LE_PARTY_CATEGORY_HOME)) then
+        return "INSTANCE_CHAT"
+    end
+    return "PARTY"
+end
+local CHANNELS = { PARTY = true, INSTANCE_CHAT = true, RAID = true }
 local function InGroup() return IsInGroup and IsInGroup() and not (IsInRaid and IsInRaid()) end
 
 ------------------------------------------------------------------------
@@ -22,7 +42,10 @@ local function InGroup() return IsInGroup and IsInGroup() and not (IsInRaid and 
 local function Pump()
     local msg = table.remove(sendQ, 1)
     if not msg then sending = false; return end
-    if InGroup() and C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(PREFIX, msg, "PARTY") end
+    if InGroup() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        C_ChatInfo.SendAddonMessage(PREFIX, msg, Channel())
+        NS.partyStats.sent = NS.partyStats.sent + 1
+    end
     C_Timer.After(0.12, Pump)
 end
 
@@ -117,6 +140,8 @@ local AutoShare
 
 local function OnMessage(msg, sender)
     local who = Short(sender)
+    NS.partyStats.recv = NS.partyStats.recv + 1
+    NS.partyStats.last = who .. ": " .. msg:sub(1, 40)
     if who == Me() then return end
     local kind, rest = msg:match("^(%a)|?(.*)$")
     if not kind then return end
@@ -170,6 +195,14 @@ local function OnMessage(msg, sender)
     end
 end
 
+-- /tq party sync: ask everyone to resend and send ours
+function NS.PartyResync()
+    if not InGroup() then return false end
+    Send("H|" .. VERSION .. "|" .. (UnitLevel("player") or 0))
+    lastFull = GetTime(); C_Timer.After(0.5, SendFull)
+    return true
+end
+
 function NS.Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
 
 ------------------------------------------------------------------------
@@ -177,7 +210,7 @@ function NS.Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return
 ------------------------------------------------------------------------
 local function Prune()
     for name in pairs(NS.party) do
-        if not (InGroup() and UnitInParty(name)) then NS.party[name] = nil end
+        if not (InGroup() and PartyNames()[name]) then NS.party[name] = nil end
     end
 end
 
@@ -377,7 +410,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         NS.QueueXP()
         if NS.RefreshParty then NS.RefreshParty() end
     elseif event == "CHAT_MSG_ADDON" then
-        if a1 == PREFIX and (a3 == "PARTY" or a3 == "RAID") and NS.db and NS.db.party then OnMessage(a2, a4) end
+        if a1 == PREFIX and CHANNELS[a3] and NS.db and NS.db.party then OnMessage(a2, a4) end
     end
 end)
 

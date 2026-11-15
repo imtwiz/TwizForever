@@ -589,7 +589,7 @@ local function Help()
     print("  /tq size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /tq relearn      - forget learned speeds and rates")
     print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
-    print("  /tq party        - party sync status; /tq party on|off, /tq party xp (XP bars), /tq party share (auto-share), /tq party help (stay to help)")
+    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party share (auto-share), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
@@ -656,6 +656,8 @@ SlashCmdList.QUESTROUTE = function(msg)
         elseif arg == "share" then
             NS.db.partyShare = not NS.db.partyShare
             NS.Print("auto-share with new party members " .. (NS.db.partyShare and "on" or "off"))
+        elseif arg == "sync" then
+            if NS.PartyResync() then NS.Print("asked your party to resync quests.") else NS.Print("you're not in a party.") end
         elseif arg == "help" then
             NS.db.partyHelp = not NS.db.partyHelp
             NS.Print("stay to help party members finish kills " .. (NS.db.partyHelp and "on" or "off"))
@@ -668,7 +670,15 @@ SlashCmdList.QUESTROUTE = function(msg)
                 local p = NS.party[m]
                 print(("  %s: %d quests%s"):format(m, NS.Count(p.quests), p.step and (", heading to " .. p.step.text) or ""))
             end
-            if #st.noAddon > 0 then print("  not syncing (no TwizQuest): " .. table.concat(st.noAddon, ", ")) end
+            if #st.noAddon > 0 then
+                print("  not syncing: " .. table.concat(st.noAddon, ", ")
+                    .. " - they need TwizQuest 1.5+ enabled (it also needs Questie and TomTom installed, or it won't load)")
+            end
+            local ps = NS.partyStats or {}
+            print(("  messages sent %d, received %d%s"):format(ps.sent or 0, ps.recv or 0,
+                ps.last and (" - last from " .. ps.last) or ""))
+            if not NS.db.party then print("  party sync is OFF - /tq party on") end
+            print("  /tq party sync - ask everyone to resend")
         end
         return
     elseif cmd == "share" then

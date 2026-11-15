@@ -1,5 +1,12 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.7.1
+- Party sync fixes: friends whose names came through with a realm attached
+  were shown as "not running TwizQuest", every group change forgot synced
+  friends, and dungeon-finder groups never synced. All fixed.
+- /tq party now shows messages sent/received and why someone isn't syncing;
+  /tq party sync asks everyone to resend.
+
 NEW IN 1.7.0
 - Auto-accept: every quest offered to you is accepted - quest givers, gossip
   menus, items that start quests, and quests your party shares (escort

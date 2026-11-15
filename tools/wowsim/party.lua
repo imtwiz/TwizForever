@@ -5,8 +5,7 @@ C_ChatInfo.RegisterAddonMessagePrefix = function() return true end
 C_ChatInfo.SendAddonMessage = function(prefix, msg, chan) SIM.sent[#SIM.sent + 1] = msg end
 IsInGroup = function() return SIM.inGroup end
 IsInRaid = function() return false end
-UnitInParty = function(n) for _, v in ipairs(SIM.partyNames) do if v == n then return true end end return false end
-Ambiguate = function(n) return (n:gsub("%-.*", "")) end
+UnitInParty = function() return false end   -- the game's name check: never relied on
 QuestLogPushQuest = function() SIM.calls[#SIM.calls + 1] = { "QuestLogPushQuest" } end
 local realUnitName = UnitName
 UnitName = function(u)
@@ -54,6 +53,9 @@ for _, c in ipairs(SIM.calls) do
 end
 L(("auto-share: %d push(es), quest(s) %s"):format(pushes, table.concat(selected, ",")))
 fromBob("N|100|Kill Kobold Vermin")
+SIM.Fire("GROUP_ROSTER_UPDATE"); SIM.Advance(1)   -- a party change must not forget Bob
+L("after a roster update Bob still synced: " .. tostring(ns.party.Bob and ns.party.Bob.synced))
+SlashCmdList.QUESTROUTE("party")
 route("Bob synced, behind on kobolds")
 
 -- XP bars: Bob reports his XP, then levels up

@@ -4,10 +4,9 @@ C_ChatInfo = C_ChatInfo or {}
 C_ChatInfo.RegisterAddonMessagePrefix = function() return true end
 C_ChatInfo.SendAddonMessage = function(p, m) if p == "TWZC" then SIM.sent[#SIM.sent + 1] = m end end
 IsInGroup = function() return SIM.inGroup end
-UnitInParty = function(n) for _, v in ipairs(SIM.partyNames) do if v == n then return true end end return false end
+UnitInParty = function() return false end   -- the game's name check: never relied on
 local realUN = UnitName
 UnitName = function(u) local i = u and tonumber(u:match("^party(%d)$") or "") if i then return SIM.partyNames[i] end return realUN(u) end
-Ambiguate = function(n) return (n:gsub("%-.*", "")) end
 GetSpellInfo = function(id) return "Spell " .. id end
 local f = io.open(REPO .. "/tools/wowsim/planmake.lua"); local src = f:read("*a"); f:close()
 src = src:sub(1, src:find("local plan, why") - 1)

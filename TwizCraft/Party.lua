@@ -10,7 +10,26 @@ NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, re
 
 local function Me() return UnitName("player") end
 local function Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
-local function Short(n) return Ambiguate and Ambiguate(n, "none") or n end
+-- names are compared without the realm: "Bob-SomeRealm" and "Bob" are the same person
+local function Short(name) return name and (name:gsub("%-.*$", "")) or name end
+-- party members' names right now (short)
+local function PartyNames()
+    local t = {}
+    for i = 1, 4 do
+        local n = UnitName("party" .. i)
+        if n and n ~= "" then t[Short(n)] = true end
+    end
+    return t
+end
+-- dungeon-finder groups talk on INSTANCE_CHAT, normal parties on PARTY
+local function Channel()
+    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
+        and not (LE_PARTY_CATEGORY_HOME and IsInGroup(LE_PARTY_CATEGORY_HOME)) then
+        return "INSTANCE_CHAT"
+    end
+    return "PARTY"
+end
+local CHANNELS = { PARTY = true, INSTANCE_CHAT = true, RAID = true }
 local function InGroup() return IsInGroup and IsInGroup() and not (IsInRaid and IsInRaid()) end
 
 ------------------------------------------------------------------------
@@ -20,7 +39,7 @@ local sendQ, sending = {}, false
 local function Pump()
     local m = table.remove(sendQ, 1)
     if not m then sending = false; return end
-    if InGroup() and C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(PREFIX, m, "PARTY") end
+    if InGroup() and C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(PREFIX, m, Channel()) end
     C_Timer.After(0.15, Pump)
 end
 local function Send(m)
@@ -134,7 +153,7 @@ end
 local members = {}
 local function Roster()
     for name in pairs(NS.partyProfs) do
-        if not (InGroup() and UnitInParty(name)) then NS.partyProfs[name] = nil end
+        if not (InGroup() and PartyNames()[name]) then NS.partyProfs[name] = nil end
     end
     if not InGroup() then wipe(members); wipe(sentSig); if NS.RefreshUI then NS.RefreshUI() end return end
     local now, joined = {}, false
@@ -340,6 +359,6 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     elseif event == "GROUP_ROSTER_UPDATE" then
         Roster()
     elseif event == "CHAT_MSG_ADDON" then
-        if a1 == PREFIX and a3 == "PARTY" then OnMessage(a2, a4) end
+        if a1 == PREFIX and CHANNELS[a3] then OnMessage(a2, a4) end
     end
 end)

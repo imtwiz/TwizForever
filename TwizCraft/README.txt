@@ -1,5 +1,9 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.8.2
+- Party crafters: same sync fixes as TwizQuest (realm names, group changes,
+  dungeon-finder groups).
+
 NEW IN 1.8.1
 - Shortcut is now /tc (/cr still works). /tc help lists everything.
 
