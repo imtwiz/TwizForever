@@ -8,6 +8,7 @@ local ADDON, NS = ...
 
 BINDING_HEADER_CRAFTROUTE = "TwizCraft"
 BINDING_NAME_CRAFTROUTE_NEXT = "Craft next step"
+BINDING_NAME_CRAFTROUTE_CRAFTALL = "Craft All: next batch of everything you can make"
 
 local function ProfessionOpen(line)
     if not (C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo) then return false end
@@ -119,3 +120,120 @@ function NS.CraftNext(button)
     if plan.steps and plan.steps[1] then return NS.CraftStep(plan.steps[1], plan, button) end
     NS.Print("nothing to craft.")
 end
+
+------------------------------------------------------------------------
+-- Craft All: everything you can make right now, in plan order - make-first
+-- items, then each step. Each press crafts a whole batch of one recipe (as
+-- many as your materials and the plan allow); the game needs a fresh click,
+-- key or wheel notch to start the next recipe.
+------------------------------------------------------------------------
+function NS.CraftAllQueue()
+    local plan = NS.currentPlan
+    local q = {}
+    if not plan then return q end
+    for _, sc in ipairs(plan.subcrafts or {}) do
+        local p = NS.Char().profs[sc.line]
+        local r = p and p.recipes[sc.id]
+        if r and r.learned and CanMake(r) > 0 then
+            q[#q + 1] = { line = sc.line, id = sc.id, r = r, want = sc.n, prof = p.name }
+        end
+    end
+    for _, st in ipairs(plan.steps or {}) do
+        if st.r and st.r.learned and CanMake(st.r) > 0 then
+            q[#q + 1] = { line = plan.line, id = st.id, r = st.r, want = st.n, prof = plan.name }
+        end
+    end
+    -- the same recipe in several places (e.g. two skill ranges): one batch
+    local merged, at = {}, {}
+    for _, e in ipairs(q) do
+        local m = at[e.id]
+        if m then m.want = (m.want or 0) + (e.want or 0)
+        else at[e.id] = e; merged[#merged + 1] = e end
+    end
+    return merged
+end
+
+local function Busy()
+    if UnitCastingInfo and UnitCastingInfo("player") then return true end
+    if C_TradeSkillUI and C_TradeSkillUI.GetRecipeRepeatCount then
+        local ok, n = pcall(C_TradeSkillUI.GetRecipeRepeatCount)
+        if ok and (n or 0) > 0 then return true end
+    end
+    return false
+end
+
+local lastBusyMsg = 0
+local current
+function NS.CraftAll(button)
+    if button == "RightButton" then
+        current = nil
+        return NS.CraftRecipeNow(nil, nil, nil, nil, nil, "RightButton")
+    end
+    if Busy() then
+        if GetTime() - lastBusyMsg > 3 then
+            lastBusyMsg = GetTime()
+            NS.Print("still crafting - Craft All picks up the next recipe when this batch is done.")
+        end
+        return
+    end
+    if NS.PlanNow then NS.PlanNow() end
+    local q = NS.CraftAllQueue()
+    local first = q[1]
+    if not first then
+        NS.Print("nothing you can craft with what's in your bags right now.")
+        NS.UpdateCraftWheel()
+        return
+    end
+    current = first.r.name
+    NS.CraftRecipeNow(first.line, first.id, first.r, first.want, first.prof, button)
+    if #q > 1 then
+        NS.Print(("%d more recipe%s after this batch - press Craft All again or spin your mouse wheel."):format(
+            #q - 1, #q == 2 and "" or "s"))
+    end
+    NS.UpdateCraftWheel()
+end
+
+-- While the profession window is open and something is craftable, the mouse
+-- wheel (outside scrolling lists) presses Craft All. Released when done.
+local wheelOwner = CreateFrame("Frame")
+local wheelBound = false
+function NS.UpdateCraftWheel()
+    local plan = NS.currentPlan
+    local want = NS.db and NS.db.wheelCraft ~= false and plan and ProfessionOpen(plan.line)
+        and #NS.CraftAllQueue() > 0 and true or false
+    if want == wheelBound or InCombatLockdown() then return end
+    if want then
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELUP", "CRAFTROUTE_CRAFTALL")
+        SetOverrideBinding(wheelOwner, true, "MOUSEWHEELDOWN", "CRAFTROUTE_CRAFTALL")
+    else
+        ClearOverrideBindings(wheelOwner)
+    end
+    wheelBound = want
+end
+
+-- tell you when a batch finishes and what's next
+local ev = CreateFrame("Frame")
+ev:RegisterEvent("TRADE_SKILL_SHOW")
+ev:RegisterEvent("TRADE_SKILL_CLOSE")
+ev:RegisterEvent("UNIT_SPELLCAST_STOP")
+ev:RegisterEvent("PLAYER_REGEN_ENABLED")
+ev:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_SPELLCAST_STOP" then
+        if unit ~= "player" or not current then return end
+        C_Timer.After(0.4, function()
+            if Busy() or not current then return end
+            current = nil
+            local q = NS.CraftAllQueue()
+            if q[1] then
+                NS.Print(("batch done - next: %s (%d recipe%s left). Press Craft All or spin the wheel."):format(
+                    q[1].r.name, #q, #q == 1 and "" or "s"))
+            else
+                NS.Print("Craft All finished - nothing left you can make right now.")
+            end
+            NS.UpdateCraftWheel()
+            if NS.RefreshUI then NS.RefreshUI() end
+        end)
+        return
+    end
+    C_Timer.After(0.3, NS.UpdateCraftWheel)
+end)

@@ -2,4 +2,7 @@
     <Binding name="CRAFTROUTE_NEXT" header="CRAFTROUTE" category="ADDONS">
         if TwizCraft and TwizCraft.CraftNext then TwizCraft.CraftNext() end
     </Binding>
+    <Binding name="CRAFTROUTE_CRAFTALL" category="ADDONS">
+        if TwizCraft and TwizCraft.CraftAll then TwizCraft.CraftAll() end
+    </Binding>
 </Bindings>

@@ -434,3 +434,16 @@ Ambiguate = Ambiguate or function(n) return n end
 -- the minimap frame
 Minimap = Minimap or CreateFrame("Frame", "Minimap", UIParent)
 if Minimap.SetSize then Minimap:SetSize(140, 140) end
+
+-- remove items from bags (crafting uses up reagents)
+function SIM.TakeFromBags(id, count)
+    for bag = 0, 4 do for slot = 1, 16 do
+        local k = bag .. ":" .. slot
+        local s = SIM.bags[k]
+        if s and s.id == id and count > 0 then
+            local take = math.min(s.count, count)
+            s.count = s.count - take; count = count - take
+            if s.count <= 0 then SIM.bags[k] = nil end
+        end
+    end end
+end

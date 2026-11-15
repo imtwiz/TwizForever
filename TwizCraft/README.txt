@@ -1,5 +1,15 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.7.0
+- Craft All button (next to Craft next, or /cr craftall): crafts everything
+  you can make right now in plan order - make-first items, then each step.
+  Each press crafts a whole batch of one recipe (as many as your materials
+  and the plan allow). The game needs a fresh click to start each different
+  recipe, so press again - or just spin your mouse wheel while the profession
+  window is open. Chat tells you when a batch is done and what's next.
+  Right-click stops. Bindable in Options > Keybindings > AddOns.
+  /cr wheel turns the mouse-wheel shortcut off.
+
 NEW IN 1.6.1
 - Requires TomTom (for the waypoint arrow on shopping and mailbox stops).
 

@@ -344,8 +344,34 @@ local function Build()
         GameTooltip:Show()
     end)
     nextBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local allBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    allBtn:SetSize(64, 18); allBtn:SetPoint("RIGHT", nextBtn, "LEFT", -4, 0)
+    allBtn:SetText("Craft All")
+    allBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    allBtn:SetScript("OnClick", function(_, button) NS.CraftAll(button) end)
+    allBtn:EnableMouseWheel(true)
+    allBtn:SetScript("OnMouseWheel", function() NS.CraftAll() end)
+    allBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Craft All")
+        local q = NS.CraftAllQueue()
+        if #q == 0 then
+            GameTooltip:AddLine("Nothing you can craft with what's in your bags right now.", 1, 1, 1, true)
+        else
+            GameTooltip:AddLine("Crafts everything you can make now, in plan order:", 1, 1, 1, true)
+            for _, e in ipairs(q) do
+                local can = math.huge
+                for _, g in ipairs(e.r.reagents) do can = math.min(can, math.floor(NS.SlotBags(g) / math.max(1, g.qty))) end
+                GameTooltip:AddDoubleLine(e.r.name, ("x%d"):format(math.min(can, e.want or can)), 1, 1, 1, 0.7, 0.7, 0.7)
+            end
+        end
+        GameTooltip:AddLine("Each press crafts a whole batch of one recipe. The game needs a new click to start the next one - press again, or spin your mouse wheel while the profession window is open.", 0.4, 1, 0.4, true)
+        GameTooltip:AddLine("Right-click: stop. Bind a key in Options > Keybindings > AddOns.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     local refresh = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    refresh:SetSize(64, 18); refresh:SetPoint("RIGHT", nextBtn, "LEFT", -4, 0)
+    refresh:SetSize(64, 18); refresh:SetPoint("RIGHT", allBtn, "LEFT", -4, 0)
     refresh:SetText("Refresh")
     refresh:SetScript("OnClick", function() NS.RefreshAll() end)
     refresh:SetScript("OnEnter", function(self)
@@ -464,6 +490,14 @@ function NS.RefreshAll()
 end
 
 local queued
+-- plan right now (Craft All uses this so its batches match your current bags)
+function NS.PlanNow()
+    local line = NS.current or Selected()
+    if not line then return end
+    local ok, p, w = pcall(NS.PlanFor, line)
+    if ok and p then plan, why = p, w; NS.currentPlan = plan end
+end
+
 function NS.Replan(now)
     if not NS.db or not frame then return end
     if queued and not now then return end
@@ -500,6 +534,12 @@ SlashCmdList.CRAFTROUTE = function(msg)
     if cmd == "" then
         if frame:IsShown() then frame:Hide(); NS.db.shown = false
         else frame:Show(); NS.db.shown = true; NS.Replan(true) end
+    elseif cmd == "craftall" or cmd == "all" then
+        NS.CraftAll()
+    elseif cmd == "wheel" then
+        NS.db.wheelCraft = NS.db.wheelCraft == false
+        NS.Print("mouse wheel = Craft All while a profession window is open: " .. (NS.db.wheelCraft and "on" or "off"))
+        NS.UpdateCraftWheel()
     elseif cmd == "refresh" then
         NS.RefreshAll()
     elseif cmd == "find" then
@@ -524,6 +564,8 @@ SlashCmdList.CRAFTROUTE = function(msg)
     else
         NS.Print("commands:")
         print("  /cr            show or hide the window")
+        print("  /cr craftall   craft the next batch of everything you can make (Craft All button)")
+        print("  /cr wheel      mouse wheel presses Craft All while a profession window is open (on)")
         print("  /cr target 225 plan up to this skill instead of your cap (/cr target to clear)")
         print("  /cr resell     count AH resale of what you craft (default: vendor value)")
         print("  /cr odds       skill-up odds learned from your crafting")
