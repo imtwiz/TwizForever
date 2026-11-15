@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.10.1
+- Drop All keeps class quests too (same rule as dungeon quests): shift-click
+  Drop All, or /tq dropall dungeons, to drop them as well.
+
 NEW IN 1.10.0 - AUTOMATIC GROUP SYNC
 - As soon as someone in your party syncs, the group plan starts by itself:
   one person plans the fastest XP for the whole group and everyone's

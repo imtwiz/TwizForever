@@ -37,6 +37,10 @@ local function route(label)
 end
 
 C_QuestLog.GetQuestTagInfo = function(id) if id == 101 then return { tagID = 81, tagName = "Dungeon" } end end
+-- 100 is a class quest (Questie requiredClasses), 103 a normal one
+local realQ = ns.Q
+ns.Q = function(id, f) if f == "requiredClasses" and id == 100 then return 8 end return realQ(id, f) end
+table.insert(SIM.quests, { title = "Old Gray Errand", questID = 103, isHeader = false, objectives = {} })
 local shown
 StaticPopup_Show = function(w, a1, a2) shown = { w, a1, a2 } return shown end
 local function abandoned()

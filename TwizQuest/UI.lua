@@ -321,7 +321,7 @@ local function Build()
     frame.dropAll:SetSize(80, 22); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -6, 0)
     frame.dropAll:SetText("Drop All")
     frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd(IsShiftKeyDown()) end)
-    Tip(frame.dropAll, "Drop All", "Abandons every quest except dungeon quests (asks first)\nShift-click: dungeon quests too\nLow-value quests only: /tq cleanup")
+    Tip(frame.dropAll, "Drop All", "Abandons every quest except dungeon and class quests (asks first)\nShift-click: those too\nLow-value quests only: /tq cleanup")
     frame.groupBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.groupBtn:SetSize(84, 22); frame.groupBtn:SetPoint("RIGHT", frame.dropAll, "LEFT", -6, 0)
     frame.groupBtn:SetText("Group")
@@ -603,14 +603,30 @@ local function IsDungeonQuest(id)
 end
 NS.IsDungeonQuest = IsDungeonQuest
 
--- the quests Drop All would remove: everything, or everything but dungeon/raid quests
+-- class quests (Questie's requiredClasses, or the game's class tag)
+local function IsClassQuest(id)
+    local rc = NS.Q and NS.Q(id, "requiredClasses")
+    if type(rc) == "number" and rc > 0 then return true end
+    if C_QuestLog.GetQuestTagInfo then
+        local ok, tag = pcall(C_QuestLog.GetQuestTagInfo, id)
+        local t = ok and type(tag) == "table" and NS.safe(tag.tagID)
+        if t == 21 then return true end   -- class quest tag
+    end
+    return false
+end
+NS.IsClassQuest = IsClassQuest
+
+-- quests Drop All keeps unless you shift-click: dungeon, raid and class quests
+local function IsKeptQuest(id) return IsDungeonQuest(id) or IsClassQuest(id) end
+
+-- the quests Drop All would remove: everything, or everything but dungeon/raid/class quests
 local function DropList(withDungeons)
     local ids, kept, done = {}, 0, 0
     for i = 1, (C_QuestLog.GetNumQuestLogEntries() or 0) do
         local info = C_QuestLog.GetInfo(i)
         local id = info and NS.safe(info.questID)
         if id and id > 0 and not NS.safe(info.isHeader) then
-            if not withDungeons and IsDungeonQuest(id) then
+            if not withDungeons and IsKeptQuest(id) then
                 kept = kept + 1
             else
                 ids[#ids + 1] = id
@@ -637,13 +653,13 @@ StaticPopupDialogs.TWIZQUEST_ABANDON_ALL = {
             pcall(C_QuestLog.AbandonQuest)
         end
         NS.Print(("abandoned %d quest(s)%s."):format(#ids,
-            kept > 0 and (", kept %d dungeon quest%s (shift-click Drop All to drop those too)"):format(kept, kept == 1 and "" or "s") or ""))
+            kept > 0 and (", kept %d dungeon/class quest%s (shift-click Drop All to drop those too)"):format(kept, kept == 1 and "" or "s") or ""))
         NS.cache = nil
         NS.Replan()
     end,
 }
 
--- Drop All keeps dungeon and raid quests; shift-click drops those too
+-- Drop All keeps dungeon, raid and class quests; shift-click drops those too
 function NS.DropAllCmd(withDungeons)
     if NS.KeepAllQuests and NS.KeepAllQuests() then
         NS.Print("you're synced with your party - TwizQuest never removes quests while synced. Leave the group or /tq party off first.")
@@ -652,13 +668,13 @@ function NS.DropAllCmd(withDungeons)
     if withDungeons == nil then withDungeons = IsShiftKeyDown() end
     local ids, kept, done = DropList(withDungeons)
     if #ids == 0 then
-        NS.Print(kept > 0 and ("only dungeon quests left (%d) - shift-click Drop All to drop them."):format(kept)
+        NS.Print(kept > 0 and ("only dungeon/class quests left (%d) - shift-click Drop All to drop them."):format(kept)
             or "your quest log is already empty.")
         return
     end
     local notes = ""
-    if withDungeons then notes = notes .. "\n|cffff9933Including dungeon quests.|r"
-    elseif kept > 0 then notes = notes .. ("\nKeeping %d dungeon quest%s."):format(kept, kept == 1 and "" or "s") end
+    if withDungeons then notes = notes .. "\n|cffff9933Including dungeon and class quests.|r"
+    elseif kept > 0 then notes = notes .. ("\nKeeping %d dungeon/class quest%s."):format(kept, kept == 1 and "" or "s") end
     if done > 0 then notes = notes .. ("\n|cffff5555%d of them are complete and ready to turn in!|r"):format(done) end
     local dialog = StaticPopup_Show("TWIZQUEST_ABANDON_ALL", #ids, notes)
     if dialog then dialog.data = withDungeons end
@@ -686,8 +702,8 @@ local function Help()
     print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
     print("  /tq solo         - back to your own route")
     print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
-    print("  /tq dropall      - abandon every quest except dungeon quests, asks first (Drop All button)")
-    print("  /tq dropall dungeons - same, including dungeon quests (shift-click Drop All)")
+    print("  /tq dropall      - abandon every quest except dungeon and class quests, asks first (Drop All button)")
+    print("  /tq dropall dungeons - same, including dungeon and class quests (shift-click Drop All)")
     print("  /tq service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end

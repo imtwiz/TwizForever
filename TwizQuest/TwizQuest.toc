@@ -2,7 +2,7 @@
 ## Title: TwizQuest
 ## Notes: Plans which quests to do, in what order, for the most XP per hour from where you're standing. Uses Questie's quest database for locations and learns your kill speed, rest time and travel speed as you play.
 ## Author: Alan Sherbourne
-## Version: 1.10.0
+## Version: 1.10.1
 ## Dependencies: Questie, TomTom
 ## OptionalDeps: QuestieDB
 ## SavedVariables: QuestRouteDB
