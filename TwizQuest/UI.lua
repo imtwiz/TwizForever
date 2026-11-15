@@ -86,6 +86,7 @@ local function PartyText(st)
     if #st.noAddon > 0 then
         bits[#bits + 1] = ("|cff999999Synced: %d/%d|r"):format(#st.members, #st.members + #st.noAddon)
     end
+    bits[#bits + 1] = ("|cff66ff66Same: %d|r"):format(#st.same)
     if #st.missing > 0 then bits[#bits + 1] = ("|cffffd100Share: %d|r"):format(#st.missing) end
     if #st.behind > 0 then bits[#bits + 1] = ("|cffff9933Behind: %d|r"):format(#st.behind) end
     if #st.ready > 0 then bits[#bits + 1] = ("|cff66ff66Ready: %d|r"):format(#st.ready) end
@@ -103,6 +104,10 @@ local function PartyTooltip(self)
         GameTooltip:AddDoubleLine(m .. (p.level and (" (" .. p.level .. ")") or ""),
             p.step and ("Next: " .. p.step.text) or "", 1, 1, 1, 0.7, 0.7, 0.7)
     end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(("Same quests: %d everyone has%s"):format(#st.same,
+        st.sameSome > #st.same and (", " .. st.sameSome .. " with someone") or ""), 0.4, 1, 0.4)
+    for _, id in ipairs(st.same) do GameTooltip:AddLine("  " .. QName(id), 1, 1, 1) end
     if #st.missing > 0 then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Share: they lack", 1, 0.82, 0)
@@ -233,9 +238,10 @@ local function Refresh()
     local age = GetTime() - (plan.at or GetTime())
     local groupTag = ""
     if plan.group then
-        groupTag = ("|cff66ccffGroup%s: %s XP/hr x%d|r   "):format(
+        local st = NS.PartyStatus and NS.PartyStatus()
+        groupTag = ("|cff66ccffGroup%s: %s XP/hr x%d, %d same|r   "):format(
             plan.group.from and (" (" .. plan.group.from .. ")") or "",
-            NS.FormatNum(plan.group.rate), plan.group.members)
+            NS.FormatNum(plan.group.rate), plan.group.members, st and #st.same or 0)
     end
     frame.summary:SetText(("%s|cff66ff66%s XP/hr|r   %s XP / %s%s   %s"):format(groupTag,
         NS.FormatNum(plan.rate), NS.FormatNum(plan.xp), NS.FormatTime(plan.time),
@@ -576,10 +582,12 @@ end)
 -- Slash commands
 ------------------------------------------------------------------------
 function NS.ShareAllCmd()
-    local n, why = NS.ShareAll()
+    local n, why, skipped = NS.ShareAll()
+    skipped = skipped or 0
+    local note = skipped > 0 and (" - skipped %d the whole group already has"):format(skipped) or ""
     if why then NS.Print(why .. ".")
-    elseif n == 0 then NS.Print("none of your quests can be shared.")
-    else NS.Print(("sharing %d quest%s with your party (one every 0.5s)."):format(n, n == 1 and "" or "s")) end
+    elseif n == 0 then NS.Print((skipped > 0 and "everyone already has your shareable quests" or "none of your quests can be shared") .. ".")
+    else NS.Print(("sharing %d quest%s with your party (one every 0.5s)%s."):format(n, n == 1 and "" or "s", note)) end
 end
 
 -- dungeon and raid quests: Questie's database first, then the game's quest tag

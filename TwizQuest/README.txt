@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.10.2
+- The party line shows "Same: N" - quests everyone in the group has (hover
+  for the list, plus how many you share with at least one member). The group
+  plan summary shows it too.
+- Share All and share-on-pickup skip any quest the whole group already has.
+
 NEW IN 1.10.1
 - Drop All keeps class quests too (same rule as dungeon quests): shift-click
   Drop All, or /tq dropall dungeons, to drop them as well.

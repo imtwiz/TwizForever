@@ -361,7 +361,7 @@ end
 
 -- Summary for the party line: members, quests to share, who's behind, ready together
 function NS.PartyStatus()
-    local st = { members = {}, missing = {}, theyHave = {}, behind = {}, ready = {}, noAddon = {} }
+    local st = { members = {}, missing = {}, theyHave = {}, behind = {}, ready = {}, noAddon = {}, same = {}, sameSome = 0 }
     if not InGroup() then return st end
     for _, m in ipairs(Roster()) do
         local s = m.name
@@ -370,6 +370,11 @@ function NS.PartyStatus()
     end
     local log = Snapshot()
     for id in pairs(log) do
+        -- quests you have in common: with everyone, or with at least one member
+        if NS.GroupHasAll(id) then st.same[#st.same + 1] = id end
+        for _, name in ipairs(st.members) do
+            if NS.party[name].quests[id] then st.sameSome = st.sameSome + 1; break end
+        end
         local myDone = C_QuestLog.IsComplete and C_QuestLog.IsComplete(id)
         local allDone = myDone
         for _, name in ipairs(st.members) do
@@ -432,20 +437,36 @@ end
 
 -- share every quest in your log that can be shared (party members who already
 -- have one, or can't take it, simply get told so by the game)
+-- true when every party member is synced and already has this quest
+function NS.GroupHasAll(id)
+    if not InGroup() then return false end
+    local any = false
+    for _, m in ipairs(Roster()) do
+        local p = NS.party[m.name]
+        if not (p and p.synced and p.quests[id]) then return false end
+        any = true
+    end
+    return any
+end
+
 function NS.ShareAll()
     if not InGroup() then return 0, "join a party first" end
-    local n = 0
+    local n, skipped = 0, 0
     local count = C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries() or 0
     for i = 1, count do
         local info = C_QuestLog.GetInfo(i)
         local id = info and NS.safe(info.questID)
         if id and id > 0 and not NS.safe(info.isHeader)
             and C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id) then
-            shareQ[#shareQ + 1] = id; n = n + 1
+            if NS.GroupHasAll(id) then
+                skipped = skipped + 1          -- the whole group already has it
+            else
+                shareQ[#shareQ + 1] = id; n = n + 1
+            end
         end
     end
     if n > 0 and not sharing then sharing = true; ShareNext() end
-    return n
+    return n, nil, skipped
 end
 
 -- a quest you just picked up: offer it to the group (skipped when everyone in
@@ -453,12 +474,7 @@ end
 function NS.ShareOnPickup(id)
     if not (id and NS.db and NS.db.shareOnAccept ~= false) or not InGroup() then return end
     if not (C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id)) then return end
-    local needs = false
-    for _, m in ipairs(Roster()) do
-        local p = NS.party[m.name]
-        if not (p and p.synced and p.quests[id]) then needs = true end
-    end
-    if not needs then return end
+    if NS.GroupHasAll(id) then return end
     shareQ[#shareQ + 1] = id
     if not sharing then sharing = true; C_Timer.After(0.5, ShareNext) end
     local title = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id)
