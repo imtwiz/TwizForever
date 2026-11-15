@@ -212,9 +212,9 @@ local function Refresh()
         toLevel and ("|cff999999level in ~" .. NS.FormatTime(toLevel) .. "|r") or "",
         NS.IsPlanning() and "  |cffffff00updating...|r" or
             ("  |cff777777" .. (age < 5 and "just now" or NS.FormatTime(age) .. " ago") .. "|r"))
-        .. (((plan.skipped or 0) > 0) and ("  |cffff8040(%d skipped, /qr error)|r"):format(plan.skipped) or "")
+        .. (((plan.skipped or 0) > 0) and ("  |cffff8040(%d skipped, /tq error)|r"):format(plan.skipped) or "")
         .. (((plan.rested or 0) > 0) and ("  |cff6699ffrested %s|r"):format(NS.FormatNum(plan.rested)) or "")
-        .. ((#(plan.drop or {}) > 0) and ("  |cffffd100%d to drop (/qr cleanup)|r"):format(#plan.drop) or ""))
+        .. ((#(plan.drop or {}) > 0) and ("  |cffffd100%d to drop (/tq cleanup)|r"):format(#plan.drop) or ""))
     local shown, fit = 0, RowsFit()
     for i = 1, ROWS do
         local s = (i <= fit) and plan.route[i] or nil
@@ -233,7 +233,7 @@ local function Refresh()
         end
     end
     if #plan.route == 0 then
-        frame.summary:SetText("Nothing worth doing nearby. Try /qr range 5000 or /qr above 4.")
+        frame.summary:SetText("Nothing worth doing nearby. Try /tq range 5000 or /tq above 4.")
     end
     if not NS.db.sized then frame:SetHeight(58 + partyOffset + shown * ROW_H) end
 end
@@ -295,7 +295,7 @@ local function Build()
     frame.dropAll:SetSize(60, 18); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -4, 0)
     frame.dropAll:SetText("Drop All")
     frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd() end)
-    Tip(frame.dropAll, "Drop All", "Abandon every quest in your log (asks first). To drop only the ones not worth doing, use /qr cleanup.")
+    Tip(frame.dropAll, "Drop All", "Abandon every quest in your log (asks first). To drop only the ones not worth doing, use /tq cleanup.")
 
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.summary:SetPoint("TOPLEFT", 10, -28)
@@ -429,7 +429,7 @@ function NS.OnPlan(result, why)
         NS.UpdateTargetButton()
         if NS.db.autoWay and result.route[1] then SetWaypoint(result.route[1], true) end
     elseif frame then
-        frame.status = "Can't plan yet: " .. tostring(why or "unknown") .. "  (/qr error)"
+        frame.status = "Can't plan yet: " .. tostring(why or "unknown") .. "  (/tq error)"
     end
     Refresh()
 end
@@ -576,30 +576,32 @@ end
 
 local function Help()
     NS.Print("commands:")
-    print("  /qr              - show or hide the route window")
-    print("  /qr plan         - re-plan now (it also updates by itself)")
-    print("  /qr auto         - automatic updates (now " .. (NS.db.auto and "on" or "off") .. ")")
-    print("  /qr next         - waypoint to the first step")
-    print("  /qr time 60      - minutes of play to plan (now " .. NS.db.horizon .. ")")
-    print("  /qr above 3      - max levels above you a quest can be (now " .. NS.db.maxAbove .. ")")
-    print("  /qr range 3000   - max yards to a quest giver (now " .. NS.db.maxDist .. ")")
-    print("  /qr elites       - include quests with elite kills (now " .. (NS.db.elites and "on" or "off") .. ")")
-    print("  /qr way          - auto-waypoint step 1 (now " .. (NS.db.autoWay and "on" or "off") .. ")")
-    print("  /qr learned      - what it has learned about how you play")
-    print("  /qr size         - reset the window size (drag the bottom-right corner to resize)")
-    print("  /qr relearn      - forget learned speeds and rates")
-    print("  /qr cleanup      - quests in your log that aren't worth their slot; /qr abandon drops them")
-    print("  /qr party        - party sync status; /qr party on|off, /qr party xp (XP bars), /qr party share (auto-share), /qr party help (stay to help)")
-    print("  /qr share        - share your quests that party members don't have")
-    print("  /qr shareall     - offer every shareable quest to your party (Share All button)")
-    print("  /qr dropall      - abandon every quest in your log, asks first (Drop All button)")
-    print("  /qr service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
+    print("  /tq              - show or hide the route window")
+    print("  /tq plan         - re-plan now (it also updates by itself)")
+    print("  /tq auto         - automatic updates (now " .. (NS.db.auto and "on" or "off") .. ")")
+    print("  /tq next         - waypoint to the first step")
+    print("  /tq time 60      - minutes of play to plan (now " .. NS.db.horizon .. ")")
+    print("  /tq above 3      - max levels above you a quest can be (now " .. NS.db.maxAbove .. ")")
+    print("  /tq range 3000   - max yards to a quest giver (now " .. NS.db.maxDist .. ")")
+    print("  /tq elites       - include quests with elite kills (now " .. (NS.db.elites and "on" or "off") .. ")")
+    print("  /tq way          - auto-waypoint step 1 (now " .. (NS.db.autoWay and "on" or "off") .. ")")
+    print("  /tq learned      - what it has learned about how you play")
+    print("  /tq size         - reset the window size (drag the bottom-right corner to resize)")
+    print("  /tq relearn      - forget learned speeds and rates")
+    print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
+    print("  /tq party        - party sync status; /tq party on|off, /tq party xp (XP bars), /tq party share (auto-share), /tq party help (stay to help)")
+    print("  /tq share        - share your quests that party members don't have")
+    print("  /tq minimap      - show/hide the minimap button")
+    print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
+    print("  /tq dropall      - abandon every quest in your log, asks first (Drop All button)")
+    print("  /tq service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end
 
-SLASH_QUESTROUTE1 = "/qr"
+SLASH_QUESTROUTE1 = "/tq"
 SLASH_QUESTROUTE2 = "/twizquest"
-SLASH_QUESTROUTE3 = "/questroute"
+SLASH_QUESTROUTE3 = "/qr"          -- old shortcut still works
+SLASH_QUESTROUTE4 = "/questroute"
 SlashCmdList.QUESTROUTE = function(msg)
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
     if cmd == "cleanup" or cmd == "abandon" then
@@ -608,7 +610,7 @@ SlashCmdList.QUESTROUTE = function(msg)
         if cmd == "cleanup" then
             NS.Print(("%d quest(s) aren't worth their log slot:"):format(#drop))
             for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
-            print("  /qr abandon drops them all (asks first).")
+            print("  /tq abandon drops them all (asks first).")
         else
             StaticPopupDialogs.TWIZQUEST_ABANDON = StaticPopupDialogs.TWIZQUEST_ABANDON or {
                 text = "Abandon %d quest(s) that aren't worth it?\n(See chat for the list.)",
@@ -626,6 +628,11 @@ SlashCmdList.QUESTROUTE = function(msg)
             for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
             StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
         end
+        return
+    elseif cmd == "minimap" then
+        NS.db.minimap = NS.db.minimap == false
+        NS.UpdateMinimap()
+        NS.Print("minimap button " .. (NS.db.minimap and "shown" or "hidden (/tq minimap to bring it back)"))
         return
     elseif cmd == "shareall" then
         NS.ShareAllCmd(); return

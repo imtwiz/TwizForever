@@ -661,7 +661,7 @@ runner:SetScript("OnUpdate", function(self)
             if okS and st then stack = st end
         end
         if NS.db then NS.db.lastError = { msg = tostring(err), stack = stack, at = time and time() or 0 } end
-        NS.Print("planning failed: " .. tostring(err) .. "  (/qr error for details)")
+        NS.Print("planning failed: " .. tostring(err) .. "  (/tq error for details)")
         if NS.OnPlan then NS.OnPlan(nil, tostring(err)) end
     elseif coroutine.status(co) == "dead" then
         co = nil; self:Hide()

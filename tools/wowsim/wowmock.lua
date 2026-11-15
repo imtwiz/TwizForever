@@ -430,3 +430,7 @@ IsInGroup = IsInGroup or function() return (SIM.group or 1) > 1 end
 IsInRaid = IsInRaid or function() return false end
 UnitInParty = UnitInParty or function() return false end
 Ambiguate = Ambiguate or function(n) return n end
+
+-- the minimap frame
+Minimap = Minimap or CreateFrame("Frame", "Minimap", UIParent)
+if Minimap.SetSize then Minimap:SetSize(140, 140) end

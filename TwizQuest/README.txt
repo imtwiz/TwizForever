@@ -1,17 +1,23 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.6.0
+- Shortcut is now /tq (/qr still works). /tq help lists everything.
+- Minimap button: left-click shows/hides the window, right-click replans,
+  drag it around the minimap. Hover shows your planned xp/hr and next quest.
+  /tq minimap hides or shows it.
+
 NEW IN 1.5.3
-- Share All button (title bar, or /qr shareall): offers every shareable quest
+- Share All button (title bar, or /tq shareall): offers every shareable quest
   in your log to your party, one every 1.5 seconds.
-- Drop All button (or /qr dropall): abandons every quest in your log after a
+- Drop All button (or /tq dropall): abandons every quest in your log after a
   confirmation - it warns you if any are complete and ready to turn in.
-  To drop only quests not worth doing, use /qr cleanup.
+  To drop only quests not worth doing, use /tq cleanup.
 
 NEW IN 1.5.2
 - Party XP bars: under the party line, a bar for you and each friend running
   TwizQuest - level, % through the level, XP to go, rested XP (blue), and
   roughly how long until they level at their plan's pace. Bars use class
-  colors. Chat tells you when a friend levels. /qr party xp to hide them.
+  colors. Chat tells you when a friend levels. /tq party xp to hide them.
 
 NEW IN 1.5.1
 - Requires TomTom (the waypoint arrow for each step).
@@ -22,13 +28,13 @@ automatically (hidden addon messages, only what changed).
 - Party line under the summary: who's syncing, quests to share, who's behind,
   quests everyone can turn in together, quests they have that you don't.
   Hover it for details and where each friend is heading next.
-- Share button (or /qr share) offers your quests they don't have. New members
-  get them offered automatically once (/qr party share to toggle).
+- Share button (or /tq share) offers your quests they don't have. New members
+  get them offered automatically once (/tq party share to toggle).
 - Your route stays at a kill spot while a friend still needs kills or drops on
   a quest you've finished: "Kill 5 Kobold Vermin (helping Bob)". Shared credit
-  means it costs you little and keeps you together (/qr party help to toggle).
+  means it costs you little and keeps you together (/tq party help to toggle).
 - Quests your party shares are favoured when planning, so you quest together.
-- /qr party shows status; /qr party off turns syncing off.
+- /tq party shows status; /tq party off turns syncing off.
 
 NEW IN 1.4
   Rested XP    - kills are worth double while you're rested, so the route
@@ -41,10 +47,10 @@ NEW IN 1.4
                  elites are counted as about twice as fast.
   Sell & repair- bags nearly full (2 slots) or gear at 25%? A stop at the
                  nearest friendly vendor/repairer is added where it costs the
-                 least time (/qr service to turn off).
+                 least time (/tq service to turn off).
   Cleanup      - quests in your log earning under a third of your plan's
-                 XP/hour (gray ones included) are listed: /qr cleanup, and
-                 /qr abandon drops them (asks first).
+                 XP/hour (gray ones included) are listed: /tq cleanup, and
+                 /tq abandon drops them (asks first).
 
 Needs Questie and TomTom (you have both) - TomTom draws the arrow to each step.
 
@@ -81,18 +87,18 @@ How it gets smarter
   There's no internet in WoW, so it can't ask an AI while you play.
   Instead it learns from you: seconds per kill, rest time per kill, run
   and mount speed, and how this server's kill and quest XP compare with
-  the standard numbers. /qr learned shows what it knows. Estimates for
+  the standard numbers. /tq learned shows what it knows. Estimates for
   new quests assume 8 kills/items or 5 objects until you accept them.
 
-Commands (/qr or /questroute)
-  /qr            show/hide the window
-  /qr plan       re-plan now (normally not needed)
-  /qr auto       automatic updates on/off
-  /qr next       arrow to step 1
-  /qr time 60    minutes to plan ahead
-  /qr above 3    max levels above you
-  /qr range 3000 max yards to a quest giver
-  /qr elites     include elite quests
-  /qr way        auto-arrow on/off
-  /qr learned    what it has learned
-  /qr relearn    reset learning
+Commands (/tq or /questroute)
+  /tq            show/hide the window
+  /tq plan       re-plan now (normally not needed)
+  /tq auto       automatic updates on/off
+  /tq next       arrow to step 1
+  /tq time 60    minutes to plan ahead
+  /tq above 3    max levels above you
+  /tq range 3000 max yards to a quest giver
+  /tq elites     include elite quests
+  /tq way        auto-arrow on/off
+  /tq learned    what it has learned
+  /tq relearn    reset learning
