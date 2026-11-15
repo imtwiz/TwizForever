@@ -206,7 +206,7 @@ function C_Item.GetItemInfo(id)
     if type(id) == "string" then id = tonumber(id:match("item:(%d+)")) end
     local it = I(id) if not it or it.uncached then return nil end
     local link = ("|cffffffff|Hitem:%d::::::::|h[%s]|h|r"):format(id, it.name)
-    return it.name, link, it.quality or 1, 10, 1, "Trade Goods", "", 20, "", it.icon or 134400, it.vendor or 0, it.classID or 7, it.subID or 0
+    return it.name, link, it.quality or 1, 10, 1, "Trade Goods", "", 20, "", it.icon or 134400, it.vendor or 0, it.classID or 7, it.subID or 0, it.bind or 0
 end
 GetItemInfo = C_Item.GetItemInfo
 function C_Item.GetItemInfoInstant(id) local it = I(id) if not it then return nil end return id, "Trade Goods", "", "", it.icon or 134400, it.classID or 7, it.subID or 0 end

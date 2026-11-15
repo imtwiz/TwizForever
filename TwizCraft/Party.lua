@@ -109,6 +109,8 @@ local function Send(m)
     sendQ[#sendQ + 1] = m
     if not sending then sending = true; C_Timer.After(0.05, Pump) end
 end
+NS._partySend, NS._partyRoster, NS._partyMember = Send, Roster, Member
+NS._nameFits = function(a, b) return a and b and Fits(Norm(a), Norm(b)) end
 
 -- your professions as they are now: { [line] = { name, skill, max, list = { "id:out", ... }, sig } }
 local function Mine()
@@ -246,6 +248,10 @@ local function OnMessage(msg, sender)
     local m = NS.partyProfs[who]
     if not m then m = { profs = {} }; NS.partyProfs[who] = m end
     m.online, m.at = true, time()
+    if kind == "Q" or kind == "K" or kind == "S" or kind == "X" or kind == "D" then
+        if NS.OnOrderMessage then NS.OnOrderMessage(kind, rest, who) end
+        return
+    end
     if kind == "H" then
         if GetTime() - lastFull > 3 then lastFull = GetTime(); C_Timer.After(0.5 + math.random(), SendAll) end
     elseif kind == "B" then
@@ -487,6 +493,7 @@ local function Rows()
                         local mine = NS.Char().profs[line]
                         local iKnow = mine and mine.recipes[r.id] and mine.recipes[r.id].learned
                         rows[#rows + 1] = { kind = "recipe", out = r.out, need = r.need, crafter = name,
+                            id = r.id, line = line, prof = p.name, recipeName = r.name, online = m.online,
                             text = ("      %s%s"):format(r.name, iKnow and "" or " |cff66ccff(you don't know)|r"),
                             right = r.can and (r.can > 0 and ("|cff66ff66x%d|r"):format(r.can) or "|cff777777-|r") or "" }
                     end
@@ -569,6 +576,8 @@ local function Build()
             elseif d and d.kind == "recipe" and d.out and d.out > 0 and IsModifiedClick("CHATLINK") then
                 local _, link = C_Item.GetItemInfo(d.out)
                 if link then ChatEdit_InsertLink(link) end
+            elseif d and d.kind == "recipe" and NS.OpenCraftRequest then
+                NS.OpenCraftRequest(d) -- ask that friend to craft it: trade them the mats
             end
         end)
         l:SetScript("OnEnter", function(self)
@@ -576,6 +585,8 @@ local function Build()
             if d and d.kind == "recipe" then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 if d.out and d.out > 0 then GameTooltip:SetItemByID(d.out) end
+                GameTooltip:AddLine(d.online and ("Click to ask %s to craft it - TwizCraft trades them the materials."):format(d.crafter)
+                    or ("%s is offline - group up and stand near them to ask for a craft."):format(d.crafter), 0.5, 0.8, 1, true)
                 if d.need then
                     GameTooltip:AddLine(" ")
                     GameTooltip:AddLine(("Made by %s - materials you and your friends have:"):format(d.crafter), 0.4, 0.8, 1)

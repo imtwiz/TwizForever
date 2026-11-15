@@ -1,5 +1,20 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.13.0 - CRAFT ORDERS FROM FRIENDS
+- Ask a friend to craft something: in the Friends' crafting window
+  (/tc party) click one of their recipes, pick how many, stand next to them
+  and click "Trade mats to <friend>". TwizCraft tells their TwizCraft what
+  you want, opens a trade and puts the materials in it - you click Trade.
+  If the trade doesn't go through (cancelled, too far, bags full), nothing
+  is lost: click the button again to start over.
+- As the friend: a TwizCraft popup shows the order. Accept the trade to get
+  the materials, click "Craft", then "Trade to <them>" - the crafted items
+  are put in the trade for you. They get a message when it's done.
+- Recipes that make bind-on-pickup items can't be ordered (they couldn't be
+  traded back); the crafter's TwizCraft declines them too.
+- The game needs a real click to start a trade, accept it and craft, so
+  each of those is one button press. Both of you need TwizCraft 1.13.0.
+
 NEW IN 1.12.0 - EVERY PROFESSION, FOR FRIENDS TOO
 - Your crafting professions (Alchemy, Blacksmithing, Engineering, ...) are
   read by themselves once a session, so friends see all your recipes
