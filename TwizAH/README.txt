@@ -88,6 +88,17 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.2
+  - Buy All Recipes no longer stalls: price lookups for a purchase jump ahead
+    of bag research, a lookup the AH doesn't answer is retried once, the
+    queue checks back by itself if the AH's throttle never says "ready", and
+    a run that sits idle picks up the next recipe on its own.
+  - Recipes the game sells as commodities are bought the commodity way
+    instead of being skipped as "not on the AH".
+  - No automatic full scan starts while you're buying.
+  - When Buy All ends because the rest don't fit your max spend, it says so
+    and how much is left.
+
 WHAT'S NEW IN 2.4.1
   - Buy All Recipes keeps going by itself: one click starts it, prices are
     looked up automatically, and each click, mouse-wheel notch or key press

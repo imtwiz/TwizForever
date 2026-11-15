@@ -260,7 +260,7 @@ end
 SIM.ah = {} SIM.owned = {}
 C_AuctionHouse = {}
 local throttleReady = true
-function C_AuctionHouse.IsThrottledMessageSystemReady() return throttleReady end
+function C_AuctionHouse.IsThrottledMessageSystemReady() if SIM.throttleStuckUntil and GetTime() < SIM.throttleStuckUntil then return false end return throttleReady end
 function C_AuctionHouse.MakeItemKey(id, ilvl, suffix) return { itemID = id, itemLevel = ilvl or 0, itemSuffix = suffix or 0, battlePetSpeciesID = 0 } end
 function C_AuctionHouse.GetItemKeyFromItem(loc) local id = C_Item.GetItemID(loc) return C_AuctionHouse.MakeItemKey(id) end
 function C_AuctionHouse.GetItemKeyInfo(key) local it = I(key.itemID) if not it then return nil end return { itemID = key.itemID, itemName = it.name, quality = it.quality or 1, iconFileID = it.icon or 1, isCommodity = not (SIM.ah[key.itemID] and SIM.ah[key.itemID].commodity == false) } end

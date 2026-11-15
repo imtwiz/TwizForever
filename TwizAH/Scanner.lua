@@ -119,6 +119,7 @@ local function FinishCurrent()
 end
 
 local Pump
+local pumpRetry = false
 
 local function Done()
     ns.scanning = false
@@ -142,7 +143,12 @@ Pump = function()
         return
     end
     if C_AuctionHouse.IsThrottledMessageSystemReady and not C_AuctionHouse.IsThrottledMessageSystemReady() then
-        return -- AUCTION_HOUSE_THROTTLED_SYSTEM_READY will call us again
+        -- AUCTION_HOUSE_THROTTLED_SYSTEM_READY should call us again; check back anyway in case it never comes
+        if not pumpRetry then
+            pumpRetry = true
+            C_Timer.After(1, function() pumpRetry = false; Pump() end)
+        end
+        return
     end
     local it = table.remove(queue, 1)
     current = it
@@ -209,13 +215,14 @@ local function FinishLookup(rows)
 end
 
 local function OnCommodityResults(itemID)
-    if not (current and current.isCommodity and current.itemID == itemID) then return end
+    if not (current and current.itemID == itemID and (current.isCommodity or current.lookup)) then return end
     local n = C_AuctionHouse.GetNumCommoditySearchResults(itemID) or 0
     if current.lookup then
+        -- a lookup can come back as a commodity even when we guessed "item" (the game decides)
         local rows = {}
         for i = 1, math.min(n, 25) do
             local r = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, i)
-            if r then rows[#rows + 1] = { unit = r.unitPrice, qty = r.quantity, own = IsOwnRow(r), auctionID = r.auctionID } end
+            if r then rows[#rows + 1] = { unit = r.unitPrice, qty = r.quantity, own = IsOwnRow(r), auctionID = r.auctionID, commodity = true } end
         end
         return FinishLookup(rows)
     end
@@ -230,7 +237,7 @@ local function OnCommodityResults(itemID)
 end
 
 local function OnItemResults(itemKey)
-    if not (current and not current.isCommodity and itemKey and itemKey.itemID == current.itemID) then return end
+    if not (current and itemKey and itemKey.itemID == current.itemID and (not current.isCommodity or current.lookup)) then return end
     local n = C_AuctionHouse.GetNumItemSearchResults(itemKey) or 0
     if current.lookup then
         local rows = {}
@@ -254,10 +261,18 @@ local function OnItemResults(itemKey)
 end
 
 -- Ask the AH about one item; cb(rows) gets { {unit, qty, own, auctionID}, ... } cheapest first, or nil
-function ns.QueueLookup(itemID, itemKey, isCommodity, cb)
-    table.insert(queue, { itemID = itemID, itemKey = itemKey or C_AuctionHouse.MakeItemKey(itemID),
-        isCommodity = isCommodity, priceOnly = true, lookup = cb, qty = 0, locs = {} })
+-- urgent = jump ahead of bag research (a purchase is waiting on it)
+function ns.QueueLookup(itemID, itemKey, isCommodity, cb, urgent)
+    local e = { itemID = itemID, itemKey = itemKey or C_AuctionHouse.MakeItemKey(itemID),
+        isCommodity = isCommodity, priceOnly = true, lookup = cb, qty = 0, locs = {} }
+    if urgent then table.insert(queue, 1, e) else table.insert(queue, e) end
     Pump()
+end
+
+-- forget a lookup nobody is waiting for any more
+function ns.DropLookup(cb)
+    for i = #queue, 1, -1 do if queue[i].lookup == cb then table.remove(queue, i) end end
+    if current and current.lookup == cb then current.lookup = function() end end
 end
 
 function ns.StartBagScan()
@@ -981,6 +996,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
         ns.autoScanTicker = C_Timer.NewTicker(15, function()
             if not ns.ahOpen or not ns.S.autoFullScan then return end
             if ns.scanning or ns.processingTicker or fullScanPending then return end
+            if ns.recipeRun or ns.recipeBuy or ns.buy then return end -- don't start a full scan in the middle of buying
             if ns.FullScanCooldownLeft() == 0 then
                 ns.Print("Starting an automatic full scan (/dw autofull off to stop).")
                 ns.StartFullScan()

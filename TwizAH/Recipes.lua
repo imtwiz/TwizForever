@@ -212,20 +212,37 @@ local function Quote(r, all, retried)
     local commodity = okK and type(keyInfo) == "table" and keyInfo.isCommodity == true
     local b = { itemID = r.itemID, r = r, retried = retried, stage = "quote", commodity = commodity, all = all, med = r.med, at = GetTime() }
     ns.recipeBuy = b
-    if commodity then
+    local function StartCommodity()
+        b.commodity = true
         C_AuctionHouse.StartCommoditiesPurchase(r.itemID, 1)
+    end
+    if commodity then
+        StartCommodity()
     else
-        ns.QueueLookup(r.itemID, nil, false, function(rows)
+        b.lookup = function(rows)
             if ns.recipeBuy ~= b then return end
-            for _, row in ipairs(rows or {}) do
+            if rows == nil then
+                -- the AH didn't answer in time; try once more before giving up on it
+                ns.recipeBuy = nil
+                if not retried then return Quote(r, all, true) end
+                skipped[r.itemID] = true
+                return Done("The AH didn't answer about " .. Name(r.itemID) .. " - skipped.")
+            end
+            if rows[1] and rows[1].commodity then return StartCommodity() end -- the game sells it as a commodity
+            for _, row in ipairs(rows) do
                 if not row.own and (row.qty or 1) == 1 and row.auctionID then return Ready(b, row.unit, row.auctionID) end
             end
             skipped[r.itemID] = true
             Done(Name(r.itemID) .. " isn't on the AH any more. Skipped.")
-        end)
+        end
+        ns.QueueLookup(r.itemID, nil, false, b.lookup, true)
     end
-    C_Timer.After(8, function()
+    C_Timer.After(15, function()
         if ns.recipeBuy == b and b.stage == "quote" then
+            if b.lookup and ns.DropLookup then ns.DropLookup(b.lookup) end
+            if b.commodity then pcall(C_AuctionHouse.CancelCommoditiesPurchase) end
+            ns.recipeBuy = nil
+            if not retried then return Quote(r, all, true) end
             skipped[r.itemID] = true
             Done("No price came back for " .. Name(r.itemID) .. " - skipped.")
         end
@@ -262,9 +279,25 @@ end
 
 Continue = function()
     local plan = ns.RecipePlan()
-    if not plan[1] then return StopRun() end
+    if not plan[1] then
+        local more = 0
+        for _, r in ipairs(ns.RecipeList()) do if r.learnable and not skipped[r.itemID] then more = more + 1 end end
+        if more > 0 then
+            return StopRun(("Buy All finished: %d recipe%s for %s. %d more cost more than the %s left of your max spend - raise it to keep going."):format(
+                ns.recipeRun.n, ns.recipeRun.n == 1 and "" or "s", ns.Money(ns.recipeRun.spent), more, ns.Money(ns.RecipeBudgetLeft())))
+        end
+        return StopRun()
+    end
     Quote(plan[1], true)
 end
+
+local watchdog = CreateFrame("Frame")
+local idleSince
+watchdog:SetScript("OnUpdate", function()
+    if not ns.recipeRun or ns.recipeBuy then idleSince = nil; return end
+    idleSince = idleSince or GetTime()
+    if GetTime() - idleSince > 2 then idleSince = nil; Continue() end
+end)
 
 -- each press: buys the recipe whose price is ready, or starts the run
 function ns.BuyAllRecipes()
