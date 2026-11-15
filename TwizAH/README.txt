@@ -88,6 +88,19 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.3
+  - Recipes tab: "Refresh prices" looks every recipe on the list up on the
+    AH right now, drops the ones that sold and updates prices. It also runs
+    by itself when you open the AH and every 2 minutes while it's open.
+  - Faster buying: with fresh prices, Buy All goes straight to "confirm",
+    so each click or wheel notch buys a recipe with no wait for a search. If
+    that listing is gone, it tries the next one it already knows about.
+  - Learn button: recipes in your bags that you can learn now get a gold
+    "Learn recipes (N)" button at the top of the screen. Each click learns
+    one; at the mailbox or AH your mouse wheel does it too. The game needs a
+    click or key press per recipe, so it can't learn them with no input.
+    Right-drag to move it; /dw autolearn off hides it.
+
 WHAT'S NEW IN 2.4.2
   - Buy All Recipes no longer stalls: price lookups for a purchase jump ahead
     of bag research, a lookup the AH doesn't answer is retried once, the

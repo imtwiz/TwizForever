@@ -439,6 +439,7 @@ function ns.UpdateWheelPost()
     local cmd
     if ns.ahOpen and ns.S and ns.S.wheelPost then
         if ns.recipeRun then cmd = "DEPOSITWISE_BUYRECIPES" -- a Buy All Recipes run takes the wheel while it lasts
+        elseif ns.learnWheel then cmd = nil                 -- the Learn button has it (recipes in your bags)
         elseif #ns.PostAllQueue() > 0 then cmd = "DEPOSITWISE_POSTALL" end
     end
     local want = cmd or false

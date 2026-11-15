@@ -419,6 +419,7 @@ ITEM_SPELL_TRIGGER_ONUSE = "Use:"
 -- override bindings (scroll-to-post)
 SIM.overrides = {}
 function SetOverrideBinding(owner, prio, key, cmd) rec("SetOverrideBinding", key, cmd) SIM.overrides[key] = cmd end
+function SetOverrideBindingClick(owner, prio, key, button, mouse) rec("SetOverrideBindingClick", key, button) SIM.overrides[key] = "CLICK " .. button end
 function ClearOverrideBindings(owner) rec("ClearOverrideBindings") SIM.overrides = {} end
 function SIM.Wheel()   -- a mouse-wheel notch outside any scrolling frame
     local cmd = SIM.overrides["MOUSEWHEELDOWN"]
