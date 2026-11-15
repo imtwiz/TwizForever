@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.11.0 - CLEANER WINDOW
+  - One card for what to do next (with the Target button), a short "Up next"
+    list, slim XP bars, and a footer with Solo/Group, your party line and
+    Share. Everything else (Plan again, Share All, Drop All, party sync,
+    auto-accept, help) is in the "..." menu.
+
 NEW IN 1.10.2
 - The party line shows "Same: N" - quests everyone in the group has (hover
   for the list, plus how many you share with at least one member). The group

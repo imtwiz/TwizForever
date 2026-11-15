@@ -6,6 +6,7 @@ local frame, stepRows, shopRows, tabs = nil, {}, {}, {}
 local routeRows, ROUTE_ROWS = {}, 10
 local nowRows, NOW_ROWS = {}, 12
 local plan, why
+local TOP, FOOT = 72, 40
 
 local COLOR = { orange = "ff8040", yellow = "ffff00", green = "40bf40", gray = "808080" }
 local SRC_TEXT = {
@@ -42,56 +43,63 @@ local function Refresh()
     if frame.partyBtn then
         local online = NS.PartyCrafterCount and NS.PartyCrafterCount() or 0
         local all = NS.FriendCount and NS.FriendCount() or 0
-        frame.partyBtn:SetText(online > 0 and ("Party (%d)"):format(online) or ("Friends (%d)"):format(all))
+        frame.partyBtn:SetText(online > 0 and ("Party %d"):format(online) or ("Friends %d"):format(all))
         frame.partyBtn:SetShown(all > 0)
     end
-    -- profession tabs
+    -- profession picker: one segment per profession
     local profs, i = NS.Professions(), 0
     local c = NS.Char()
+    local x = 92
     for _, p in ipairs(profs) do
         i = i + 1
         local b = tabs[i]
         if not b then
-            b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-            b:SetSize(100, 20)
-            b:SetPoint("TOPLEFT", 10 + (i - 1) * 104, -28)
+            b = NS.Skin.Button(frame, "", "seg", 100, 22)
             tabs[i] = b
         end
-        local line = p.line
-        b:SetText(("%s %d"):format(p.name, p.skill))
-        b:SetEnabled(line ~= NS.current)
-        local resolved = NS.ResolveLine(line, p.name)
-        b:SetEnabled(resolved ~= NS.current)
+        local text = ("%s %d"):format(p.name, p.skill)
+        b:SetText(text)
+        b:SetWidth(16 + #text * 6)
+        b:ClearAllPoints(); b:SetPoint("TOPLEFT", x, -10)
+        x = x + b:GetWidth() + 2
+        local resolved = NS.ResolveLine(p.line, p.name)
+        b.selected = resolved == NS.current
+        NS.Skin.Paint(b)
         b:SetScript("OnClick", function() NS.current = resolved; NS.Replan(true) end)
         b:SetAlpha(c.profs[resolved] and 1 or 0.6)
         b:Show()
     end
     for j = i + 1, #tabs do tabs[j]:Hide() end
+    frame.bar:Hide(); frame.sub:SetText("")
 
     for _, r in ipairs(stepRows) do r:Hide() end
     for _, r in ipairs(shopRows) do r:Hide() end
     for _, r in ipairs(routeRows) do r:Hide() end
     for _, r in ipairs(nowRows) do r:Hide() end
     if frame.nowTitle then frame.nowTitle:Hide() end
+    frame.stepTitle:Hide(); frame.shopNote:SetText("")
     frame.shopTitle:Hide()
     frame.routeTitle:Hide()
     frame.buyBtn:Hide()
 
     if not plan then
         frame.summary:SetText(why or "Open a profession window once so I can read your recipes.")
-        if not NS.db.sized then frame:SetHeight(90) end
+        if not NS.db.sized then frame:SetHeight(120) end
         return
     end
     if plan.done then
-        frame.summary:SetText(("%s %d/%d - at your cap. Train the next rank to keep going (/tc target to set a goal)."):format(
-            plan.name, plan.skill, plan.max))
-        if not NS.db.sized then frame:SetHeight(90) end
+        frame.summary:SetText(("%s %d/%d - at your cap"):format(plan.name, plan.skill, plan.max))
+        frame.sub:SetText("Train the next rank to keep going (/tc target sets a goal).")
+        if not NS.db.sized then frame:SetHeight(120) end
         return
     end
 
-    frame.summary:SetText(("|cffffd100%s|r %d -> %d:  ~%d crafts, ~%s net, ~%s crafting%s"):format(
-        plan.name, plan.skill, plan.target, plan.crafts, NS.Money(plan.cost), NS.FormatTime(plan.time),
-        plan.stuck and ("  |cffff4040(no recipe past " .. plan.stuck .. " - learn new ones)|r") or ""))
+    frame.summary:SetText(("%s  %d |cff9aa1ab-> %d|r"):format(plan.name, plan.skill, plan.target))
+    frame.sub:SetText(("~%d crafts  ·  ~%s  ·  ~%s crafting%s"):format(
+        plan.crafts, NS.Money(plan.cost), NS.FormatTime(plan.time),
+        plan.stuck and ("  |cffff8060no recipe past " .. plan.stuck .. " - learn new ones|r") or ""))
+    frame.bar:SetValue(math.max(0.02, math.min(1, plan.skill / math.max(1, plan.target))))
+    frame.bar:Show()
 
     -- how many rows fit: your chosen height split between steps and shopping,
     -- or the defaults (12 steps, 10 items) when you haven't resized
@@ -100,7 +108,7 @@ local function Refresh()
     local makeNow = plan.makeNow or {}
     local stepCap, shopCap, routeCap, nowCap = NS.db.steps or 12, 10, 6, 10
     if NS.db.sized then
-        local total = math.max(6, math.floor((frame:GetHeight() - 76 - 22 - 22 - 22 - 20 - 30) / ROW_H))
+        local total = math.max(6, math.floor((frame:GetHeight() - TOP - 22 - 22 - 22 - 20 - 30 - FOOT) / ROW_H))
         nowCap = math.min(#makeNow, math.max(1, math.floor(total * 0.15)))
         total = total - nowCap
         routeCap = math.min(#route, math.max(2, math.floor(total * 0.25)))
@@ -112,7 +120,10 @@ local function Refresh()
     routeCap = math.min(routeCap, ROUTE_ROWS)
     nowCap = math.min(nowCap, NOW_ROWS)
 
-    local y = -76
+    local y = -TOP
+    frame.stepTitle:ClearAllPoints(); frame.stepTitle:SetPoint("TOPLEFT", 12, y)
+    frame.stepTitle:SetLabel("Steps"); frame.stepTitle:Show()
+    y = y - 16
     for k = 1, math.min(#plan.steps, stepCap) do
         local st = plan.steps[k]
         local row = stepRows[k]
@@ -129,7 +140,7 @@ local function Refresh()
     if #makeNow > 0 and nowCap > 0 then
         y = y - 6
         frame.nowTitle:ClearAllPoints(); frame.nowTitle:SetPoint("TOPLEFT", 12, y)
-        frame.nowTitle:SetText("Make now from your bags  |cff999999(click to craft)|r")
+        frame.nowTitle:SetLabel("Make now from your bags")
         frame.nowTitle:Show()
         y = y - 16
         for k = 1, math.min(#makeNow, nowCap) do
@@ -153,7 +164,8 @@ local function Refresh()
         for _, sc in ipairs(plan.subcrafts) do parts[#parts + 1] = ("%s%d %s"):format(sc.learn and "[learn] " or "", sc.n, sc.name) end
         subNote = "  |cff40ff40make first: " .. table.concat(parts, ", ") .. "|r"
     end
-    frame.shopTitle:SetText(("Shopping list  (buy ~%s)%s"):format(NS.Money(plan.buyCost), subNote))
+    frame.shopTitle:SetLabel("Shopping")
+    frame.shopNote:SetText(("~%s%s"):format(NS.Money(plan.buyCost), subNote))
     frame.shopTitle:Show()
     y = y - 16
     for k = 1, math.min(#plan.shop, shopCap) do
@@ -177,7 +189,7 @@ local function Refresh()
     if #route > 0 and routeCap > 0 then
         y = y - 6
         frame.routeTitle:ClearAllPoints(); frame.routeTitle:SetPoint("TOPLEFT", 12, y)
-        frame.routeTitle:SetText("Cheapest route  |cff999999(click a stop for a waypoint)|r")
+        frame.routeTitle:SetLabel("Route · click a stop for a waypoint")
         frame.routeTitle:Show()
         y = y - 16
         for k = 1, math.min(#route, routeCap) do
@@ -210,13 +222,13 @@ local function Refresh()
     end
     if text then
         y = y - 6
-        frame.buyBtn:ClearAllPoints(); frame.buyBtn:SetPoint("BOTTOMLEFT", 10, 8)
-        frame.buyBtn:SetWidth(math.min(frame:GetWidth() - 40, 420))
+        frame.buyBtn:ClearAllPoints(); frame.buyBtn:SetPoint("BOTTOMLEFT", 10, FOOT + 4)
+        frame.buyBtn:SetPoint("RIGHT", frame, "RIGHT", -10, 0)
         frame.buyBtn:SetText(text)
         frame.buyBtn:Show()
-        y = y - 26
+        y = y - 30
     end
-    if not NS.db.sized then frame:SetHeight(-y + 16) end
+    if not NS.db.sized then frame:SetHeight(-y + 12 + FOOT) end
 end
 NS.RefreshUI = function() Refresh() end
 
@@ -301,7 +313,7 @@ local function MakeRow(onEnter, onClick)
     row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.right:SetPoint("RIGHT"); row.right:SetJustifyH("RIGHT")
     local hl = row:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.08)
+    hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
     row:SetScript("OnEnter", onEnter)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -322,42 +334,23 @@ local function Build()
         local p, _, rp, x, y = self:GetPoint()
         NS.db.pos = { p, rp, x, y }
     end)
-    if frame.SetBackdrop then
-        frame:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-        frame:SetBackdropColor(0, 0, 0, 0.85)
-    end
+    NS.Skin.Panel(frame)
     if NS.db.pos then
         frame:ClearAllPoints()
         frame:SetPoint(NS.db.pos[1], UIParent, NS.db.pos[2], NS.db.pos[3], NS.db.pos[4])
     end
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 10, -8); title:SetText("TwizCraft")
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", 2, 2)
-    close:SetScript("OnClick", function() frame:Hide(); NS.db.shown = false end)
-    local nextBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    nextBtn:SetSize(80, 18); nextBtn:SetPoint("TOPRIGHT", -28, -6)
-    nextBtn:SetText("Craft next")
-    nextBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    nextBtn:SetScript("OnClick", function(_, button) NS.CraftNext(button) end)
-    nextBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine("Craft next")
-        GameTooltip:AddLine("Makes the next thing on the plan: anything you need to make first, then step 1.", 1, 1, 1, true)
-        GameTooltip:AddLine("Bind a key: Options > Keybindings > AddOns > TwizCraft.", 0.7, 0.7, 0.7, true)
-        GameTooltip:Show()
-    end)
-    nextBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local allBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    allBtn:SetSize(64, 18); allBtn:SetPoint("RIGHT", nextBtn, "LEFT", -4, 0)
-    allBtn:SetText("Craft All")
-    allBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    local title = NS.Skin.Text(frame, "title")
+    title:SetPoint("TOPLEFT", 12, -14); title:SetText("TwizCraft")
+    local close = NS.Skin.IconButton(frame, "x", "Close", function() frame:Hide(); NS.db.shown = false end)
+    close:SetPoint("TOPRIGHT", -8, -8)
+
+    -- footer: gold Craft All, Craft next, friends chip, more menu
+    local allBtn = NS.Skin.Button(frame, "Craft All", "primary", 110, 26)
+    allBtn:SetPoint("BOTTOMLEFT", 10, 8)
     allBtn:SetScript("OnClick", function(_, button) NS.CraftAll(button) end)
     allBtn:EnableMouseWheel(true)
     allBtn:SetScript("OnMouseWheel", function() NS.CraftAll() end)
-    allBtn:SetScript("OnEnter", function(self)
+    allBtn:HookScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("Craft All")
         local q, grays = NS.CraftAllQueue(IsShiftKeyDown())
@@ -376,39 +369,42 @@ local function Build()
         GameTooltip:AddLine("Shift-click: include gray recipes too. Right-click: stop. Bind a key in Options > Keybindings > AddOns.", 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
-    allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local refresh = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    refresh:SetSize(64, 18); refresh:SetPoint("RIGHT", allBtn, "LEFT", -4, 0)
-    frame.partyBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.partyBtn:SetSize(64, 18); frame.partyBtn:SetPoint("RIGHT", refresh, "LEFT", -4, 0)
-    frame.partyBtn:SetText("Party")
+    allBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    local nextBtn = NS.Skin.Button(frame, "Craft next", "secondary", 86, 26)
+    nextBtn:SetPoint("LEFT", allBtn, "RIGHT", 6, 0)
+    nextBtn:SetScript("OnClick", function(_, button) NS.CraftNext(button) end)
+    NS.Skin.Tip(nextBtn, "Craft next", "Makes the next thing on the plan: anything you need to make first, then step 1. Bind a key: Options > Keybindings > AddOns > TwizCraft.")
+    frame.partyBtn = NS.Skin.Button(frame, "Friends", "ghost", 76, 26)
+    frame.partyBtn:SetPoint("LEFT", nextBtn, "RIGHT", 6, 0)
     frame.partyBtn:SetScript("OnClick", function() NS.TogglePartyCrafters() end)
-    frame.partyBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine("Party crafters")
-        GameTooltip:AddLine("Professions, recipes and materials of friends who run TwizCraft - kept after they leave your group. Item tooltips also show who can make an item.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    frame.partyBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    NS.Skin.Tip(frame.partyBtn, "Party crafters", "Professions, recipes and materials of friends who run TwizCraft - kept after they leave your group. Item tooltips also show who can make an item.")
     frame.partyBtn:Hide()
-    refresh:SetText("Refresh")
-    refresh:SetScript("OnClick", function() NS.RefreshAll() end)
-    refresh:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine("Refresh")
-        GameTooltip:AddLine("Re-reads your recipes (if a profession window is open), your bags and prices, then re-plans.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    refresh:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local more = NS.Skin.MoreButton(frame, function()
+        return {
+            { "Refresh", function() NS.RefreshAll() end, "Re-reads your recipes (if a profession window is open), your bags and prices, then re-plans." },
+            { "Party crafters", function() NS.TogglePartyCrafters() end },
+            { "Reset window size", function() if NS.resetSize then NS.resetSize() end end },
+            { "Help (/tc help)", function() if SlashCmdList.CRAFTROUTE then SlashCmdList.CRAFTROUTE("help") end end },
+        }
+    end, 26)
+    more:SetPoint("BOTTOMRIGHT", -10, 8)
 
-    frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.summary:SetPoint("TOPLEFT", 12, -56); frame.summary:SetPoint("RIGHT", -10, 0)
-    frame.summary:SetJustifyH("LEFT")
-    frame.shopTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.routeTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.nowTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.buyBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.buyBtn:SetSize(300, 22)
+    -- under the header: profession, skill bar, totals
+    frame.bar = NS.Skin.Bar(frame, 6)
+    frame.bar:SetPoint("TOPLEFT", 12, -60); frame.bar:SetPoint("RIGHT", -12, 0)
+    frame.bar:Hide()
+    frame.sub = NS.Skin.Text(frame, "small")
+    frame.sub:SetPoint("TOPRIGHT", -12, -44); frame.sub:SetJustifyH("RIGHT")
+    frame.summary = NS.Skin.Text(frame, "body")
+    frame.summary:SetPoint("TOPLEFT", 12, -42); frame.summary:SetPoint("RIGHT", frame.sub, "LEFT", -8, 0)
+    frame.summary:SetJustifyH("LEFT"); frame.summary:SetWordWrap(true)
+    frame.stepTitle = NS.Skin.Label(frame)
+    frame.shopTitle = NS.Skin.Label(frame)
+    frame.shopNote = NS.Skin.Text(frame, "small")
+    frame.shopNote:SetPoint("LEFT", frame.shopTitle, "RIGHT", 8, 0)
+    frame.routeTitle = NS.Skin.Label(frame)
+    frame.nowTitle = NS.Skin.Label(frame)
+    frame.buyBtn = NS.Skin.Button(frame, "", "secondary", 300, 24)
     frame.buyBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame.buyBtn:SetScript("OnClick", function(_, button)
         if NS.merchantOpen then NS.BuyFromVendor(plan)
@@ -486,7 +482,7 @@ local function Build()
     end
     local resizing
     NS.resetSize = NS.MakeResizable(frame, NS.db, {
-        minW = 440, minH = 120, maxW = 1400, maxH = 1100, defaultW = 520, defaultH = 90, savePos = true,
+        minW = 440, minH = 120, maxW = 1400, maxH = 1100, defaultW = 520, defaultH = 120, savePos = true,
         onResize = function()
             if resizing then return end
             resizing = true; Layout(); Refresh(); resizing = false

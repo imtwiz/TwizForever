@@ -88,6 +88,23 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.0
+  - Recipes tab: the cheapest recipes you're missing for your professions,
+    from your full-scan prices. Recipes you already know, have in your bags,
+    or need more skill for are left out of Buy All (higher-skill ones show as
+    "Later"). Click a row to buy one (one click looks up the price, a second
+    confirms). Buy All works cheapest-first and shows how many recipes it
+    will buy and what that costs in total.
+  - Max spend: type the most you want to spend on recipes in the box next to
+    Buy All (10, 10g or 2g50s). Buy All never goes past it. /dw recipemax 10g
+    sets it too; /dw recipemax reset clears what's been spent. /dw recipes
+    opens the tab.
+  - Cleaner window: flat dark panel, one gold button (Post All), tabs in a
+    single bar with Smelt, Craft and Session under "More +", fewer columns on
+    My Bags (Item, Qty, Post at, Sells/day, Profit, Do - deposits, duration and
+    vendor value are in the row tooltip), and the single-post buttons in a
+    "Post one..." menu.
+
 WHAT'S NEW IN 2.3.1
 - Scroll to post: while the AH is open and items are waiting, just spin your
   mouse wheel - each notch posts the next item (best first, then profitable

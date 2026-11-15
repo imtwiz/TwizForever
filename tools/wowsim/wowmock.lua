@@ -263,7 +263,7 @@ local throttleReady = true
 function C_AuctionHouse.IsThrottledMessageSystemReady() return throttleReady end
 function C_AuctionHouse.MakeItemKey(id, ilvl, suffix) return { itemID = id, itemLevel = ilvl or 0, itemSuffix = suffix or 0, battlePetSpeciesID = 0 } end
 function C_AuctionHouse.GetItemKeyFromItem(loc) local id = C_Item.GetItemID(loc) return C_AuctionHouse.MakeItemKey(id) end
-function C_AuctionHouse.GetItemKeyInfo(key) local it = I(key.itemID) if not it then return nil end return { itemID = key.itemID, itemName = it.name, quality = it.quality or 1, iconFileID = it.icon or 1, isCommodity = SIM.ah[key.itemID] and SIM.ah[key.itemID].commodity or true } end
+function C_AuctionHouse.GetItemKeyInfo(key) local it = I(key.itemID) if not it then return nil end return { itemID = key.itemID, itemName = it.name, quality = it.quality or 1, iconFileID = it.icon or 1, isCommodity = not (SIM.ah[key.itemID] and SIM.ah[key.itemID].commodity == false) } end
 function C_AuctionHouse.IsSellItemValid(loc) local s = SIM.bags[loc.bag .. ":" .. loc.slot] return s and not s.bound end
 function C_AuctionHouse.GetItemCommodityStatus(loc) local s = SIM.bags[loc.bag .. ":" .. loc.slot] if not s then return 0 end return (I(s.id).gear and 1) or 2 end
 function C_AuctionHouse.CalculateCommodityDeposit(id, d, q) local v = (I(id) and I(id).vendor or 0) return math.max(1, math.floor(v * q * 0.05 * ({ 1, 4, 12 })[d] / 4)) end
@@ -312,7 +312,9 @@ function C_AuctionHouse.StartCommoditiesPurchase(id, q) rec("StartCommoditiesPur
     C_Timer.After(0.3, function() if need > 0 then SIM.Fire("COMMODITY_PRICE_UNAVAILABLE") else SIM.Fire("COMMODITY_PRICE_UPDATED", math.floor(total / q), total) end end) end
 function C_AuctionHouse.ConfirmCommoditiesPurchase(id, q) rec("ConfirmCommoditiesPurchase", id, q) C_Timer.After(0.3, function() SIM.Fire("COMMODITY_PURCHASE_SUCCEEDED") end) end
 function C_AuctionHouse.CancelCommoditiesPurchase() rec("CancelCommoditiesPurchase") end
-function C_AuctionHouse.PlaceBid(id, amount) rec("PlaceBid", id, amount) end
+function C_AuctionHouse.PlaceBid(id, amount) rec("PlaceBid", id, amount)
+    SIM.bids = SIM.bids or {}; SIM.bids[#SIM.bids + 1] = { id = id, amount = amount }
+    if SIM.onPlaceBid then SIM.onPlaceBid(id, amount) end end
 -- owned auctions
 function C_AuctionHouse.QueryOwnedAuctions() rec("QueryOwnedAuctions") C_Timer.After(0.3, function() SIM.Fire("OWNED_AUCTIONS_UPDATED") end) end
 function C_AuctionHouse.GetNumOwnedAuctions() return #SIM.owned end
@@ -409,6 +411,7 @@ DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) SIM.log[#SIM.log + 1] = m end
 C_UnitAuras = { GetAuraDataByIndex = function(unit, i) local n = SIM.auras[i] return n and { name = n } end }
 C_TooltipInfo = { GetItemByID = function(id) local it = SIM.items[id] if not it then return nil end
     local lines = { { leftText = it.name } }
+    for _, t in ipairs(SIM.tooltipLines and SIM.tooltipLines[id] or {}) do lines[#lines + 1] = { leftText = t } end
     if SIM.tooltips[id] then lines[#lines + 1] = { leftText = "Use: " .. SIM.tooltips[id] } end
     return { lines = lines } end }
 ITEM_SPELL_TRIGGER_ONUSE = "Use:"

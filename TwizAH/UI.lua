@@ -9,15 +9,12 @@ local WIDTH, HEIGHT = 720, 520
 local frame, rows, offset, tab, selected = nil, {}, 0, "BAGS", nil
 
 local BAG_COLS = {
-    { key = "item",    title = "Item",       w = 165, j = "LEFT" },
+    { key = "item",    title = "Item",       w = 230, j = "LEFT" },
     { key = "qty",     title = "Qty",        w = 40,  j = "RIGHT" },
-    { key = "post",    title = "Post at (ea)", w = 90, j = "RIGHT" },
-    { key = "speed",   title = "Sells/day",  w = 50,  j = "RIGHT" },
-    { key = "dur",     title = "Time",       w = 40,  j = "CENTER" },
-    { key = "deposit", title = "Deposit",    w = 70,  j = "RIGHT" },
-    { key = "ev",      title = "Expected",   w = 90,  j = "RIGHT" },
-    { key = "vendor",  title = "Vendor",     w = 75,  j = "RIGHT" },
-    { key = "verdict", title = "Verdict",    w = 65,  j = "CENTER" },
+    { key = "post",    title = "Post at",    w = 95,  j = "RIGHT" },
+    { key = "speed",   title = "Sells/day",  w = 65,  j = "RIGHT" },
+    { key = "ev",      title = "Profit",     w = 95,  j = "RIGHT" },
+    { key = "verdict", title = "Do",         w = 75,  j = "CENTER" },
 }
 local DEAL_COLS = {
     { key = "item",    title = "Item",       w = 175, j = "LEFT" },
@@ -85,7 +82,14 @@ local TABS = {
     { key = "CRAFT",   label = "Craft" },
     { key = "AUCTIONS", label = "Auctions" },
     { key = "SESSION", label = "Session" },
+    { key = "RECIPES", label = "Recipes" },
 }
+local MAIN_TABS = { "BRIEF", "BAGS", "DEALS", "MOVERS", "RECIPES", "AUCTIONS" }
+local MORE_TABS = { "SMELT", "CRAFT", "SESSION" }
+local function TabLabel(key)
+    for _, t in ipairs(TABS) do if t.key == key then return t.label end end
+    return key
+end
 
 -- Tabs that live in their own files register here:
 -- { cols, list(), fill(row, data, cells, ItemLabel), tooltip(data), summary() -> text, status,
@@ -207,12 +211,8 @@ end
 ------------------------------------------------------------------------
 -- Construction
 ------------------------------------------------------------------------
-local function MakeButton(parent, text, w, onClick)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(w, 22)
-    b:SetText(text)
-    b:SetScript("OnClick", onClick)
-    return b
+local function MakeButton(parent, text, w, onClick, kind)
+    return ns.Skin.Button(parent, text, kind or "secondary", w, 24, onClick)
 end
 
 local function BuildHeader()
@@ -445,13 +445,12 @@ local function CreateRows()
         row:SetPoint("RIGHT", frame, "RIGHT", -12, 0)
         row:RegisterForClicks("LeftButtonUp")
         local hl = row:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.08)
+        hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
         row.sel = row:CreateTexture(nil, "BACKGROUND")
-        row.sel:SetAllPoints(); row.sel:SetColorTexture(0.2, 0.6, 1, 0.18); row.sel:Hide()
-        if i % 2 == 0 then
-            local bg = row:CreateTexture(nil, "BACKGROUND", nil, -1)
-            bg:SetAllPoints(); bg:SetColorTexture(1, 1, 1, 0.03)
-        end
+        row.sel:SetAllPoints(); row.sel:SetColorTexture(0.94, 0.77, 0.36, 0.12); row.sel:Hide()
+        local line = row:CreateTexture(nil, "BACKGROUND", nil, -1)
+        line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT"); line:SetHeight(1)
+        line:SetColorTexture(0.137, 0.153, 0.180, 1)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(18, 18); row.icon:SetPoint("LEFT", 2, 0)
         row.cells = {}
@@ -488,8 +487,6 @@ local function Layout()
     local top = (tab == "DEALS") and 92 or 64
     visible = math.max(3, math.min(ROWS, math.floor((frame:GetHeight() - top - 16 - 60) / ROW_H)))
     frame.filterBar:SetWidth(frame:GetWidth() - 24)
-    local tw = math.max(56, math.min(84, math.floor((frame:GetWidth() - 130 - 36) / #TABS) - 4))
-    for _, b in pairs(frame.tabs) do b:SetWidth(tw) end
     frame.text:SetWidth(frame:GetWidth() - 36)
     BuildHeader()
 end
@@ -499,11 +496,14 @@ local function SetTab(t)
     frame.listTop:ClearAllPoints()
     frame.listTop:SetPoint("TOPLEFT", 12, t == "DEALS" and -92 or -64)
     frame.filterBar:SetShown(t == "DEALS")
-    for key, b in pairs(frame.tabs) do b:SetEnabled(key ~= t) end
+    frame.tabBar:Select(t)
+    local inMore = false
+    for _, k in ipairs(MORE_TABS) do if k == t then inMore = true end end
+    frame.moreTab:SetText(inMore and (TabLabel(t) .. " +") or "More +")
+    frame.moreTab.selected = inMore; ns.Skin.Paint(frame.moreTab)
     frame.text:SetShown(TEXT_TABS[t] or false)
-    frame.postBest:SetShown(t == "BAGS")
-    frame.postSel:SetShown(t == "BAGS")
-    frame.postMarg:SetShown(t == "BAGS")
+    frame.postBest:Hide(); frame.postSel:Hide(); frame.postMarg:Hide() -- in the Post menu now
+    frame.postMore:SetShown(t == "BAGS")
     frame.postAll:SetShown(t == "BAGS")
     frame.scanBags:SetShown(t == "BAGS")
     frame.fullScan:SetShown(t == "DEALS" or t == "MOVERS" or t == "BRIEF" or t == "SMELT" or t == "CRAFT")
@@ -511,6 +511,7 @@ local function SetTab(t)
     frame.buyAll:SetShown(t == "CRAFT")
     for key, def in pairs(ns.extraTabs) do
         for _, b in ipairs(def.__buttons or {}) do b:SetShown(key == t) end
+        for _, w in ipairs(def.__widgets or {}) do w:SetShown(key == t) end
         if key == t and def.onShow then pcall(def.onShow) end
     end
     frame.cancelBuy:SetShown(t == "CRAFT")
@@ -522,37 +523,38 @@ local function Create()
     frame = CreateFrame("Frame", "TwizAHFrame", UIParent, "BackdropTemplate")
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetFrameStrata("HIGH")
-    frame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    frame:SetBackdropColor(0.05, 0.05, 0.07, 0.95)
+    ns.Skin.Panel(frame)
     frame:SetMovable(true); frame:EnableMouse(true); frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:Hide()
 
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    frame.title:SetPoint("TOPLEFT", 14, -12)
+    frame.title = ns.Skin.Text(frame, "title")
+    frame.title:SetPoint("TOPLEFT", 14, -14)
     frame.title:SetText("TwizAH")
 
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -2, -2)
+    local close = ns.Skin.IconButton(frame, "x", "Close", function() frame:Hide() end)
+    close:SetPoint("TOPRIGHT", -8, -8)
 
-    frame.tabs = {}
-    local prev
-    for _, t in ipairs(TABS) do
-        local b = MakeButton(frame, t.label, 72, function() SetTab(t.key) end)
-        if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 130, -10) end
-        frame.tabs[t.key] = b
-        prev = b
-    end
+    local items = {}
+    for _, k in ipairs(MAIN_TABS) do items[#items + 1] = { k, TabLabel(k) } end
+    frame.tabBar = ns.Skin.Segmented(frame, items, function(k) SetTab(k) end, 26)
+    frame.tabBar:SetPoint("TOPLEFT", 92, -9)
+    frame.moreTab = ns.Skin.Button(frame, "More +", "seg", 76, 22)
+    frame.moreTab:SetPoint("LEFT", frame.tabBar, "RIGHT", 4, 0)
+    frame.moreTab.menuBelow = true
+    ns.Skin.Menu(frame.moreTab, function()
+        local list = {}
+        for _, k in ipairs(MORE_TABS) do list[#list + 1] = { TabLabel(k), function() SetTab(k) end } end
+        list[#list + 1] = { "Settings help", function() SlashCmdList.DEPOSITWISE("help") end }
+        return list
+    end)
+    frame.tabs = {} -- old name kept for anything that still looks
+    for _, b in ipairs(frame.tabBar.buttons) do frame.tabs[b.key] = b end
 
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    frame.summary:SetPoint("TOPLEFT", 14, -40)
+    frame.summary:SetPoint("TOPLEFT", 14, -42)
     frame.summary:SetPoint("RIGHT", -14, 0)
     frame.summary:SetJustifyH("LEFT")
 
@@ -567,12 +569,8 @@ local function Create()
     frame.filterButtons = {}
     local prevF
     for _, c in ipairs(ns.CATEGORIES) do
-        local b = CreateFrame("Button", nil, frame.filterBar, "UIPanelButtonTemplate")
-        b:SetHeight(20)
-        b:SetText(c.short or c.label)
-        b:SetNormalFontObject("GameFontNormalSmall"); b:SetHighlightFontObject("GameFontHighlightSmall")
-        b:SetDisabledFontObject("GameFontHighlightSmall")
-        b:SetWidth(math.max(34, b:GetFontString():GetStringWidth() + 14))
+        local label = c.short or c.label
+        local b = ns.Skin.Button(frame.filterBar, label, "seg", math.max(34, #label * 6 + 14), 20)
         if prevF then b:SetPoint("LEFT", prevF, "RIGHT", 2, 0) else b:SetPoint("LEFT", 0, 0) end
         b:SetScript("OnClick", function() ns.S.dealFilter = c.key; offset = 0; UI.Refresh() end)
         frame.filterButtons[c.key] = b
@@ -597,6 +595,7 @@ local function Create()
     frame.headers = {}
     for i = 1, 9 do
         local h = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        h:SetTextColor(unpack(ns.Skin.C.faint))
         frame.headers[i] = h
     end
     CreateRows()
@@ -621,13 +620,13 @@ local function Create()
         return n, pages
     end
     frame.pager = CreateFrame("Frame", nil, frame)
-    frame.pager:SetSize(150, 22)
-    frame.pager:SetPoint("BOTTOMRIGHT", -12, 36)
-    frame.pagePrev = MakeButton(frame.pager, "< Prev", 56, function()
+    frame.pager:SetSize(130, 24)
+    frame.pager:SetPoint("BOTTOMRIGHT", -12, 12)
+    frame.pagePrev = MakeButton(frame.pager, "<", 28, function()
         offset = math.max(0, offset - visible); UI.Refresh()
     end)
     frame.pagePrev:SetPoint("LEFT", 0, 0)
-    frame.pageNext = MakeButton(frame.pager, "Next >", 56, function()
+    frame.pageNext = MakeButton(frame.pager, ">", 28, function()
         local _, pages = PageInfo()
         offset = math.min(offset + visible, (pages - 1) * visible); UI.Refresh()
     end)
@@ -637,12 +636,11 @@ local function Create()
     frame.PageInfo = PageInfo
 
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    frame.status:SetPoint("BOTTOMLEFT", 14, 40)
-    frame.status:SetPoint("RIGHT", frame.pager, "LEFT", -8, 0)
+    frame.status:SetPoint("BOTTOMLEFT", 14, 44)
+    frame.status:SetPoint("RIGHT", frame, "RIGHT", -14, 0)
     frame.status:SetJustifyH("LEFT")
 
-    frame.scanBags = MakeButton(frame, "Rescan Bags", 100, function() ns.StartBagScan() end)
-    frame.scanBags:SetPoint("BOTTOMLEFT", 12, 12)
+    frame.scanBags = MakeButton(frame, "Rescan", 80, function() ns.StartBagScan() end)
     frame.postBest = MakeButton(frame, "Post Next Best", 120, function() ns.PostNextBest() end)
     frame.postBest:SetPoint("LEFT", frame.scanBags, "RIGHT", 6, 0)
     frame.postSel = MakeButton(frame, "Post Selected", 110, function()
@@ -659,8 +657,21 @@ local function Create()
         GameTooltip:Show()
     end)
     frame.postMarg:SetScript("OnLeave", GameTooltip_Hide)
-    frame.postAll = MakeButton(frame, "Post All", 110, function() ns.PostAll() end)
-    frame.postAll:SetPoint("LEFT", frame.postMarg, "RIGHT", 6, 0)
+    frame.postAll = MakeButton(frame, "Post All", 150, function() ns.PostAll() end, "primary")
+    frame.postAll:SetPoint("BOTTOMLEFT", 12, 12)
+    frame.scanBags:SetPoint("LEFT", frame.postAll, "RIGHT", 6, 0)
+    frame.postMore = ns.Skin.Button(frame, "Post one...", "secondary", 96, 24)
+    frame.postMore:SetPoint("LEFT", frame.scanBags, "RIGHT", 6, 0)
+    ns.Skin.Menu(frame.postMore, function()
+        local mq = #ns.MarginalQueue()
+        return {
+            { "Post next best", function() ns.PostNextBest() end },
+            { "Post selected", function()
+                if selected and not selected.posted then ns.Post(selected) else ns.Print("Select an item first.") end
+            end, nil, not (selected and not selected.posted) },
+            { ("Post marginal (%d)"):format(mq), function() ns.PostNextMarginal() end, nil, mq == 0 },
+        }
+    end)
     frame.postAll:EnableMouseWheel(true)
     frame.postAll:SetScript("OnMouseWheel", function() ns.PostAll() end)
     frame.postAll:SetScript("OnEnter", function(self)
@@ -671,7 +682,7 @@ local function Create()
         GameTooltip:Show()
     end)
     frame.postAll:SetScript("OnLeave", GameTooltip_Hide)
-    frame.fullScan = MakeButton(frame, "Full AH Scan", 120, function() ns.StartFullScan() end)
+    frame.fullScan = MakeButton(frame, "Full AH Scan", 110, function() ns.StartFullScan() end)
     frame.fullScan:SetPoint("BOTTOMLEFT", 12, 12)
     frame.lowBids = MakeButton(frame, "Low Bids", 130, function()
         ns.dealView = (ns.dealView == "BIDS") and "BUYOUT" or "BIDS"
@@ -687,7 +698,7 @@ local function Create()
     end)
     frame.lowBids:SetScript("OnLeave", GameTooltip_Hide)
 
-    frame.buyAll = MakeButton(frame, "Buy All Supplies", 260, function() ns.BuyAllSupplies() end)
+    frame.buyAll = MakeButton(frame, "Buy All Supplies", 260, function() ns.BuyAllSupplies() end, "primary")
     frame.buyAll:SetPoint("LEFT", frame.fullScan, "RIGHT", 6, 0)
     frame.buyAll:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -709,7 +720,7 @@ local function Create()
         def.__buttons = {}
         local prevB
         for _, bd in ipairs(def.buttons or {}) do
-            local b = MakeButton(frame, bd.text, bd.width or 120, function() bd.onClick(); UI.Refresh() end)
+            local b = MakeButton(frame, bd.text, bd.width or 120, function() bd.onClick(); UI.Refresh() end, bd.kind)
             if prevB then b:SetPoint("LEFT", prevB, "RIGHT", 6, 0) else b:SetPoint("BOTTOMLEFT", 12, 12) end
             if bd.tooltip then
                 b:SetScript("OnEnter", function(self)
@@ -724,11 +735,16 @@ local function Create()
             def.__buttons[#def.__buttons + 1] = b
             prevB = b
         end
+        def.__widgets = {}
+        if def.build then
+            local ok, ws = pcall(def.build, frame, prevB)
+            if ok and type(ws) == "table" then
+                def.__widgets = ws
+                for _, w in ipairs(ws) do w:Hide() end
+            elseif not ok then ns.Print("tab error: " .. tostring(ws)) end
+        end
     end
 
-    local help = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    help:SetPoint("BOTTOMRIGHT", -14, 18)
-    help:SetText("/dw help for settings")
 
     local resizing
     ns.resetSize = ns.MakeResizable(frame, ns.S, {
@@ -754,11 +770,8 @@ local function FillBagRow(row, it)
     c[3]:SetText(r.postUnit and ns.Money(r.postUnit) or (it.noListings and "|cff40c0ffnone|r" or "..."))
     local demand = ns.MarketStats(it.itemID)
     c[4]:SetText(demand and ("%.1f"):format(demand * 24) or "|cff808080?|r")
-    c[5]:SetText(r.duration and ns.DURATION_LABEL[r.duration] or "")
-    c[6]:SetText(r.deposit and ns.Money(r.deposit) or "")
-    c[7]:SetText(r.bestEV and ns.Money(r.bestEV) or "")
-    c[8]:SetText(ns.Money(r.vendorTotal or (it.vendor or 0) * it.qty))
-    c[9]:SetText(ns.VERDICT_TEXT[verdict])
+    c[5]:SetText(r.bestEV and ns.Money(r.bestEV) or "")
+    c[6]:SetText(ns.VERDICT_TEXT[verdict])
     row.sel:SetShown(selected == it)
 end
 
@@ -1127,7 +1140,7 @@ RefreshNow = function()
     end
 
     if frame.filterButtons then
-        for key, b in pairs(frame.filterButtons) do b:SetEnabled(key ~= (ns.S.dealFilter or "ALL")) end
+        for key, b in pairs(frame.filterButtons) do b.selected = key == (ns.S.dealFilter or "ALL"); ns.Skin.Paint(b) end
         frame.quick:SetChecked(ns.S.quickOnly)
     end
     if frame.lowBids then

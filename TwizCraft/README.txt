@@ -1,5 +1,11 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.11.0 - CLEANER WINDOW
+  - Profession picker, skill bar toward your target and the totals up top;
+    Steps, Make now, Shopping and Route as quiet sections; gold Craft All,
+    Craft next, the Friends chip and a "..." menu (Refresh, party crafters,
+    reset size, help) along the bottom.
+
 NEW IN 1.10.1 (with LeetStick's party-sync work)
 - Party crafters understand Forever surnames ("Bob Stone", "Bob-Stone",
   with or without realm), ignore your own messages and strangers, and keep

@@ -32,7 +32,8 @@ ns.DEFAULTS = {
     autoFullScan     = true,           -- full AH scan when you open the AH, and every 15 min while it's open
     freshMinutes     = 30,             -- auto-vendor only trusts AH prices this recent
     tooltip          = true,
-    wheelPost        = true,           -- while the AH is open and items wait, the mouse wheel posts them
+    wheelPost        = true,
+    recipeBudget     = 100000,         -- copper: the most Buy All spends on recipes in total (10g)           -- while the AH is open and items wait, the mouse wheel posts them
 }
 
 local function CopyDefaults(src, dst)
@@ -568,6 +569,7 @@ local HELP = {
     "/dw scan - rescan your bags (AH must be open)",
     "/dw fullscan - full AH scan for deals (once per 15 min)",
     "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
+    "/dw recipes - cheapest recipes you are missing; /dw recipemax 10g sets the most Buy All spends (reset clears spent)",
     "/dw postall - post everything worth posting, one item per press",
     "/dw wheel on|off - spin the mouse wheel at the AH to post everything (on by default)",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
@@ -619,6 +621,17 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ns.PostNextMarginal()
     elseif cmd == "postbest" then
         ns.PostNextBest()
+    elseif cmd == "recipes" then
+        ns.UI.Show(); ns.UI.SetTab("RECIPES")
+    elseif cmd == "recipemax" then
+        if rest == "reset" then ns.ResetRecipeSpent()
+        else
+            local t = rest:gsub("%s", "")
+            local v = t:match("^%d+$") and tonumber(t) * 10000 or ns.ParseMoney(t)
+            if v then ns.SetRecipeBudget(v)
+            else ns.Print(("max spend on recipes %s, spent %s. /dw recipemax 10g to change, /dw recipemax reset to clear spent."):format(
+                ns.Money(S.recipeBudget or 0), ns.Money(ns.db.recipeSpent or 0))) end
+        end
     elseif cmd == "fullscan" then
         ns.StartFullScan()
     elseif cmd == "cut" then

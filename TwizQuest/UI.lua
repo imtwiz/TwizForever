@@ -1,53 +1,69 @@
 -- TwizQuest window: the ordered steps, XP/hour, and click-to-waypoint.
 local ADDON, NS = ...
 
-local ROWS, DEFAULT_ROWS, ROW_H = 40, 16, 20
+local ROWS = 40
 local PAD = 12                 -- space between the window edge and its contents
-local LIST_Y = 58              -- where the step list starts with nothing above it
 local DEFAULT_W = 520
 local plan
 local frame, rows = nil, {}
 local wayUID
 
-local KIND_TEXT = {
-    pickup = "|cffffd100Pick up|r",
-    turnin = "|cff00ff66Turn in|r",
-}
+------------------------------------------------------------------------
+-- The window (clean skin): header, the "Next" card, the "Up next" list,
+-- and a footer with party XP bars, Solo/Group, Share and a "more" menu.
+------------------------------------------------------------------------
+local S = NS.Skin
+local CARD_H, LINE_H, BAR_H, FOOT_H, HEAD_H = 74, 26, 16, 38, 40
 
-local function StepText(s)
+local function Short(n)
+    n = n or 0
+    if n >= 10000 then return ("%.1fk"):format(n / 1000) end
+    return NS.FormatNum(n)
+end
+
+-- what a step looks like: glyph, glyph color, title, subtitle, right-hand note
+local function StepParts(s)
     local q = s.q
-    if s.kind == "service" then
-        return ("|cffff9933%s|r %s |cff999999- %s|r"):format(s.repair and "Sell & repair:" or "Sell:",
-            s.who or "vendor", s.why or "")
+    local dist = s.dist and s.dist > 0 and ("%d yd"):format(s.dist) or nil
+    local function join(...)
+        local t = {}
+        for i = 1, select("#", ...) do local v = select(i, ...) if v and v ~= "" then t[#t + 1] = v end end
+        return table.concat(t, " · ")
     end
-    if s.kind == "bank" then
-        return ("  |cff40c0ffBank:|r %d %s |cff999999- %s|r"):format(s.need or 0, s.name or "items", q.name)
-    elseif s.kind == "useitem" then
-        return ("%s %s |cff999999- use %s|r"):format(KIND_TEXT.pickup, q.name, s.name or "item")
-    elseif s.kind == "bankstart" then
-        return ("%s %s |cff999999- bank, use %s|r"):format(KIND_TEXT.pickup, q.name, s.name or "item")
+    if s.kind == "service" then
+        return "$", "orange", (s.repair and "Sell & repair" or "Sell junk"), join(s.who, s.why, dist), s.why or ""
+    elseif s.kind == "bank" then
+        return "B", "blue", ("Bank: %d %s"):format(s.need or 0, s.name or "items"), join(q.name, dist), ""
+    elseif s.kind == "useitem" or s.kind == "bankstart" then
+        return "!", "gold", "Start " .. q.name, join("use " .. (s.name or "item"), dist), ""
     end
     if s.role == 1 then
-        return ("%s %s%s"):format(KIND_TEXT.pickup, q.name, s.who and (" |cff999999- " .. s.who .. "|r") or "")
+        return "!", "gold", "Pick up " .. q.name, join(s.who, dist), s.who or ""
     elseif s.role == 3 then
-        return ("%s %s%s"):format(KIND_TEXT.turnin, q.name, s.who and (" |cff999999- " .. s.who .. "|r") or "")
+        return "?", "green", "Turn in " .. q.name, join(s.who, dist), "+" .. NS.FormatNum(q.xp or 0) .. " XP"
     end
     local what
     if s.kind == "monster" or s.kind == "killcredit" then
         what = ("Kill %d %s"):format(s.need or 0, s.name or s.text or "targets")
     elseif s.kind == "item" then
-        what = ("Get %d %s%s"):format(s.need or 0, s.name or s.text or "items",
-            s.dropper and (" (~" .. (s.kills or s.need) .. " " .. s.dropper .. ")") or "")
+        what = ("Get %d %s"):format(s.need or 0, s.name or s.text or "items")
     elseif s.kind == "loot" or s.kind == "object" then
         what = ("Collect %d %s"):format(s.need or 0, s.name or s.text or "objects")
     elseif s.kind == "buy" then
-        what = ("Buy %s from %s"):format(s.name or "item", s.vendor or "vendor")
+        what = ("Buy %s"):format(s.name or "item")
     else
         what = s.text or "Objective"
     end
-    if s.elite then what = what .. " |cffff5555(elite)|r" end
-    if s.help then what = what .. (" |cff66ccff(for %s)|r"):format(s.help) end
-    return ("  %s |cff999999- %s|r"):format(what, q.name)
+    if s.elite then what = what .. " " .. S.Color("red", "(elite)") end
+    local sub = join(q.name, dist, s.dropper and ("~" .. (s.kills or s.need) .. " " .. s.dropper) or nil,
+        s.help and S.Color("blue", "helping " .. s.help) or nil)
+    return (s.kind == "item" or s.kind == "loot" or s.kind == "object") and "o" or "x", "text", what, sub, dist or ""
+end
+
+-- the old one-line text (tooltips and chat still use it)
+local function StepText(s)
+    local _, _, title, sub = StepParts(s)
+    return title .. (sub ~= "" and (" |cff999999- " .. sub .. "|r") or "")
 end
 
 local function SetWaypoint(s, silent)
@@ -67,9 +83,22 @@ local function SetWaypoint(s, silent)
     if not silent then NS.Print("waypoint set: " .. title) end
 end
 
--- rows that fit: your chosen height, or the default when you haven't resized
+local function StepTooltip(owner, s)
+    if not s then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+    GameTooltip:AddLine(s.q.name, S.C.gold[1], S.C.gold[2], S.C.gold[3])
+    local plain = StepText(s):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    GameTooltip:AddLine(plain, 1, 1, 1, true)
+    GameTooltip:AddDoubleLine("Travel", ("%d yd, %s"):format(s.dist or 0, NS.FormatTime(s.travel or 0)), 0.7, 0.7, 0.7, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
+    if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
+    if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
+    GameTooltip:AddLine("Click: waypoint", 0.5, 0.8, 1)
+    GameTooltip:Show()
+end
+
 ------------------------------------------------------------------------
--- Party line: who's synced, quests to share, who's behind, ready together
+-- Party: status text, tooltip, XP bars
 ------------------------------------------------------------------------
 local partyOffset = 0
 local function QName(id)
@@ -79,26 +108,24 @@ end
 
 local function PartyText(st)
     if #st.members == 0 then
-        if #st.noAddon > 0 then return ("|cff999999Party: synced 0/%d|r"):format(#st.noAddon) end
+        if #st.noAddon > 0 then return S.Color("muted", ("synced 0/%d"):format(#st.noAddon)) end
         return nil
     end
-    local bits = { ("|cff66ccffParty:|r %s"):format(table.concat(st.members, ", ")) }
+    local bits = { S.Color("text", table.concat(st.members, ", ")) }
+    bits[#bits + 1] = S.Color("green", #st.same .. " same")
+    if #st.behind > 0 then bits[#bits + 1] = S.Color("orange", #st.behind .. " behind") end
+    if #st.ready > 0 then bits[#bits + 1] = S.Color("green", #st.ready .. " ready") end
+    if #st.theyHave > 0 then bits[#bits + 1] = S.Color("muted", #st.theyHave .. " theirs") end
     if #st.noAddon > 0 then
-        bits[#bits + 1] = ("|cff999999Synced: %d/%d|r"):format(#st.members, #st.members + #st.noAddon)
+        bits[#bits + 1] = S.Color("muted", ("synced %d/%d"):format(#st.members, #st.members + #st.noAddon))
     end
-    bits[#bits + 1] = ("|cff66ff66Same: %d|r"):format(#st.same)
-    if #st.missing > 0 then bits[#bits + 1] = ("|cffffd100Share: %d|r"):format(#st.missing) end
-    if #st.behind > 0 then bits[#bits + 1] = ("|cffff9933Behind: %d|r"):format(#st.behind) end
-    if #st.ready > 0 then bits[#bits + 1] = ("|cff66ff66Ready: %d|r"):format(#st.ready) end
-    if #st.theyHave > 0 then bits[#bits + 1] = ("|cff999999Theirs: %d|r"):format(#st.theyHave) end
-    if #st.missing + #st.behind + #st.ready + #st.theyHave == 0 then bits[#bits + 1] = "|cff66ff66In sync|r" end
-    return table.concat(bits, "   ")
+    return table.concat(bits, S.Color("faint", " · "))
 end
 
 local function PartyTooltip(self)
     local st = NS.PartyStatus()
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("Party sync", 0.4, 0.8, 1)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:AddLine("Party sync", S.C.blue[1], S.C.blue[2], S.C.blue[3])
     for _, m in ipairs(st.members) do
         local p = NS.party[m]
         GameTooltip:AddDoubleLine(m .. (p.level and (" (" .. p.level .. ")") or ""),
@@ -106,26 +133,26 @@ local function PartyTooltip(self)
     end
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine(("Same quests: %d everyone has%s"):format(#st.same,
-        st.sameSome > #st.same and (", " .. st.sameSome .. " with someone") or ""), 0.4, 1, 0.4)
+        st.sameSome > #st.same and (", " .. st.sameSome .. " with someone") or ""), S.C.green[1], S.C.green[2], S.C.green[3])
     for _, id in ipairs(st.same) do GameTooltip:AddLine("  " .. QName(id), 1, 1, 1) end
     if #st.missing > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Share: they lack", 1, 0.82, 0)
+        GameTooltip:AddLine("Missing (Share):", S.C.gold[1], S.C.gold[2], S.C.gold[3])
         for _, m in ipairs(st.missing) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.behind > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Behind: they still need", 1, 0.6, 0.2)
+        GameTooltip:AddLine("Behind:", S.C.orange[1], S.C.orange[2], S.C.orange[3])
         for _, b in ipairs(st.behind) do GameTooltip:AddDoubleLine(QName(b.id), b.who .. " " .. b.left, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.ready > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Ready: turn in together", 0.4, 1, 0.4)
+        GameTooltip:AddLine("Ready to turn in:", S.C.green[1], S.C.green[2], S.C.green[3])
         for _, id in ipairs(st.ready) do GameTooltip:AddLine(QName(id), 1, 1, 1) end
     end
     if #st.theyHave > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Theirs: you lack", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Theirs only:", 0.7, 0.7, 0.7)
         for _, m in ipairs(st.theyHave) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.noAddon > 0 then
@@ -135,30 +162,27 @@ local function PartyTooltip(self)
     GameTooltip:Show()
 end
 
-local BAR_H = 17
 local function XPRow(row, name, xp, classFile, isMe)
-    row.name:SetText((isMe and "|cff66ff66" or "") .. name .. (isMe and "|r" or ""))
+    row.name:SetText(isMe and S.Color("green", "You") or name)
     if not xp or not xp.max or xp.max <= 0 then
-        row.bar:SetValue(0); row.rest:SetValue(0)
+        row.bar:SetValue(0); row.bar.behind:SetValue(0)
         row.text:SetText("")
-        row.right:SetText("|cff999999No data|r")
+        row.right:SetText(S.Color("faint", "no data"))
         return
     end
     row.bar:SetMinMaxValues(0, xp.max); row.bar:SetValue(xp.cur)
-    row.rest:SetMinMaxValues(0, xp.max); row.rest:SetValue(math.min(xp.max, xp.cur + (xp.rest or 0)))
+    row.bar.behind:SetMinMaxValues(0, xp.max); row.bar.behind:SetValue(math.min(xp.max, xp.cur + (xp.rest or 0)))
     local color = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
-    if color then row.bar:SetStatusBarColor(color.r, color.g, color.b) else row.bar:SetStatusBarColor(0.58, 0.0, 0.55) end
+    if color then row.bar:SetStatusBarColor(color.r, color.g, color.b) else row.bar:SetStatusBarColor(0.69, 0.49, 0.94) end
     local left = xp.max - xp.cur
-    local eta = (xp.rate or 0) > 0 and ("   " .. NS.FormatTime(left / xp.rate * 3600)) or ""
     row.text:SetText(("%d%%"):format(math.floor(xp.cur / xp.max * 100)))
-    row.right:SetText(("L%d   %s left%s%s"):format(xp.level or 0, NS.FormatNum(left),
-        (xp.rest or 0) > 0 and ("   |cff6699ff+" .. NS.FormatNum(xp.rest) .. " rested|r") or "", "|cff999999" .. eta .. "|r"))
+    row.right:SetText(S.Color("muted", ("L%d · %s to go"):format(xp.level or 0, Short(left))))
 end
 
 local function MyXP()
-    local plan = NS._plan and NS._plan()
+    local p = NS._plan and NS._plan()
     return { level = UnitLevel("player"), cur = UnitXP("player") or 0, max = UnitXPMax("player") or 0,
-             rest = (GetXPExhaustion and GetXPExhaustion()) or 0, rate = plan and plan.rate or 0 }
+             rest = (GetXPExhaustion and GetXPExhaustion()) or 0, rate = p and p.rate or 0 }
 end
 
 local function UnitClassFile(name)
@@ -166,114 +190,151 @@ local function UnitClassFile(name)
     if unit then return select(2, UnitClass(unit)) end
 end
 
-local function RowsFit()
-    if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - LIST_Y - PAD - partyOffset) / ROW_H))) end
-    return DEFAULT_ROWS
+------------------------------------------------------------------------
+-- Layout and refresh
+------------------------------------------------------------------------
+local function FooterHeight(nbars) return FOOT_H + nbars * BAR_H + (nbars > 0 and 8 or 0) end
+local function FixedHeight(nbars, flags)
+    return HEAD_H + (flags and 14 or 0) + 10 + CARD_H + 12 + 18 + 18 + FooterHeight(nbars) + 6
 end
 
--- widths follow the window
+local function RowsFit(nbars, flags)
+    if NS.db.sized then
+        return math.max(0, math.min(ROWS, math.floor((frame:GetHeight() - FixedHeight(nbars, flags)) / LINE_H)))
+    end
+    return 5
+end
+
 local function Layout()
     if not frame then return end
     local w = frame:GetWidth()
-    for _, row in ipairs(rows) do
-        row:SetWidth(w - 2 * PAD)
-        row.text:SetWidth(math.max(80, w - 2 * PAD - 28 - 110))
-    end
+    for _, row in ipairs(rows) do row:SetWidth(w - 2 * PAD) end
 end
 
 local function Refresh()
     if not frame then return end
-    if frame.dropAll then frame.dropAll:SetShown(not (NS.KeepAllQuests and NS.KeepAllQuests())) end
-    if frame.groupBtn then
-        local can = NS.groupMode or (IsInGroup() and NS.SyncedCount and NS.SyncedCount() > 0)
-        frame.groupBtn:SetShown(can and true or false)
-        frame.groupBtn:SetText(NS.groupMode and "Solo" or "Group")
-    end
-    local ptext = NS.db.party and NS.PartyStatus and PartyText(NS.PartyStatus()) or nil
-    local nbars = 0
-    -- flags: a second summary line, only when there is something to flag
-    local flags = {}
-    if plan then
-        if (plan.skipped or 0) > 0 then flags[#flags + 1] = ("|cffff8040Skipped: %d|r"):format(plan.skipped) end
-        if (plan.rested or 0) > 0 then flags[#flags + 1] = ("|cff6699ffRested: %s|r"):format(NS.FormatNum(plan.rested)) end
-        if #(plan.drop or {}) > 0 then flags[#flags + 1] = ("|cffffd100Drop: %d|r"):format(#plan.drop) end
-    end
-    local flagsOffset = #flags > 0 and 16 or 0
-    frame.flags:SetText(table.concat(flags, "   "))
-    frame.flags:SetShown(#flags > 0)
+    -- footer: party status, XP bars, Solo/Group, Share
+    local synced = NS.KeepAllQuests and NS.KeepAllQuests()
+    local st = NS.db.party and NS.PartyStatus and NS.PartyStatus() or nil
+    local ptext = st and PartyText(st) or nil
+    frame.dropAll:SetShown(not synced)
+    local canGroup = NS.groupMode or (IsInGroup() and NS.SyncedCount and NS.SyncedCount() > 0)
+    frame.groupBtn:SetText(NS.groupMode and "Solo" or "Group")
+    frame.groupToggle:SetShown(canGroup and true or false)
+    frame.groupToggle:Select(NS.groupMode and "group" or "solo")
+    frame.partyLine.text:SetText(ptext or S.Color("faint", IsInGroup() and "party not synced" or "solo"))
     frame.partyLine:ClearAllPoints()
-    frame.partyLine:SetPoint("TOPLEFT", PAD, -(LIST_Y - 2 + flagsOffset))
-    frame.partyLine:SetPoint("RIGHT", -PAD, 0)
-    if ptext then
-        frame.partyLine.text:SetText(ptext); frame.partyLine:Show()
-        local st = NS.PartyStatus()
-        frame.share:SetText(("Share (%d)"):format(#st.missing))
-        frame.share:SetShown(#st.missing > 0)
-        partyOffset = 22
-        if NS.db.partyXP and #st.members > 0 then
-            nbars = 1
-            XPRow(frame.xpRows[1], UnitName("player"), MyXP(), select(2, UnitClass("player")), true)
-            for _, m in ipairs(st.members) do
-                if nbars < #frame.xpRows then
-                    nbars = nbars + 1
-                    XPRow(frame.xpRows[nbars], m, NS.party[m].xp, UnitClassFile(m))
-                end
+    if canGroup then frame.partyLine:SetPoint("LEFT", frame.groupToggle, "RIGHT", 10, 0)
+    else frame.partyLine:SetPoint("LEFT", frame.foot, "LEFT", PAD, 0) end
+    frame.partyLine:SetPoint("RIGHT", frame.share, "LEFT", -8, 0)
+    local missing = st and #st.missing or 0
+    frame.share:SetText("Share " .. missing)
+    frame.share:SetShown(missing > 0)
+    local nbars = 0
+    if st and NS.db.partyXP and #st.members > 0 then
+        nbars = 1
+        XPRow(frame.xpRows[1], UnitName("player"), MyXP(), select(2, UnitClass("player")), true)
+        for _, m in ipairs(st.members) do
+            if nbars < #frame.xpRows then
+                nbars = nbars + 1
+                XPRow(frame.xpRows[nbars], m, NS.party[m].xp, UnitClassFile(m))
             end
         end
-        partyOffset = partyOffset + nbars * BAR_H + (nbars > 0 and 6 or 0)
-    else
-        frame.partyLine:Hide(); partyOffset = 0
     end
-    partyOffset = partyOffset + flagsOffset
     for i, r in ipairs(frame.xpRows) do r:SetShown(i <= nbars) end
-    frame.listTop:SetPoint("TOPLEFT", PAD, -LIST_Y - partyOffset)
+    frame.foot:SetHeight(FooterHeight(nbars))
+    partyOffset = nbars
+
+    -- flags under the header, only when there is something to flag
+    local flags = {}
+    if plan then
+        if (plan.skipped or 0) > 0 then flags[#flags + 1] = S.Color("orange", plan.skipped .. " skipped") end
+        if (plan.rested or 0) > 0 then flags[#flags + 1] = S.Color("blue", Short(plan.rested) .. " rested") end
+        if #(plan.drop or {}) > 0 then flags[#flags + 1] = S.Color("gold", #plan.drop .. " worth dropping (/tq cleanup)") end
+    end
+    frame.flags:SetText(table.concat(flags, S.Color("faint", " · ")))
+    frame.flags:SetShown(#flags > 0)
+    frame.card:ClearAllPoints()
+    frame.card:SetPoint("TOPLEFT", PAD, -(HEAD_H + 10 + (#flags > 0 and 14 or 0)))
+    frame.card:SetPoint("RIGHT", -PAD, 0)
+
+    -- header: the number that matters
     if not plan then
-        frame.summary:SetText(NS.IsPlanning() and "Planning..." or (frame.status or "No plan"))
+        frame.summary:SetText(S.Color("muted", NS.IsPlanning() and "Planning..." or (frame.status or "No plan yet")))
+        frame.card:Hide(); frame.upLabel:Hide(); frame.more:Hide()
         for i = 1, ROWS do rows[i]:Hide() end
-        if not NS.db.sized then frame:SetHeight(LIST_Y + PAD + partyOffset) end
+        if not NS.db.sized then frame:SetHeight(HEAD_H + 20 + FooterHeight(nbars)) end
         return
     end
     local need = (UnitXPMax("player") or 0) - (UnitXP("player") or 0)
     local toLevel = (plan.rate > 0) and (need / plan.rate * 3600) or nil
-    local age = GetTime() - (plan.at or GetTime())
-    local groupTag = ""
+    local head
     if plan.group then
-        local st = NS.PartyStatus and NS.PartyStatus()
-        groupTag = ("|cff66ccffGroup%s: %s XP/hr x%d, %d same|r   "):format(
-            plan.group.from and (" (" .. plan.group.from .. ")") or "",
-            NS.FormatNum(plan.group.rate), plan.group.members, st and #st.same or 0)
+        head = S.Color("green", Short(plan.group.rate) .. " XP/hr group")
+            .. S.Color("muted", ("   %s you%s"):format(Short(plan.rate), plan.group.from and (" · " .. plan.group.from .. "'s plan") or ""))
+    else
+        head = S.Color("green", Short(plan.rate) .. " XP/hr")
+            .. S.Color("muted", "   " .. NS.FormatNum(plan.xp) .. " XP in " .. NS.FormatTime(plan.time))
     end
-    frame.summary:SetText(("%s|cff66ff66%s XP/hr|r   %s XP / %s%s   %s"):format(groupTag,
-        NS.FormatNum(plan.rate), NS.FormatNum(plan.xp), NS.FormatTime(plan.time),
-        toLevel and ("   Level: " .. NS.FormatTime(toLevel)) or "",
-        NS.IsPlanning() and "|cffffff00Updating|r" or
-            ("|cff777777Updated: " .. (age < 5 and "now" or NS.FormatTime(age)) .. "|r")))
-    local shown, fit = 0, RowsFit()
+    if toLevel then head = head .. S.Color("muted", " · level in " .. NS.FormatTime(toLevel)) end
+    if NS.IsPlanning() then head = head .. S.Color("gold", " · updating") end
+    frame.summary:SetText(head)
+
+    -- the next step
+    local first = plan.route[1]
+    if not first then
+        frame.summary:SetText(S.Color("muted", "No quests in range"))
+        frame.card:Hide(); frame.upLabel:Hide(); frame.more:Hide()
+        for i = 1, ROWS do rows[i]:Hide() end
+        if not NS.db.sized then frame:SetHeight(HEAD_H + 20 + FooterHeight(nbars)) end
+        return
+    end
+    local glyph, gc, title, sub = StepParts(first)
+    frame.card.step = first
+    frame.card.glyph:SetText(S.Color(gc, glyph))
+    frame.card.title:SetText(title)
+    frame.card.sub:SetText(S.Color("muted", sub))
+    local have, total = first.have, first.total
+    if total and total > 0 then
+        frame.card.bar:SetMinMaxValues(0, total); frame.card.bar:SetValue(have or 0); frame.card.bar:Show()
+    else
+        frame.card.bar:Hide()
+    end
+    frame.card:Show()
+
+    -- up next
+    local fit = RowsFit(nbars, #flags > 0)
+    local shown = 0
     for i = 1, ROWS do
-        local s = (i <= fit) and plan.route[i] or nil
+        local s = (i <= fit) and plan.route[i + 1] or nil
         local row = rows[i]
         if s then
+            local g, c, t, sb, note = StepParts(s)
             row.step = s
-            row.num:SetText(i .. ".")
-            row.text:SetText(StepText(s))
-            local gain = (s.kxp or 0) + ((s.role == 3) and s.q.xp or 0)
-            row.right:SetText(("%s%s"):format(
-                gain > 0 and ("+" .. NS.FormatNum(gain) .. " ") or "",
-                "|cff999999" .. NS.FormatTime(s.eta) .. "|r"))
+            row.glyph:SetText(S.Color(c, g))
+            local quest = (s.role ~= 1 and s.role ~= 3 and s.kind ~= "service") and S.Color("muted", " · " .. s.q.name) or ""
+            row.text:SetText(t .. quest)
+            row.right:SetText(S.Color("muted", note ~= "" and note or NS.FormatTime(s.eta or 0)))
             row:Show(); shown = i
         else
             row:Hide()
         end
     end
-    if #plan.route == 0 then
-        frame.summary:SetText("No quests in range")
+    local rest = math.max(0, #plan.route - 1 - shown)
+    frame.upLabel:SetText("UP NEXT · " .. NS.FormatTime(plan.time))
+    frame.upLabel:SetShown(#plan.route > 1)
+    frame.more:SetText(rest > 0 and ("+%d more step%s"):format(rest, rest == 1 and "" or "s") or "")
+    frame.more:ClearAllPoints()
+    frame.more:SetPoint("TOPLEFT", frame.listTop, "TOPLEFT", 4, -(shown * LINE_H) - 4)
+    frame.more:SetShown(rest > 0)
+    if not NS.db.sized then
+        frame:SetHeight(FixedHeight(nbars, #flags > 0) + shown * LINE_H - (#plan.route > 1 and 0 or 18) - (rest > 0 and 0 or 18))
     end
-    if not NS.db.sized then frame:SetHeight(LIST_Y + PAD + partyOffset + shown * ROW_H) end
 end
 
 local function Build()
     frame = CreateFrame("Frame", "TwizQuestFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(DEFAULT_W, LIST_Y + PAD)
+    frame:SetSize(DEFAULT_W, 300)
     frame:SetPoint("RIGHT", UIParent, "RIGHT", -60, 60)
     frame:SetMovable(true); frame:EnableMouse(true); frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
@@ -283,159 +344,146 @@ local function Build()
         local p, _, rp, x, y = self:GetPoint()
         NS.db.pos = { p, rp, x, y }
     end)
-    if frame.SetBackdrop then
-        frame:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-        frame:SetBackdropColor(0, 0, 0, 0.8)
-    end
+    S.Panel(frame)
     if NS.db.pos then
         frame:ClearAllPoints()
         frame:SetPoint(NS.db.pos[1], UIParent, NS.db.pos[2], NS.db.pos[3], NS.db.pos[4])
     end
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", PAD, -12)
-    title:SetText("TwizQuest")
-
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", 2, 2)
-    close:SetScript("OnClick", function() frame:Hide(); NS.db.shown = false end)
-
-    local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    btn:SetSize(64, 22); btn:SetPoint("TOPRIGHT", -30, -7)
-    btn:SetText("Plan")
-    btn:SetScript("OnClick", function() NS.Replan() end)
-
-    local function Tip(b, title, text)
-        b:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:AddLine(title, 1, 0.82, 0)
-            GameTooltip:AddLine(type(text) == "function" and text() or text, 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    end
-    frame.shareAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.shareAll:SetSize(84, 22); frame.shareAll:SetPoint("RIGHT", btn, "LEFT", -6, 0)
-    frame.shareAll:SetText("Share All")
-    frame.shareAll:SetScript("OnClick", function() NS.ShareAllCmd() end)
-    Tip(frame.shareAll, "Share All", function()
-        return IsInGroup() and "Every shareable quest in your log" or "Needs a party"
-    end)
-    frame.dropAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.dropAll:SetSize(80, 22); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -6, 0)
-    frame.dropAll:SetText("Drop All")
-    frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd(IsShiftKeyDown()) end)
-    Tip(frame.dropAll, "Drop All", "Abandons every quest except dungeon and class quests (asks first)\nShift-click: those too\nLow-value quests only: /tq cleanup")
-    frame.groupBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.groupBtn:SetSize(84, 22); frame.groupBtn:SetPoint("RIGHT", frame.dropAll, "LEFT", -6, 0)
-    frame.groupBtn:SetText("Group")
-    frame.groupBtn:SetScript("OnClick", function()
-        if NS.groupMode then NS.EndGroupPlan() else NS.StartGroupPlan() end
-    end)
-    Tip(frame.groupBtn, "Group plan", function()
-        if NS.groupMode then
-            return (NS.groupPlan and ("Following " .. NS.groupPlan.from .. "'s group plan") or "Your group plan is on")
-                .. "\nClick: back to your own route"
-        end
-        return "Plans the fastest XP for the whole group: quests count the XP of everyone who has them, can be shared them, or can pick them up\nSends the route to your party (click Share to offer quests they're missing)\nEveryone needs TwizQuest"
-    end)
-    frame.groupBtn:Hide()
-
-    frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.summary:SetPoint("TOPLEFT", PAD, -38)
-    frame.summary:SetPoint("RIGHT", -PAD, 0)
-    frame.summary:SetJustifyH("LEFT"); frame.summary:SetWordWrap(false)
-    frame.flags = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.flags:SetPoint("TOPLEFT", PAD, -54)
-    frame.flags:SetPoint("RIGHT", -PAD, 0)
-    frame.flags:SetJustifyH("LEFT"); frame.flags:SetWordWrap(false)
+    -- header
+    local head = CreateFrame("Frame", nil, frame)
+    head:SetPoint("TOPLEFT"); head:SetPoint("TOPRIGHT"); head:SetHeight(HEAD_H)
+    S.Divider(frame, head)
+    local title = S.Text(head, "title")
+    title:SetPoint("LEFT", PAD, 0); title:SetText("TwizQuest")
+    local close = S.IconButton(head, "x", "Close (/tq to reopen)", function() frame:Hide(); NS.db.shown = false end)
+    close:SetPoint("RIGHT", -8, 0)
+    local planBtn = S.Button(head, "Plan", "ghost", 44, 24, function() NS.Replan() end)
+    planBtn:SetPoint("RIGHT", close, "LEFT", -2, 0)
+    S.Tip(planBtn, "Plan", "Plan your route again now")
+    frame.summary = S.Text(head, "small")
+    frame.summary:SetPoint("LEFT", title, "RIGHT", 12, 0)
+    frame.summary:SetPoint("RIGHT", planBtn, "LEFT", -8, 0)
+    frame.flags = S.Text(frame, "small")
+    frame.flags:SetPoint("TOPLEFT", PAD, -(HEAD_H + 4)); frame.flags:SetPoint("RIGHT", -PAD, 0)
     frame.flags:Hide()
 
-    frame.partyLine = CreateFrame("Button", nil, frame)
-    frame.partyLine:SetHeight(18)
-    frame.partyLine:SetPoint("TOPLEFT", PAD, -(LIST_Y - 2))
-    frame.partyLine:SetPoint("RIGHT", -PAD, 0)
-    frame.partyLine.text = frame.partyLine:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.partyLine.text:SetPoint("LEFT"); frame.partyLine.text:SetPoint("RIGHT", -86, 0)
-    frame.partyLine.text:SetJustifyH("LEFT"); frame.partyLine.text:SetWordWrap(false)
-    frame.partyLine:SetScript("OnEnter", PartyTooltip)
-    frame.partyLine:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    frame.share = CreateFrame("Button", nil, frame.partyLine, "UIPanelButtonTemplate")
-    frame.share:SetSize(80, 18); frame.share:SetPoint("RIGHT")
-    frame.share:SetScript("OnClick", function()
-        local n = NS.ShareMissing()
-        NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
-    end)
-    frame.partyLine:Hide()
-    -- party XP bars (you + up to 4 friends)
-    frame.xpRows = {}
-    for i = 1, 5 do
-        local r = CreateFrame("Frame", nil, frame)
-        r:SetHeight(BAR_H - 3)
-        r:SetPoint("TOPLEFT", frame.partyLine, "BOTTOMLEFT", 0, -4 - (i - 1) * BAR_H)
-        r:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
-        r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.name:SetPoint("LEFT"); r.name:SetWidth(96); r.name:SetJustifyH("LEFT"); r.name:SetWordWrap(false)
-        r.rest = CreateFrame("StatusBar", nil, r)
-        r.rest:SetPoint("LEFT", 102, 0); r.rest:SetSize(140, BAR_H - 4)
-        r.rest:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        r.rest:SetStatusBarColor(0.25, 0.4, 0.9, 0.45)
-        r.bar = CreateFrame("StatusBar", nil, r)
-        r.bar:SetAllPoints(r.rest)
-        r.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        r.bar:SetFrameLevel(r.rest:GetFrameLevel() + 1)
-        local bg = r.rest:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 0.6)
-        r.text = r.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.text:SetPoint("CENTER")
-        r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.right:SetPoint("LEFT", r.rest, "RIGHT", 10, 0); r.right:SetPoint("RIGHT")
-        r.right:SetJustifyH("LEFT"); r.right:SetWordWrap(false)
-        r:Hide()
-        frame.xpRows[i] = r
+    -- the "Next" card
+    local card = CreateFrame("Button", nil, frame, "BackdropTemplate")
+    card:SetHeight(CARD_H)
+    S.Card(card)
+    card:RegisterForClicks("AnyUp")
+    card:SetScript("OnClick", function(self) SetWaypoint(self.step) end)
+    card:SetScript("OnEnter", function(self) StepTooltip(self, self.step) end)
+    card:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local icon = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    icon:SetSize(36, 36); icon:SetPoint("LEFT", 12, 0)
+    if icon.SetBackdrop then
+        icon:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+        icon:SetBackdropColor(0.17, 0.13, 0.09, 1)
     end
+    card.glyph = icon:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    card.glyph:SetPoint("CENTER")
+    local lbl = S.Label(card); lbl:SetPoint("TOPLEFT", 60, -10); lbl:SetLabel("Next")
+    card.title = S.Text(card, "body"); card.title:SetPoint("TOPLEFT", 60, -24); card.title:SetPoint("RIGHT", -96, 0)
+    card.sub = S.Text(card, "small"); card.sub:SetPoint("TOPLEFT", 60, -42); card.sub:SetPoint("RIGHT", -96, 0)
+    card.bar = S.Bar(card, 4); card.bar:SetPoint("BOTTOMLEFT", 60, 10); card.bar:SetPoint("RIGHT", -96, 0); card.bar:Hide()
+    frame.card = card
+
+    -- up next
+    frame.upLabel = S.Label(frame)
+    frame.upLabel:SetPoint("TOPLEFT", card, "BOTTOMLEFT", 2, -12)
     frame.listTop = CreateFrame("Frame", nil, frame)
     frame.listTop:SetSize(1, 1)
-    frame.listTop:SetPoint("TOPLEFT", PAD, -LIST_Y)
-
+    frame.listTop:SetPoint("TOPLEFT", card, "BOTTOMLEFT", 0, -28)
     for i = 1, ROWS do
         local row = CreateFrame("Button", nil, frame)
-        row:SetSize(DEFAULT_W - 2 * PAD, ROW_H)
-        row:SetPoint("TOPLEFT", frame.listTop, "TOPLEFT", 0, -(i - 1) * ROW_H)
+        row:SetSize(DEFAULT_W - 2 * PAD, LINE_H)
+        row:SetPoint("TOPLEFT", frame.listTop, "TOPLEFT", 0, -(i - 1) * LINE_H)
         row:RegisterForClicks("AnyUp")
-        row.num = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.num:SetPoint("LEFT"); row.num:SetWidth(22); row.num:SetJustifyH("RIGHT")
-        row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.text:SetPoint("LEFT", 28, 0); row.text:SetWidth(DEFAULT_W - 2 * PAD - 28 - 110); row.text:SetJustifyH("LEFT")
-        row.text:SetWordWrap(false)
-        row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.right:SetPoint("RIGHT"); row.right:SetJustifyH("RIGHT")
-        local hl = row:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.08)
+        row.glyph = S.Text(row, "body"); row.glyph:SetPoint("LEFT", 4, 0); row.glyph:SetWidth(16); row.glyph:SetJustifyH("CENTER")
+        row.right = S.Text(row, "small"); row.right:SetPoint("RIGHT", -4, 0); row.right:SetJustifyH("RIGHT")
+        row.text = S.Text(row, "body"); row.text:SetPoint("LEFT", 28, 0); row.text:SetPoint("RIGHT", row.right, "LEFT", -8, 0)
+        local line = row:CreateTexture(nil, "ARTWORK"); line:SetColorTexture(unpack(S.C.line)); line:SetHeight(1)
+        line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT")
+        local hl = row:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
         row:SetScript("OnClick", function(self) SetWaypoint(self.step) end)
-        row:SetScript("OnEnter", function(self)
-            local s = self.step
-            if not s then return end
-            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-            GameTooltip:AddLine(s.q.name, 1, 0.82, 0)
-            local plain = StepText(s):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-            GameTooltip:AddLine(plain, 1, 1, 1, true)
-            GameTooltip:AddDoubleLine("Travel", ("%d yd, %s"):format(s.dist or 0, NS.FormatTime(s.travel or 0)), 0.7, 0.7, 0.7, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
-            if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
-            if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-            GameTooltip:AddLine("Click: waypoint", 0.5, 0.8, 1)
-            GameTooltip:Show()
-        end)
+        row:SetScript("OnEnter", function(self) StepTooltip(self, self.step) end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row:Hide()
         rows[i] = row
     end
+    frame.more = S.Text(frame, "faint"); frame.more:Hide()
+
+    -- footer: XP bars, then Solo/Group, party status, Share, more
+    local foot = CreateFrame("Frame", nil, frame)
+    foot:SetPoint("BOTTOMLEFT"); foot:SetPoint("BOTTOMRIGHT"); foot:SetHeight(FOOT_H)
+    S.Divider(frame, foot, "top")
+    frame.foot = foot
+    frame.xpRows = {}
+    for i = 1, 5 do
+        local r = CreateFrame("Frame", nil, foot)
+        r:SetHeight(BAR_H - 2)
+        r:SetPoint("TOPLEFT", PAD, -8 - (i - 1) * BAR_H); r:SetPoint("RIGHT", -PAD, 0)
+        r.name = S.Text(r, "small"); r.name:SetPoint("LEFT"); r.name:SetWidth(64)
+        r.right = S.Text(r, "small"); r.right:SetPoint("RIGHT"); r.right:SetWidth(120); r.right:SetJustifyH("RIGHT")
+        r.bar = S.Bar(r, 6); r.bar:SetPoint("LEFT", 70, 0); r.bar:SetPoint("RIGHT", r.right, "LEFT", -10, 0)
+        r.rest = r.bar.behind
+        r.text = S.Text(r, "faint"); r.text:Hide()
+        r:Hide()
+        frame.xpRows[i] = r
+    end
+    local controls = CreateFrame("Frame", nil, foot)
+    controls:SetPoint("BOTTOMLEFT"); controls:SetPoint("BOTTOMRIGHT"); controls:SetHeight(FOOT_H)
+
+    -- Solo / Group (frame.groupBtn toggles; the segmented control shows the state)
+    frame.groupBtn = CreateFrame("Button", nil, controls)
+    frame.groupBtn:Hide()
+    frame.groupBtn:SetScript("OnClick", function()
+        if NS.groupMode then NS.EndGroupPlan() else NS.StartGroupPlan() end
+    end)
+    frame.groupToggle = S.Segmented(controls, { { "solo", "Solo", w = 44 }, { "group", "Group", w = 52 } }, function(key)
+        if (key == "group") ~= (NS.groupMode and true or false) then frame.groupBtn:Click() end
+    end, 26)
+    frame.groupToggle:SetPoint("LEFT", PAD, 0)
+    S.Tip(frame.groupToggle, "Group plan", "Group: the fastest XP for the whole party, sent to everyone running TwizQuest\nSolo: just your own route")
+    frame.groupToggle:Hide()
+
+    local more = S.MoreButton(controls, function()
+        local synced = NS.KeepAllQuests and NS.KeepAllQuests()
+        return {
+            { "Plan again", function() NS.Replan() end },
+            { "Share All", function() frame.shareAll:Click() end, nil, not IsInGroup() },
+            { synced and "Drop All (off while synced)" or "Drop All", function() frame.dropAll:Click() end, nil, synced },
+            { "Drop All incl. dungeon/class", function() NS.DropAllCmd(true) end, nil, synced },
+            { "Party: " .. (NS.db.party and "sync on" or "sync off"), function() SlashCmdList.QUESTROUTE(NS.db.party and "party off" or "party on") end },
+            { "Auto-accept: " .. (NS.db.autoAccept and "on" or "off"), function() SlashCmdList.QUESTROUTE("accept") end },
+            { "Help (/tq help)", function() SlashCmdList.QUESTROUTE("help") end },
+        }
+    end, 30)
+    more:SetPoint("RIGHT", -PAD, 0)
+    frame.share = S.Button(controls, "Share 0", "secondary", 70, 26, function()
+        local n = NS.ShareMissing()
+        NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
+    end)
+    frame.share:SetPoint("RIGHT", more, "LEFT", -6, 0)
+    S.Tip(frame.share, "Share", "Offer your quests that party members are missing")
+    frame.partyLine = CreateFrame("Button", nil, controls)
+    frame.partyLine:SetHeight(20)
+    frame.partyLine.text = S.Text(frame.partyLine, "small")
+    frame.partyLine.text:SetPoint("LEFT"); frame.partyLine.text:SetPoint("RIGHT")
+    frame.partyLine:SetScript("OnEnter", PartyTooltip)
+    frame.partyLine:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Share All / Drop All live in the "more" menu (kept as buttons for key bindings and tests)
+    frame.shareAll = CreateFrame("Button", nil, controls); frame.shareAll:Hide()
+    frame.shareAll:SetScript("OnClick", function() NS.ShareAllCmd() end)
+    frame.dropAll = CreateFrame("Button", nil, controls); frame.dropAll:Hide()
+    frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd(IsShiftKeyDown()) end)
+
     local resizing
     NS.resetSize = NS.MakeResizable(frame, NS.db, {
-        minW = 400, minH = 100, maxW = 1400, maxH = 1000, defaultW = DEFAULT_W, defaultH = LIST_Y + PAD, savePos = true,
+        minW = 400, minH = 180, maxW = 1400, maxH = 1000, defaultW = DEFAULT_W, defaultH = 300, savePos = true,
         onResize = function()
             if resizing then return end
             resizing = true; Layout(); Refresh(); resizing = false
@@ -463,15 +511,39 @@ function NS.UpdateTargetButton()
     local name = plan and plan.route[1] and StepTargetName(plan.route[1])
     targetButton:SetAttribute("macrotext", name and ("/targetexact " .. name) or "")
     targetButton.name = name
+    if targetButton.label then targetButton:SetAlpha(name and 1 or 0.4) end
 end
 
+-- the gold "Target" button on the Next card is the secure button itself, so it
+-- works from the key binding and in combat too
 local function MakeTargetButton()
-    targetButton = CreateFrame("Button", "TwizQuestTargetButton", UIParent, "SecureActionButtonTemplate")
-    targetButton:SetSize(1, 1); targetButton:SetAlpha(0)
-    targetButton:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10, 10)
+    local parent = frame and frame.card or UIParent
+    targetButton = CreateFrame("Button", "TwizQuestTargetButton", parent, "SecureActionButtonTemplate,BackdropTemplate")
     targetButton:RegisterForClicks("AnyUp", "AnyDown")
     targetButton:SetAttribute("type", "macro")
     targetButton:SetAttribute("macrotext", "")
+    if frame and frame.card then
+        targetButton:SetSize(72, 30)
+        targetButton:SetPoint("RIGHT", frame.card, "RIGHT", -12, 0)
+        if targetButton.SetBackdrop then
+            targetButton:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+            targetButton:SetBackdropColor(NS.Skin.C.gold[1], NS.Skin.C.gold[2], NS.Skin.C.gold[3], 1)
+        end
+        targetButton.label = targetButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        targetButton.label:SetPoint("CENTER")
+        targetButton.label:SetTextColor(unpack(NS.Skin.C.ink))
+        targetButton.label:SetText("Target")
+        targetButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(self.name and ("Target " .. self.name) or "Nothing to target for this step", 1, 1, 1)
+            GameTooltip:AddLine("Bind a key: Options > Keybindings > AddOns > TwizQuest", 0.7, 0.7, 0.7, true)
+            GameTooltip:Show()
+        end)
+        targetButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    else
+        targetButton:SetSize(1, 1); targetButton:SetAlpha(0)
+        targetButton:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10, 10)
+    end
 end
 
 function NS.OnPlan(result, why)
