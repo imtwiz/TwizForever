@@ -115,7 +115,19 @@ local function Mine()
     local out = {}
     local live = {}
     for _, p in ipairs(NS.Professions and NS.Professions() or {}) do live[p.name] = p end
-    for line, p in pairs(NS.Char().profs or {}) do
+    -- every profession you have gets shared, even ones whose window you've
+    -- never opened (Mining, Herbalism, Skinning...) - with no recipes yet
+    local liveOnly = {}
+    for name, lp in pairs(live) do
+        local line = lp.line or (NS.PROFESSION_LINES and NS.PROFESSION_LINES[name])
+        if line and line ~= 0 and not (NS.Char().profs or {})[line] then
+            liveOnly[line] = { name = name, recipes = {} }
+        end
+    end
+    local all = {}
+    for line, p in pairs(NS.Char().profs or {}) do all[line] = p end
+    for line, p in pairs(liveOnly) do all[line] = p end
+    for line, p in pairs(all) do
         if line ~= 0 and p.name and p.name ~= "" then
             local list = {}
             for id, r in pairs(p.recipes or {}) do
@@ -438,7 +450,7 @@ local function Rows()
             local expanded = open[key] or f ~= "" or makeableOnly
             if (f == "" and not makeableOnly) or #list > 0 then
                 rows[#rows + 1] = { kind = "prof", key = key, text = ("  %s %s |cff66ff66%d/%d|r |cff999999%d recipes|r"):format(
-                    expanded and "-" or "+", p.name, p.skill, p.max, Count(p.recipes)) }
+                    Count(p.recipes) > 0 and (expanded and "-" or "+") or " ", p.name, p.skill, p.max, Count(p.recipes)) }
                 if expanded then
                     for _, r in ipairs(list) do
                         local mine = NS.Char().profs[line]
