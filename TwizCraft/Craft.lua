@@ -139,9 +139,9 @@ end
 
 -- all = also gray recipes (no skill-ups). Returns the queue and a list of
 -- gray recipes you could make (for the "nothing left" message).
-function NS.CraftAllQueue(all)
+function NS.CraftAllQueue(all, forceLine)
     local q, grays = {}, {}
-    local line = OpenLine()
+    local line = forceLine or OpenLine()
     local plan = NS.currentPlan
     if line and (not plan or plan.line ~= line) then
         local ok, p = pcall(NS.PlanFor, line)
@@ -213,9 +213,21 @@ function NS.CraftAll(button)
     local ok, err = pcall(CraftAllInner, button)
     if not ok then NS.Print("Craft All hit an error: " .. tostring(err)) end
 end
-CraftAllInner = function(button)
+-- professions to try, best first: the open window, the plan's, then the rest
+local function CandidateLines()
+    local out, seen = {}, {}
+    local function add(l) if l and not seen[l] then seen[l] = true; out[#out + 1] = l end end
+    add(OpenLine())
+    add(NS.currentPlan and NS.currentPlan.line)
+    add(NS.current)
+    for l in pairs(NS.Char().profs or {}) do if l ~= 0 then add(l) end end
+    return out
+end
+
+local pendingOpen   -- { line, all, at } while we wait for a window we opened
+CraftAllInner = function(button, fromOpen)
     if button == "RightButton" then
-        current = nil
+        current, pendingOpen = nil, nil
         return NS.CraftRecipeNow(nil, nil, nil, nil, nil, "RightButton")
     end
     if Busy() then
@@ -226,24 +238,58 @@ CraftAllInner = function(button)
         end
         return
     end
+    if InCombatLockdown() then NS.Print("can't craft in combat."); return end
+    local all = (pendingOpen and fromOpen and pendingOpen.all) or IsShiftKeyDown()
     if NS.PlanNow then NS.PlanNow() end
-    local all = IsShiftKeyDown()
-    local q, grays = NS.CraftAllQueue(all)
-    local first = q[1]
-    if not first then
-        if not OpenLine() and not NS.currentPlan then
-            NS.Print("open a profession window first.")
-        elseif #grays > 0 then
+    -- find a profession with something to make
+    local line, q, grays
+    local allGrays = {}
+    for _, l in ipairs(CandidateLines()) do
+        local lq, lg = NS.CraftAllQueue(all, l)
+        if #lq > 0 then line, q, grays = l, lq, lg; break end
+        for _, g in ipairs(lg) do allGrays[#allGrays + 1] = g end
+    end
+    if not line then
+        pendingOpen = nil
+        if #allGrays > 0 then
             NS.Print(("nothing that gives skill-ups. You can make (gray): %s%s - shift-click Craft All to make them anyway."):format(
-                table.concat(grays, ", ", 1, math.min(#grays, 5)), #grays > 5 and ", ..." or ""))
+                table.concat(allGrays, ", ", 1, math.min(#allGrays, 5)), #allGrays > 5 and ", ..." or ""))
         else
             NS.Print("nothing you can craft with what's in your bags right now.")
         end
         NS.UpdateCraftWheel()
         return
     end
+    local prof = NS.Char().profs[line]
+    -- open (or switch to) that profession's window first; crafting starts when it's ready
+    if OpenLine() ~= line then
+        if fromOpen then
+            NS.Print(("couldn't open %s - open it yourself, then press Craft All."):format(prof.name or "the profession"))
+            pendingOpen = nil
+            return
+        end
+        if C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill and pcall(C_TradeSkillUI.OpenTradeSkill, line) then
+            pendingOpen = { line = line, all = all, at = GetTime() }
+            NS.Print(("opening %s..."):format(prof.name or "your profession"))
+        else
+            NS.Print(("open your %s window, then press Craft All."):format(prof.name or "profession"))
+        end
+        return
+    end
+    pendingOpen = nil
+    local first = q[1]
     current = first.r.name
     NS.CraftRecipeNow(first.line, first.id, first.r, first.want, first.prof, button, true)
+    if fromOpen then
+        -- if the game wouldn't start a craft right after the window opened, say so
+        local asked = GetTime()
+        C_Timer.After(0.8, function()
+            if current == first.r.name and not Busy() and (NS.lastCastStart or 0) < asked then
+                current = nil
+                NS.Print(("%s is open - press Craft All to start crafting %s."):format(prof.name or "The window", first.r.name))
+            end
+        end)
+    end
     if #q > 1 then
         NS.Print(("%d more recipe%s after this batch - press Craft All again or spin your mouse wheel."):format(
             #q - 1, #q == 2 and "" or "s"))
@@ -272,10 +318,16 @@ end
 -- tell you when a batch finishes and what's next
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("TRADE_SKILL_SHOW")
+ev:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 ev:RegisterEvent("TRADE_SKILL_CLOSE")
 ev:RegisterEvent("UNIT_SPELLCAST_STOP")
+ev:RegisterEvent("UNIT_SPELLCAST_START")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
 ev:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_SPELLCAST_START" then
+        if unit == "player" then NS.lastCastStart = GetTime() end
+        return
+    end
     if event == "UNIT_SPELLCAST_STOP" then
         if unit ~= "player" or not current then return end
         C_Timer.After(0.4, function()
@@ -292,6 +344,18 @@ ev:SetScript("OnEvent", function(_, event, unit)
             if NS.RefreshUI then NS.RefreshUI() end
         end)
         return
+    end
+    if (event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE") and pendingOpen then
+        local want = pendingOpen
+        if GetTime() - want.at > 10 then pendingOpen = nil
+        elseif OpenLine() == want.line then
+            C_Timer.After(0.4, function()
+                if pendingOpen == want then
+                    local ok, err = pcall(CraftAllInner, nil, true)
+                    if not ok then NS.Print("Craft All hit an error: " .. tostring(err)) end
+                end
+            end)
+        end
     end
     C_Timer.After(0.3, NS.UpdateCraftWheel)
 end)

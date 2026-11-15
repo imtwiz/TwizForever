@@ -1,5 +1,13 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.7.3
+- Craft All opens the right profession window by itself (or switches to it
+  if a different one is open) and starts crafting as soon as the recipes
+  load. It picks the profession that has something to make: the open one,
+  then the one TwizCraft is planning, then your others. If the game won't
+  start a craft right after the window opens, chat tells you and the next
+  press crafts.
+
 NEW IN 1.7.2
 - Craft All no longer thinks you're still crafting after a batch ends (it
   now only waits while you're actually casting), and any error it hits is
