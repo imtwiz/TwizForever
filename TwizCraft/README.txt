@@ -1,5 +1,15 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.8.0 - PARTY CRAFTERS
+- When you group with someone who also runs TwizCraft, you swap professions,
+  skill levels and known recipes automatically (hidden addon messages; only
+  changes are re-sent after you open a profession window).
+- Party button (top of the window) or /cr party: browse each member's
+  professions and recipes, click a profession to expand it, search by name.
+  Recipes you don't know are marked. Hover a recipe for the item; shift-click
+  to link it in chat.
+- Item tooltips show "Party can make: Bob (Engineering)".
+
 NEW IN 1.7.3
 - Craft All opens the right profession window by itself (or switches to it
   if a different one is open) and starts crafting as soon as the recipes

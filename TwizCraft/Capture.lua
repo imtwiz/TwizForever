@@ -121,6 +121,7 @@ Capture = function()
     if n ~= before then NS.Print(("remembered %d %s recipes."):format(n, name)) end
     NS.current = line
     if NS.Replan then NS.Replan() end
+    if NS.PartyRecipesChanged then NS.PartyRecipesChanged() end
     return n
 end
 NS.Capture = function() local ok, n = pcall(Capture); return ok and n end

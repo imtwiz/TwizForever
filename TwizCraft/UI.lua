@@ -39,6 +39,11 @@ end
 ------------------------------------------------------------------------
 local function Refresh()
     if not frame or not frame:IsShown() then return end
+    if frame.partyBtn then
+        local n = NS.PartyCrafterCount and NS.PartyCrafterCount() or 0
+        frame.partyBtn:SetText(("Party (%d)"):format(n))
+        frame.partyBtn:SetShown(n > 0)
+    end
     -- profession tabs
     local profs, i = NS.Professions(), 0
     local c = NS.Char()
@@ -373,6 +378,18 @@ local function Build()
     allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     local refresh = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     refresh:SetSize(64, 18); refresh:SetPoint("RIGHT", allBtn, "LEFT", -4, 0)
+    frame.partyBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.partyBtn:SetSize(64, 18); frame.partyBtn:SetPoint("RIGHT", refresh, "LEFT", -4, 0)
+    frame.partyBtn:SetText("Party")
+    frame.partyBtn:SetScript("OnClick", function() NS.TogglePartyCrafters() end)
+    frame.partyBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Party crafters")
+        GameTooltip:AddLine("Professions and known recipes of party members who run TwizCraft. Item tooltips also show who can make an item.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    frame.partyBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.partyBtn:Hide()
     refresh:SetText("Refresh")
     refresh:SetScript("OnClick", function() NS.RefreshAll() end)
     refresh:SetScript("OnEnter", function(self)
@@ -535,6 +552,8 @@ SlashCmdList.CRAFTROUTE = function(msg)
     if cmd == "" then
         if frame:IsShown() then frame:Hide(); NS.db.shown = false
         else frame:Show(); NS.db.shown = true; NS.Replan(true) end
+    elseif cmd == "party" then
+        NS.TogglePartyCrafters()
     elseif cmd == "craftall" or cmd == "all" then
         NS.CraftAll()
     elseif cmd == "wheel" then
@@ -565,6 +584,7 @@ SlashCmdList.CRAFTROUTE = function(msg)
     else
         NS.Print("commands:")
         print("  /cr            show or hide the window")
+        print("  /cr party      professions and recipes of party members running TwizCraft")
         print("  /cr craftall   craft the next batch of everything you can make (Craft All button)")
         print("  /cr wheel      mouse wheel presses Craft All while a profession window is open (on)")
         print("  /cr target 225 plan up to this skill instead of your cap (/cr target to clear)")

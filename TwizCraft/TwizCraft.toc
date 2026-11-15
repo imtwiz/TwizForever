@@ -2,7 +2,7 @@
 ## Title: TwizCraft
 ## Notes: The cheapest way to level each profession from where you are: which recipe to craft at each skill level, how many, and a shopping list. Uses AtlasLoot's skill colors, TwizAH's AH prices, vendor prices, and what's in your bags and bank. Learns your real skill-up odds.
 ## Author: Alan Sherbourne
-## Version: 1.7.3
+## Version: 1.8.0
 ## Dependencies: TomTom
 ## OptionalDeps: AtlasLootClassic, TwizAH, TwizQuest
 ## SavedVariables: CraftRouteDB
@@ -14,5 +14,6 @@ Planner.lua
 Shop.lua
 Mail.lua
 Craft.lua
+Party.lua
 Resize.lua
 UI.lua
