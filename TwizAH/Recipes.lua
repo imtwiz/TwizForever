@@ -102,7 +102,12 @@ local function RecipeInfo(itemID)
         if t then
             if t == known or t:find(known, 1, true) then c.known = true end
             local prof, lvl = t:match(ReqPattern())
-            if prof and lvl and not c.prof then c.prof, c.level = prof, tonumber(lvl) end
+            if prof and lvl and not c.prof then
+                c.prof, c.level = prof, tonumber(lvl)
+                -- the game colors the line red when your skill is too low
+                local col = line.leftColor
+                if col and col.r and col.r > 0.9 and (col.g or 1) < 0.3 and (col.b or 1) < 0.3 then c.tooLow = true end
+            end
         end
     end
     infoCache[itemID] = c
@@ -184,9 +189,11 @@ function ns.RecipeList()
                         local price = ns.KnownPrice(itemID) or m.min
                         local l = Live(itemID)
                         if l then price = l.rows[1] and l.rows[1].unit end -- nil: sold out right now
-                        local level = info.level or 0
-                        if price then list[#list + 1] = { itemID = itemID, icon = icon, price = price, prof = p.name,
-                            level = level, skill = p.skill, learnable = p.skill >= level, med = m.med, live = l ~= nil } end
+                        -- only recipes you can learn right now: skill requirement known and met
+                        local level = info.level
+                        local learnable = level and p.skill >= level and not info.tooLow
+                        if price and learnable then list[#list + 1] = { itemID = itemID, icon = icon, price = price, prof = p.name,
+                            level = level, skill = p.skill, learnable = true, med = m.med, live = l ~= nil } end
                     end
                 end
             end
@@ -310,6 +317,13 @@ local Confirm
 -- buyNow: this came from your click/key/wheel, so if the price is already known, buy right away
 local function Quote(r, all, retried, buyNow)
     if not ns.ahOpen then ns.Print("Open the Auction House first."); StopRun(false); return end
+    local info = RecipeInfo(r.itemID)
+    local skill = 0
+    for _, p in pairs(MyProfessions()) do if p.name == r.prof then skill = p.skill end end
+    if not (info and info.level and skill >= info.level and not info.tooLow) then
+        if all then skipped[r.itemID] = true; return Done() end
+        return ns.Print(Name(r.itemID) .. " needs more skill than you have - not buying it.")
+    end
     if AlreadyHave(r.itemID) then
         ns.InvalidateRecipes()
         if all then skipped[r.itemID] = true; return Done() end
@@ -437,7 +451,7 @@ function ns.BuyRecipe(r)
     if b and b.itemID == r.itemID and b.stage == "ready" then return Confirm(b) end
     if b and b.stage ~= "ready" then return end
     if not r.learnable then
-        ns.Print(("You need %s %d to learn %s (you have %d)."):format(r.prof, r.level, Name(r.itemID), r.skill))
+        return ns.Print(("You need %s %d to learn %s (you have %d) - not buying it."):format(r.prof, r.level, Name(r.itemID), r.skill))
     end
     Quote(r, false, false, true)
 end
@@ -568,13 +582,13 @@ table.insert(ns.UI_RegisterLater, function(UI)
         fill = function(row, r, c, ItemLabel)
             c[1]:SetText(ItemLabel(nil, nil, r.itemID))
             c[2]:SetText(r.prof)
-            c[3]:SetText(r.learnable and ("|cff9aa1ab%d|r"):format(r.level) or ("|cffff8060%d|r"):format(r.level))
+            c[3]:SetText(("|cff9aa1ab%d|r"):format(r.level))
             c[4]:SetText(ns.Money(r.price))
             local b = ns.recipeBuy
             if b and b.itemID == r.itemID then
                 c[5]:SetText(b.stage == "ready" and ("|cfff0c45cBuy|r") or "|cff808080...|r")
             else
-                c[5]:SetText(r.learnable and "|cfff0c45cBuy|r" or "|cff808080Later|r")
+                c[5]:SetText("|cfff0c45cBuy|r")
             end
             row.sel:SetShown(b and b.itemID == r.itemID or false)
         end,
@@ -752,7 +766,7 @@ function ns.LearnableInBags()
                     local info = RecipeInfo(id)
                     if info and not info.known then
                         local p = profs[(info.prof or subType or ""):lower()]
-                        if p and p.skill >= (info.level or 0) then out[#out + 1] = { bag = bag, slot = slot, itemID = id } end
+                        if p and info.level and p.skill >= info.level and not info.tooLow then out[#out + 1] = { bag = bag, slot = slot, itemID = id } end
                     end
                 end
             end

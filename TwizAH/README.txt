@@ -88,6 +88,13 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.8
+  - The Recipes tab only shows recipes you can learn right now. A recipe is
+    left out if your skill is below what it needs, if the game shows its
+    requirement in red, or if TwizAH can't read its skill requirement yet.
+    Buy All, row clicks and auto-learn all follow the same rule, so nothing
+    you can't learn yet gets bought.
+
 WHAT'S NEW IN 2.4.7
   - Recipe names show properly instead of "item 4410": if the game hasn't
     loaded a recipe yet, TwizAH uses the AH's name for it or its tooltip,

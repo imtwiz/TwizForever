@@ -3,6 +3,8 @@ ADDON_DIR = REPO .. "/TwizAH"
 dofile(REPO .. "/tools/wowsim/scenario.lua")
 local ns = TwizAH
 local L = function(s) SIM.log[#SIM.log + 1] = s end
+-- a red "Requires" line (too low) must never be bought, even if its number looks fine
+
 
 GetProfessions = function() return 1, 2 end
 GetProfessionInfo = function(i)
@@ -24,6 +26,8 @@ recipe(5004, "Pattern: Too Hard", "Tailoring", 150, 2, 500)
 recipe(5005, "Pattern: Known One", "Tailoring", 40, 2, 100, "Already known")
 recipe(5006, "Recipe: Other Prof", "Alchemy", 10, 6, 100)
 recipe(5007, "Pattern: Got It", "Tailoring", 20, 2, 300)
+recipe(5008, "Pattern: No Requirement Line", "Tailoring", 10, 2, 150)
+SIM.tooltipLines[5008] = {}
 SIM.PutInBags(5007, 1)
 
 SIM.onPlaceBid = function(auctionID, amount)
