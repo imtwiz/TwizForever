@@ -1,5 +1,10 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.12.0
+  - Up next shows your top 3 quests (the one on the card counts as the first)
+    at full brightness; steps for any quest after that are faded. Hover the
+    list to see every step clearly.
+
 NEW IN 1.11.0 - CLEANER WINDOW
   - One card for what to do next (with the Target button), a short "Up next"
     list, slim XP bars, and a footer with Solo/Group, your party line and

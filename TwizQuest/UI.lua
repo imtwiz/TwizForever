@@ -302,9 +302,12 @@ local function Refresh()
     end
     frame.card:Show()
 
-    -- up next
+    -- up next: the top 3 quests (the card's counts as the first) stay bright, the rest fade until you hover the list
     local fit = RowsFit(nbars, #flags > 0)
     local shown = 0
+    local top, nTop, cut = {}, 0, false
+    local function qid(st) return st and st.q and (st.q.id or st.q.name) end
+    if qid(first) then top[qid(first)] = true; nTop = 1 end
     for i = 1, ROWS do
         local s = (i <= fit) and plan.route[i + 1] or nil
         local row = rows[i]
@@ -315,6 +318,12 @@ local function Refresh()
             local quest = (s.role ~= 1 and s.role ~= 3 and s.kind ~= "service") and S.Color("muted", " · " .. s.q.name) or ""
             row.text:SetText(t .. quest)
             row.right:SetText(S.Color("muted", note ~= "" and note or NS.FormatTime(s.eta or 0)))
+            local id = qid(s)
+            if id and not top[id] then
+                if nTop < 3 and not cut then top[id] = true; nTop = nTop + 1 else cut = true end
+            end
+            row.faded = cut or (id ~= nil and not top[id])
+            row:SetAlpha((row.faded and not frame.listHover) and 0.3 or 1)
             row:Show(); shown = i
         else
             row:Hide()
@@ -408,11 +417,23 @@ local function Build()
         line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT")
         local hl = row:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
         row:SetScript("OnClick", function(self) SetWaypoint(self.step) end)
-        row:SetScript("OnEnter", function(self) StepTooltip(self, self.step) end)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row:SetScript("OnEnter", function(self)
+            StepTooltip(self, self.step)
+            frame.listHover = true
+            for _, r in ipairs(rows) do r:SetAlpha(1) end -- hovering the list shows every step
+        end)
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+            frame.listHover = false
+            C_Timer.After(0.15, function()
+                if frame.listHover then return end
+                for _, r in ipairs(rows) do r:SetAlpha(r.faded and 0.3 or 1) end
+            end)
+        end)
         row:Hide()
         rows[i] = row
     end
+    NS._upNextRows = rows
     frame.more = S.Text(frame, "faint"); frame.more:Hide()
 
     -- footer: XP bars, then Solo/Group, party status, Share, more

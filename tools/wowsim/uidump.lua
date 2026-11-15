@@ -73,9 +73,20 @@ end
 local plan = ns._plan()
 for i = 2, math.min(6, #plan.route) do
   local s = plan.route[i]
-  L(("ROW %d : %s"):format(i - 1, s.q.name .. " (" .. tostring(s.kind or s.role) .. ")"))
+  local row = ns._upNextRows and ns._upNextRows[i - 1]
+  L(("ROW %d : %s%s"):format(i - 1, s.q.name .. " (" .. tostring(s.kind or s.role) .. ")", row and row.faded and "  [faded]" or ""))
 end
 L("MORE  : " .. c(f.more:GetText()) .. " shown=" .. tostring(f.more.__shown))
 for i, r in ipairs(f.xpRows) do if r.__shown then L(("XP %d  : %s  %s"):format(i, c(r.name:GetText()), c(r.right:GetText()))) end end
 L("FOOTER: toggle shown=" .. tostring(f.groupToggle.__shown) .. "  status: " .. c(f.partyLine.text:GetText()) .. "  share: " .. tostring(f.share.__shown and f.share:GetText()))
 L("HEIGHT: " .. f:GetHeight())
+-- a 4th quest in the list: it and everything after it fade
+local plan2 = ns._plan()
+if plan2.route[4] then
+  plan2.route[4] = setmetatable({ q = { id = 99999, name = "A Fourth Quest" } }, { __index = plan2.route[4] })
+  ns.RefreshParty()
+  SIM.Advance(0.5)
+  local o = {}
+  for i = 1, 5 do local r = ns._upNextRows[i] if r and r.__shown then o[#o + 1] = i .. (r.faded and "=faded" or "=bright") end end
+  L("FADE  : " .. table.concat(o, " "))
+end
