@@ -200,18 +200,20 @@ function NS.CraftAllQueue(all)
     return merged, grays
 end
 
+-- only an actual cast counts: the repeat counter can stay above zero after a batch ends
 local function Busy()
-    if UnitCastingInfo and UnitCastingInfo("player") then return true end
-    if C_TradeSkillUI and C_TradeSkillUI.GetRecipeRepeatCount then
-        local ok, n = pcall(C_TradeSkillUI.GetRecipeRepeatCount)
-        if ok and (n or 0) > 0 then return true end
-    end
-    return false
+    return (UnitCastingInfo and UnitCastingInfo("player")) and true or false
 end
 
 local lastBusyMsg = 0
 local current
+local CraftAllInner
+-- never fail silently: any error goes to chat
 function NS.CraftAll(button)
+    local ok, err = pcall(CraftAllInner, button)
+    if not ok then NS.Print("Craft All hit an error: " .. tostring(err)) end
+end
+CraftAllInner = function(button)
     if button == "RightButton" then
         current = nil
         return NS.CraftRecipeNow(nil, nil, nil, nil, nil, "RightButton")
@@ -219,7 +221,8 @@ function NS.CraftAll(button)
     if Busy() then
         if GetTime() - lastBusyMsg > 3 then
             lastBusyMsg = GetTime()
-            NS.Print("still crafting - Craft All picks up the next recipe when this batch is done.")
+            NS.Print(("still crafting %s - Craft All picks up the next recipe when this batch is done."):format(
+                tostring(UnitCastingInfo("player"))))
         end
         return
     end

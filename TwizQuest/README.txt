@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.7.0
+- Auto-accept: every quest offered to you is accepted - quest givers, gossip
+  menus, items that start quests, and quests your party shares (escort
+  confirmations too). Hold Shift while talking to an NPC to skip it. Stops
+  when your quest log is full. /tq accept turns it on or off.
+
 NEW IN 1.6.0
 - Shortcut is now /tq (/qr still works). /tq help lists everything.
 - Minimap button: left-click shows/hides the window, right-click replans,

@@ -19,6 +19,7 @@ NS.DEFAULTS = {
     partyShare = true, -- share quests a party member doesn't have when they join
     partyHelp = true,  -- stay to help party members finish kills on shared quests
     partyXP   = true,  -- show XP bars for you and party members who run TwizQuest
+    autoAccept = true, -- accept every quest offered (hold Shift to skip)
     minimap   = true,  -- minimap button
     minimapAngle = 200, -- where it sits around the minimap (degrees)
     shown     = true,

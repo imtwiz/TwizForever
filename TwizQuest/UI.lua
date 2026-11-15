@@ -591,6 +591,7 @@ local function Help()
     print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
     print("  /tq party        - party sync status; /tq party on|off, /tq party xp (XP bars), /tq party share (auto-share), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
+    print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
     print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
     print("  /tq dropall      - abandon every quest in your log, asks first (Drop All button)")
@@ -628,6 +629,10 @@ SlashCmdList.QUESTROUTE = function(msg)
             for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
             StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
         end
+        return
+    elseif cmd == "accept" then
+        NS.db.autoAccept = not NS.db.autoAccept
+        NS.Print("auto-accept quests " .. (NS.db.autoAccept and "on (hold Shift when talking to an NPC to skip)" or "off"))
         return
     elseif cmd == "minimap" then
         NS.db.minimap = NS.db.minimap == false

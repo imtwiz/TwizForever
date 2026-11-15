@@ -1,5 +1,10 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.7.2
+- Craft All no longer thinks you're still crafting after a batch ends (it
+  now only waits while you're actually casting), and any error it hits is
+  shown in chat instead of failing silently.
+
 NEW IN 1.7.1
 - Craft All works on the profession window you have open (not just the one
   selected in TwizCraft), and after the plan's crafts it also makes anything
