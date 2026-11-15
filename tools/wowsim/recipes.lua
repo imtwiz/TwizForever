@@ -63,7 +63,7 @@ ns.recipeBox:SetText("20g"); ns.recipeBox.__scripts.OnEnterPressed(ns.recipeBox)
 L("budget now " .. ns.S.recipeBudget .. ", plan " .. #ns.RecipePlan())
 local rowFor
 for _, row in ipairs(ns.UI._rows()) do if row.data and row.data.itemID == 5003 then rowFor = row end end
-if rowFor then rowFor:Click(); SIM.Advance(1.2); rowFor:Click(); SIM.Advance(1.2) else L("robe row not found") end
+if rowFor then rowFor:Click(); SIM.Advance(1.2); rowFor:Click(); SIM.Advance(1.2); rowFor:Click(); SIM.Advance(1.2) else L("robe row not found") end
 L(("after row buy: spent %d, bids %d"):format(ns.db.recipeSpent, #(SIM.bids or {})))
 for _, row in ipairs(ns.UI._rows()) do
     if row.data and row.__scripts.OnEnter then

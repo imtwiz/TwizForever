@@ -228,7 +228,7 @@ function ns.RecipePlan()
 end
 
 ------------------------------------------------------------------------
--- Buying: click = price lookup, click again = confirm (the game needs both)
+-- Buying: one click / wheel notch / key press per purchase (the game needs one each)
 ------------------------------------------------------------------------
 ns.recipeBuy = nil -- { itemID, stage = "quote" | "ready" | "buying", price, auctionID, commodity, all, expensive }
 
@@ -286,14 +286,19 @@ local function Ready(b, price, auctionID)
             return Done(("%s is %s right now, over 1.5x its usual %s. Skipped (click its row to buy it anyway)."):format(
                 Name(b.itemID), ns.Money(price), ns.Money(ref)))
         end
-        ns.Print(("Careful: %s is %s right now, over 1.5x its usual %s. Click again to buy anyway."):format(
-            Name(b.itemID), ns.Money(price), ns.Money(ref)))
     end
     ns.UI.Refresh()
 end
 
-local function Quote(r, all, retried)
+local Confirm
+-- buyNow: this came from your click/key/wheel, so if the price is already known, buy right away
+local function Quote(r, all, retried, buyNow)
     if not ns.ahOpen then ns.Print("Open the Auction House first."); StopRun(false); return end
+    if AlreadyHave(r.itemID) then
+        ns.InvalidateRecipes()
+        if all then skipped[r.itemID] = true; return Done() end
+        return ns.Print("You already have " .. Name(r.itemID) .. " - not buying another.")
+    end
     -- recipes are normally single items; trust the item key when the game knows
     local okK, keyInfo = pcall(C_AuctionHouse.GetItemKeyInfo, C_AuctionHouse.MakeItemKey(r.itemID))
     local commodity = okK and type(keyInfo) == "table" and keyInfo.isCommodity == true
@@ -313,6 +318,7 @@ local function Quote(r, all, retried)
         b.fromLive = true
         Ready(b, l.rows[1].unit, l.rows[1].auctionID)
         if ns.recipeBuy ~= b then return end
+        if buyNow and b.stage == "ready" then return Confirm(b) end
         b.fresh = function(rows)
             StoreLive(r.itemID, rows)
             if ns.recipeBuy ~= b or b.stage ~= "ready" or rows == nil then return end
@@ -392,7 +398,7 @@ local function NotThrough(b)
     ns.UI.Refresh()
 end
 
-local function Confirm(b)
+Confirm = function(b)
     if b.price > GetMoney() then return Done("Not enough gold for " .. Name(b.itemID) .. ".", true) end
     b.stage, b.at, b.moneyBefore = "buying", GetTime(), GetMoney()
     if b.commodity then
@@ -409,7 +415,7 @@ local function Confirm(b)
     ns.UI.Refresh()
 end
 
--- one row: first click looks up the price, second click buys it
+-- one row click buys it (if its price is still being looked up, the next click does)
 function ns.BuyRecipe(r)
     local b = ns.recipeBuy
     if b and b.itemID == r.itemID and b.stage == "ready" then return Confirm(b) end
@@ -417,10 +423,10 @@ function ns.BuyRecipe(r)
     if not r.learnable then
         ns.Print(("You need %s %d to learn %s (you have %d)."):format(r.prof, r.level, Name(r.itemID), r.skill))
     end
-    Quote(r, false)
+    Quote(r, false, false, true)
 end
 
-Continue = function()
+Continue = function(buyNow)
     local plan = ns.RecipePlan()
     if not plan[1] then
         local more = 0
@@ -431,7 +437,7 @@ Continue = function()
         end
         return StopRun()
     end
-    Quote(plan[1], true)
+    Quote(plan[1], true, false, buyNow)
 end
 
 local watchdog = CreateFrame("Frame")
@@ -447,7 +453,7 @@ function ns.BuyAllRecipes()
     local b = ns.recipeBuy
     if b and b.stage == "ready" then return Confirm(b) end
     if b then return end
-    if ns.recipeRun then return Continue() end
+    if ns.recipeRun then return Continue(true) end
     local plan = ns.RecipePlan()
     if not plan[1] then
         if (ns.S.recipeBudget or 0) <= 0 then ns.Print("Set a max spend first (the box next to Buy All, or /dw recipemax 10g).")
@@ -459,7 +465,7 @@ function ns.BuyAllRecipes()
     if ns.S.wheelPost then
         ns.Print("Buying recipes: each click, mouse-wheel notch or key press buys the next one (the game needs one per purchase). Cancel to stop.")
     end
-    Continue()
+    Continue(true)
 end
 
 function ns.CancelRecipeBuy()
@@ -523,7 +529,7 @@ local function BuyAllText()
     if b and (b.stage == "quote" or b.stage == "checking") then return "Finding price..." end
     if b and b.stage == "buying" then return "Buying..." end
     if b and b.stage == "ready" then
-        return ("%sConfirm %s|r"):format(b.expensive and "|cffff6060" or "", ns.Money(b.price))
+        return ("Buy %s - %s"):format(Name(b.itemID), ns.Money(b.price))
     end
     local plan, total = ns.RecipePlan()
     return ("Buy All (%d) - %s"):format(#plan, ns.Money(total))
@@ -550,7 +556,7 @@ table.insert(ns.UI_RegisterLater, function(UI)
             c[4]:SetText(ns.Money(r.price))
             local b = ns.recipeBuy
             if b and b.itemID == r.itemID then
-                c[5]:SetText(b.stage == "ready" and ("|cfff0c45cConfirm|r") or "|cff808080...|r")
+                c[5]:SetText(b.stage == "ready" and ("|cfff0c45cBuy|r") or "|cff808080...|r")
             else
                 c[5]:SetText(r.learnable and "|cfff0c45cBuy|r" or "|cff808080Later|r")
             end
@@ -561,7 +567,7 @@ table.insert(ns.UI_RegisterLater, function(UI)
             GameTooltip:AddDoubleLine("Cheapest on the AH", ns.Money(r.price), 1, 1, 1)
             if r.med then GameTooltip:AddDoubleLine("Usual price", ns.Money(r.med), 1, 1, 1) end
             GameTooltip:AddDoubleLine(r.prof .. " needed", ("%d (you have %d)"):format(r.level, r.skill), 1, 1, 1, 1, 1, 1)
-            GameTooltip:AddLine(r.learnable and "Click to look up the price, click again to buy it."
+            GameTooltip:AddLine(r.learnable and "Click to buy it."
                 or "Too high for your skill right now - Buy All skips it.", 0.6, 0.6, 0.6, true)
         end,
         onClick = function(r) ns.BuyRecipe(r) end,
@@ -596,7 +602,7 @@ table.insert(ns.UI_RegisterLater, function(UI)
                   local plan, total = ns.RecipePlan()
                   GameTooltip:SetText("Buy All Recipes")
                   GameTooltip:AddLine("Buys the cheapest recipes you can learn now, one after another, until your max spend is reached.", 1, 1, 1, true)
-                  GameTooltip:AddLine("The game needs two clicks per recipe: one looks up the price, one confirms.", 0.7, 0.7, 0.7, true)
+                  GameTooltip:AddLine("Each click, mouse-wheel notch or key press buys one recipe - the game needs one per purchase. Prices are kept fresh in the background.", 0.7, 0.7, 0.7, true)
                   GameTooltip:AddLine(" ")
                   for i, r in ipairs(plan) do
                       if i > 12 then GameTooltip:AddLine(("...and %d more"):format(#plan - 12), 0.7, 0.7, 0.7); break end

@@ -88,6 +88,14 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.6
+  - No confirm step: clicking a recipe's row buys it, and the first Buy All
+    click buys the first recipe. Each further click, wheel notch or key
+    press buys the next one (the game needs one per purchase). Prices are
+    kept fresh in the background so there's nothing to wait for; only a
+    recipe whose price isn't known yet needs a second press.
+  - A recipe you already have is never bought again, even from an old row.
+
 WHAT'S NEW IN 2.4.5
   - Never buys the same recipe twice: recipes already bought, in your bags,
     bank or mailbox are left out (the mailbox is read whenever you open it),
