@@ -1,5 +1,8 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.6.1
+- Requires TomTom (for the waypoint arrow on shopping and mailbox stops).
+
 NEW IN 1.6.0
 - Makes intermediates when that's cheaper per skill point: e.g. Coarse
   Blasting Powder from Coarse Stone for Coarse Dynamite, because making the

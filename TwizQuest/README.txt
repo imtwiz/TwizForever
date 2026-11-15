@@ -1,5 +1,8 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.5.1
+- Requires TomTom (the waypoint arrow for each step).
+
 NEW IN 1.5 - PARTY SYNC
 Party members who also run TwizQuest share quest logs and objective progress
 automatically (hidden addon messages, only what changed).
@@ -30,7 +33,7 @@ NEW IN 1.4
                  XP/hour (gray ones included) are listed: /qr cleanup, and
                  /qr abandon drops them (asks first).
 
-Needs Questie (you have it). Works best with TomTom (you have it) for the arrow.
+Needs Questie and TomTom (you have both) - TomTom draws the arrow to each step.
 
 What it does
   It keeps itself up to date: a full re-plan whenever your quest log,
