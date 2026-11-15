@@ -88,6 +88,21 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.5
+  - Never buys the same recipe twice: recipes already bought, in your bags,
+    bank or mailbox are left out (the mailbox is read whenever you open it),
+    and recipes with the same name but a different item are treated as one.
+  - If a purchase can't be confirmed, TwizAH checks the AH again: if that
+    exact listing is still up, the next press retries only that listing
+    (it can't be bought twice); if it's gone, the recipe counts as bought
+    and is skipped, so a slow server can't make you buy it again.
+  - Recipes learn themselves, the way TwizOpen opens clams: whenever no
+    vendor, bank, mailbox, trade or AH window is open and you're out of
+    combat and not casting, recipes in your bags that you can learn are
+    used one at a time. If the game ever blocks this, you're told once and
+    the gold Learn button (one click each) takes over. /dw autolearn off
+    turns it off.
+
 WHAT'S NEW IN 2.4.4
   - Fixes "No answer from the AH about <recipe>": a purchase now counts as
     done when your gold drops by its price, instead of waiting for an AH

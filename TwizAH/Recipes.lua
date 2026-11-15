@@ -10,7 +10,59 @@ local PRICE_GUARD = 1.5
 local function DB()
     ns.db.recipeSpent = ns.db.recipeSpent or 0
     ns.db.recipeBought = ns.db.recipeBought or {}
+    ns.db.recipeMail = ns.db.recipeMail or {}
     return ns.db
+end
+
+-- Recipes in your mailbox (read whenever the mailbox is open)
+local function ScanMail()
+    if not GetInboxNumItems then return end
+    local db = DB()
+    wipe(db.recipeMail)
+    for i = 1, (GetInboxNumItems() or 0) do
+        for a = 1, (ATTACHMENTS_MAX_RECEIVE or 16) do
+            local link = GetInboxItemLink and GetInboxItemLink(i, a)
+            local id = link and tonumber(link:match("item:(%d+)"))
+            if id then
+                local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(id)
+                if classID == RECIPE_CLASS then db.recipeMail[id] = (db.recipeMail[id] or 0) + 1 end
+            end
+        end
+    end
+end
+
+-- Do you already have this recipe (or one with the same name) - bought, in bags/bank, in the mailbox?
+local ownedNames, ownedAt = {}, -10
+local function OwnedNames()
+    if GetTime() - ownedAt < 2 then return ownedNames end
+    wipe(ownedNames)
+    local db = DB()
+    local function add(id) local n = C_Item.GetItemInfo(id); if n then ownedNames[n] = true end end
+    for id in pairs(db.recipeBought) do add(id) end
+    for id in pairs(db.recipeMail) do add(id) end
+    for bag = 0, 4 do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local id = C_Container.GetContainerItemID(bag, slot)
+            if id then
+                local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(id)
+                if classID == RECIPE_CLASS then add(id) end
+            end
+        end
+    end
+    ownedAt = GetTime()
+    return ownedNames
+end
+
+local function AlreadyHave(itemID)
+    local db = DB()
+    if db.recipeBought[itemID] or (db.recipeMail[itemID] or 0) > 0 then return true end
+    if (C_Item.GetItemCount(itemID, true) or 0) > 0 then return true end
+    if TwizCraft and TwizCraft.MailCount then
+        local ok, n = pcall(TwizCraft.MailCount, itemID)
+        if ok and (n or 0) > 0 then return true end
+    end
+    local name = C_Item.GetItemInfo(itemID)
+    return name and OwnedNames()[name] or false
 end
 
 local function Strip(t)
@@ -109,7 +161,7 @@ local function StoreLive(itemID, rows)
 end
 
 local cache, cacheAt = nil, -10
-function ns.InvalidateRecipes() cache = nil end
+function ns.InvalidateRecipes() cache = nil; ownedAt = -10 end
 
 -- { { itemID, price, prof, level, learnable, need }, ... } learnable first, cheapest first
 function ns.RecipeList()
@@ -128,7 +180,7 @@ function ns.RecipeList()
                 elseif not info.known then
                     local profName = (info.prof or subType or ""):lower()
                     local p = profs[profName]
-                    if p and (C_Item.GetItemCount(itemID, true) or 0) == 0 then
+                    if p and not AlreadyHave(itemID) then
                         local price = ns.KnownPrice(itemID) or m.min
                         local l = Live(itemID)
                         if l then price = l.rows[1] and l.rows[1].unit end -- nil: sold out right now
@@ -145,6 +197,13 @@ function ns.RecipeList()
         if a.price ~= b.price then return a.price < b.price end
         return a.itemID < b.itemID
     end)
+    -- one per recipe name: keep the cheapest
+    local seen, deduped = {}, {}
+    for _, r in ipairs(list) do
+        local n = C_Item.GetItemInfo(r.itemID) or r.itemID
+        if not seen[n] then seen[n] = true; deduped[#deduped + 1] = r end
+    end
+    list = deduped
     ns.recipeWaiting = waiting
     cache, cacheAt = list, GetTime()
     return list
@@ -307,18 +366,30 @@ local function PaidFor(b)
 end
 
 local function NotThrough(b)
-    -- gold didn't move, so nothing was bought: forget that listing and look again
-    local l = live[b.itemID]
-    if l then
-        for i, row in ipairs(l.rows) do if row.auctionID == b.auctionID then table.remove(l.rows, i); break end end
-    end
-    live[b.itemID] = nil
-    ns.recipeBuy = nil
-    if not b.retried then
-        return Quote(b.r, b.all, true)
-    end
-    skipped[b.itemID] = true
-    Done(Name(b.itemID) .. " wouldn't go through - skipped.")
+    -- No gold change yet. Don't risk buying it twice: look at the AH again. If the very
+    -- same listing is still there, nothing went through and the next press retries that
+    -- one listing (it can't be bought twice). If it's gone, assume it may be yours.
+    b.stage = "checking"
+    ns.QueueLookup(b.itemID, nil, false, function(rows)
+        if ns.recipeBuy ~= b then return end
+        if PaidFor(b) then return Bought(b) end
+        StoreLive(b.itemID, rows)
+        local still = false
+        for _, row in ipairs(rows or {}) do if row.auctionID == b.auctionID then still = true end end
+        if still and not b.retried then
+            b.retried = true
+            b.stage = "ready"
+            ns.Print(Name(b.itemID) .. " didn't go through yet - press again to retry that same listing.")
+            return ns.UI.Refresh()
+        end
+        -- unsure: treat it as bought so it's never bought twice, and count the gold against the budget
+        local db = DB()
+        db.recipeBought[b.itemID] = true
+        db.recipeSpent = db.recipeSpent + (b.price or 0)
+        if ns.recipeRun and b.all then ns.recipeRun.n = ns.recipeRun.n + 1; ns.recipeRun.spent = ns.recipeRun.spent + (b.price or 0) end
+        Done(("Couldn't confirm %s went through - skipping it so you don't buy it twice. Check your mailbox."):format(Name(b.itemID)))
+    end, true)
+    ns.UI.Refresh()
 end
 
 local function Confirm(b)
@@ -449,7 +520,7 @@ end
 
 local function BuyAllText()
     local b = ns.recipeBuy
-    if b and b.stage == "quote" then return "Finding price..." end
+    if b and (b.stage == "quote" or b.stage == "checking") then return "Finding price..." end
     if b and b.stage == "buying" then return "Buying..." end
     if b and b.stage == "ready" then
         return ("%sConfirm %s|r"):format(b.expensive and "|cffff6060" or "", ns.Money(b.price))
@@ -730,17 +801,100 @@ function ns.UpdateLearnButton()
 end
 
 local lev = CreateFrame("Frame")
-for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_REGEN_ENABLED", "MAIL_SHOW", "MAIL_CLOSED", "AUCTION_HOUSE_SHOW",
+for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_REGEN_ENABLED", "MAIL_SHOW", "MAIL_CLOSED", "MAIL_INBOX_UPDATE", "AUCTION_HOUSE_SHOW",
     "AUCTION_HOUSE_CLOSED", "NEW_RECIPE_LEARNED", "SKILL_LINES_CHANGED", "PLAYER_ENTERING_WORLD", "GET_ITEM_INFO_RECEIVED" }) do
     pcall(lev.RegisterEvent, lev, e)
 end
 local pendingLearn
 lev:SetScript("OnEvent", function(_, event)
     if event == "NEW_RECIPE_LEARNED" or event == "SKILL_LINES_CHANGED" then wipe(infoCache) end
+    if event == "MAIL_SHOW" or event == "MAIL_INBOX_UPDATE" then pcall(ScanMail); ns.InvalidateRecipes() end
     if pendingLearn then return end
     pendingLearn = true
     C_Timer.After(0.4, function()
         pendingLearn = false
         if ns.S then pcall(ns.UpdateLearnButton) end
     end)
+end)
+
+------------------------------------------------------------------------
+-- Unattended learning, the way TwizOpen opens clams: when no vendor, bank,
+-- mailbox, trade or AH window is open (using an item there would sell, store
+-- or attach it), you're out of combat and not casting, learn the next recipe.
+-- If the game ever blocks it, the Learn button above takes over.
+------------------------------------------------------------------------
+local windows, learnBusy, learnTries, blockedAuto = {}, nil, {}, false
+local WINDOW_OPEN = { MERCHANT_SHOW = "merchant", BANKFRAME_OPENED = "bank", MAIL_SHOW = "mail",
+    TRADE_SHOW = "trade", AUCTION_HOUSE_SHOW = "ah", GUILDBANKFRAME_OPENED = "gbank" }
+local WINDOW_CLOSE = { MERCHANT_CLOSED = "merchant", BANKFRAME_CLOSED = "bank", MAIL_CLOSED = "mail",
+    TRADE_CLOSED = "trade", AUCTION_HOUSE_CLOSED = "ah", GUILDBANKFRAME_CLOSED = "gbank" }
+
+local function LearnBlocked()
+    if blockedAuto or not ns.S or ns.S.autoLearn == false then return true end
+    if next(windows) then return true end
+    if InCombatLockdown and InCombatLockdown() then return true end
+    if UnitIsDeadOrGhost and UnitIsDeadOrGhost("player") then return true end
+    if UnitCastingInfo and UnitCastingInfo("player") then return true end
+    if UnitChannelInfo and UnitChannelInfo("player") then return true end
+    if GetCursorInfo and GetCursorInfo() then return true end
+    return false
+end
+
+local LearnStep
+local function ScheduleLearn(t) C_Timer.After(t or 1, function() LearnStep() end) end
+
+LearnStep = function()
+    if learnBusy or LearnBlocked() then return end
+    for _, e in ipairs(ns.LearnableInBags()) do
+        if (learnTries[e.itemID] or 0) < 2 then
+            learnTries[e.itemID] = (learnTries[e.itemID] or 0) + 1
+            local name = C_Item.GetItemInfo(e.itemID) or "a recipe"
+            learnBusy = { itemID = e.itemID, name = name, before = C_Item.GetItemCount(e.itemID) or 0 }
+            local token = learnBusy
+            if C_Container and C_Container.UseContainerItem then C_Container.UseContainerItem(e.bag, e.slot)
+            else UseContainerItem(e.bag, e.slot) end
+            C_Timer.After(2.5, function()
+                if learnBusy ~= token then return end
+                learnBusy = nil
+                if (C_Item.GetItemCount(token.itemID) or 0) < token.before then
+                    ns.Print("Learned " .. token.name .. ".")
+                    learnTries[token.itemID] = nil
+                elseif learnTries[token.itemID] >= 2 then
+                    ns.Print("Couldn't learn " .. token.name .. " - use the Learn button or right-click it.")
+                end
+                wipe(infoCache)
+                pcall(ns.UpdateLearnButton)
+                ScheduleLearn(0.5)
+            end)
+            return
+        end
+    end
+end
+
+local auto = CreateFrame("Frame")
+for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD", "NEW_RECIPE_LEARNED",
+    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "MERCHANT_SHOW", "MERCHANT_CLOSED", "BANKFRAME_OPENED",
+    "BANKFRAME_CLOSED", "MAIL_SHOW", "MAIL_CLOSED", "TRADE_SHOW", "TRADE_CLOSED", "AUCTION_HOUSE_SHOW",
+    "AUCTION_HOUSE_CLOSED", "GUILDBANKFRAME_OPENED", "GUILDBANKFRAME_CLOSED" }) do
+    pcall(auto.RegisterEvent, auto, e)
+end
+auto:SetScript("OnEvent", function(_, event, a1)
+    if WINDOW_OPEN[event] then windows[WINDOW_OPEN[event]] = true; return end
+    if WINDOW_CLOSE[event] then windows[WINDOW_CLOSE[event]] = nil; ScheduleLearn(1); return end
+    if event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
+        if a1 == ADDON and learnBusy and not blockedAuto then
+            blockedAuto = true; learnBusy = nil
+            ns.Print("The game won't let addons learn recipes by themselves here - use the gold Learn button (one click each).")
+        end
+        return
+    end
+    if event == "NEW_RECIPE_LEARNED" and learnBusy then
+        ns.Print("Learned " .. learnBusy.name .. ".")
+        learnTries[learnBusy.itemID] = nil
+        learnBusy = nil
+        wipe(infoCache)
+        ScheduleLearn(0.5)
+        return
+    end
+    ScheduleLearn(1)
 end)

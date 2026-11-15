@@ -34,7 +34,7 @@ ns.DEFAULTS = {
     freshMinutes     = 30,             -- auto-vendor only trusts AH prices this recent
     tooltip          = true,
     wheelPost        = true,
-    autoLearn        = true,           -- show a Learn button for recipes in your bags you can learn
+    autoLearn        = true,           -- learn recipes in your bags by themselves (Learn button as backup)
     recipeBudget     = 100000,         -- copper: the most Buy All spends on recipes in total (10g)           -- while the AH is open and items wait, the mouse wheel posts them
 }
 
@@ -572,7 +572,7 @@ local HELP = {
     "/dw fullscan - full AH scan for deals (once per 15 min)",
     "/dw buysupplies - Buy All Supplies for profitable crafts (Craft tab; bindable)",
     "/dw recipes - cheapest recipes you are missing; /dw recipemax 10g sets the most Buy All spends (reset clears spent)",
-    "/dw autolearn on|off - Learn button (and mouse wheel at the mailbox/AH) for recipes in your bags",
+    "/dw autolearn on|off - learn recipes in your bags by themselves (Learn button as backup)",
     "/dw postall - post everything worth posting, one item per press",
     "/dw wheel on|off - spin the mouse wheel at the AH to post everything (on by default)",
     "/dw postbest, /dw postmarginal - post the next item (bind keys in Options > Keybindings > AddOns)",
@@ -628,7 +628,7 @@ SlashCmdList.DEPOSITWISE = function(msg)
         ns.UI.Show(); ns.UI.SetTab("RECIPES")
     elseif cmd == "autolearn" then
         S.autoLearn = not (rest == "off" or (rest == "" and S.autoLearn ~= false))
-        ns.Print("Learn button for recipes in your bags: " .. (S.autoLearn and "on" or "off"))
+        ns.Print("Auto-learn recipes in your bags: " .. (S.autoLearn and "on" or "off"))
         if ns.UpdateLearnButton then ns.UpdateLearnButton() end
     elseif cmd == "recipemax" then
         if rest == "reset" then ns.ResetRecipeSpent()
