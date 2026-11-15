@@ -421,3 +421,12 @@ function SIM.Wheel()   -- a mouse-wheel notch outside any scrolling frame
     local cmd = SIM.overrides["MOUSEWHEELDOWN"]
     if cmd == "DEPOSITWISE_POSTALL" then TwizAH.PostAll() end
 end
+
+-- addon messaging / groups (party sync)
+C_ChatInfo = C_ChatInfo or {}
+C_ChatInfo.RegisterAddonMessagePrefix = C_ChatInfo.RegisterAddonMessagePrefix or function() return true end
+C_ChatInfo.SendAddonMessage = C_ChatInfo.SendAddonMessage or function(p, m, c) rec("SendAddonMessage", p, m, c) end
+IsInGroup = IsInGroup or function() return (SIM.group or 1) > 1 end
+IsInRaid = IsInRaid or function() return false end
+UnitInParty = UnitInParty or function() return false end
+Ambiguate = Ambiguate or function(n) return n end

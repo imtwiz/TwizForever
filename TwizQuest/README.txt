@@ -1,5 +1,19 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.5 - PARTY SYNC
+Party members who also run TwizQuest share quest logs and objective progress
+automatically (hidden addon messages, only what changed).
+- Party line under the summary: who's syncing, quests to share, who's behind,
+  quests everyone can turn in together, quests they have that you don't.
+  Hover it for details and where each friend is heading next.
+- Share button (or /qr share) offers your quests they don't have. New members
+  get them offered automatically once (/qr party share to toggle).
+- Your route stays at a kill spot while a friend still needs kills or drops on
+  a quest you've finished: "Kill 5 Kobold Vermin (helping Bob)". Shared credit
+  means it costs you little and keeps you together (/qr party help to toggle).
+- Quests your party shares are favoured when planning, so you quest together.
+- /qr party shows status; /qr party off turns syncing off.
+
 NEW IN 1.4
   Rested XP    - kills are worth double while you're rested, so the route
                  favors kill-heavy quests until your rested XP runs out (each

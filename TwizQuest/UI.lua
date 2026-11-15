@@ -43,6 +43,7 @@ local function StepText(s)
         what = s.text or "Objective"
     end
     if s.elite then what = what .. " |cffff5555(elite)|r" end
+    if s.help then what = what .. (" |cff66ccff(helping %s)|r"):format(s.help) end
     return ("  %s |cff999999- %s|r"):format(what, q.name)
 end
 
@@ -64,8 +65,67 @@ local function SetWaypoint(s, silent)
 end
 
 -- rows that fit: your chosen height, or the default when you haven't resized
+------------------------------------------------------------------------
+-- Party line: who's synced, quests to share, who's behind, ready together
+------------------------------------------------------------------------
+local partyOffset = 0
+local function QName(id)
+    local t = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id)
+    return t or NS.Q(id, "name") or ("quest " .. id)
+end
+
+local function PartyText(st)
+    if #st.members == 0 then
+        if #st.noAddon > 0 then return "|cff999999Party: no one else runs TwizQuest yet|r" end
+        return nil
+    end
+    local bits = { ("|cff66ccffParty:|r %s"):format(table.concat(st.members, ", ")) }
+    if #st.missing > 0 then bits[#bits + 1] = ("|cffffd100%d to share|r"):format(#st.missing) end
+    if #st.behind > 0 then bits[#bits + 1] = ("|cffff9933%d behind|r"):format(#st.behind) end
+    if #st.ready > 0 then bits[#bits + 1] = ("|cff66ff66%d ready to turn in|r"):format(#st.ready) end
+    if #st.theyHave > 0 then bits[#bits + 1] = ("|cff999999they have %d you don't|r"):format(#st.theyHave) end
+    if #bits == 1 then bits[#bits + 1] = "|cff66ff66in sync|r" end
+    return table.concat(bits, "  ")
+end
+
+local function PartyTooltip(self)
+    local st = NS.PartyStatus()
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("Party sync", 0.4, 0.8, 1)
+    for _, m in ipairs(st.members) do
+        local p = NS.party[m]
+        GameTooltip:AddDoubleLine(m .. (p.level and (" (" .. p.level .. ")") or ""),
+            p.step and ("heading to: " .. p.step.text) or "", 1, 1, 1, 0.7, 0.7, 0.7)
+    end
+    if #st.missing > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("They don't have (click Share):", 1, 0.82, 0)
+        for _, m in ipairs(st.missing) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
+    end
+    if #st.behind > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("You're done, they still need (route keeps you there):", 1, 0.6, 0.2)
+        for _, b in ipairs(st.behind) do GameTooltip:AddDoubleLine(QName(b.id), b.who .. " " .. b.left, 1, 1, 1, 0.7, 0.7, 0.7) end
+    end
+    if #st.ready > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Everyone's ready to turn in:", 0.4, 1, 0.4)
+        for _, id in ipairs(st.ready) do GameTooltip:AddLine(QName(id), 1, 1, 1) end
+    end
+    if #st.theyHave > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("They have, you don't (ask them to share):", 0.7, 0.7, 0.7)
+        for _, m in ipairs(st.theyHave) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
+    end
+    if #st.noAddon > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Not syncing (no TwizQuest): " .. table.concat(st.noAddon, ", "), 0.6, 0.6, 0.6, true)
+    end
+    GameTooltip:Show()
+end
+
 local function RowsFit()
-    if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - 66) / ROW_H))) end
+    if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - 66 - partyOffset) / ROW_H))) end
     return DEFAULT_ROWS
 end
 
@@ -81,10 +141,21 @@ end
 
 local function Refresh()
     if not frame then return end
+    local ptext = NS.db.party and NS.PartyStatus and PartyText(NS.PartyStatus()) or nil
+    if ptext then
+        frame.partyLine.text:SetText(ptext); frame.partyLine:Show()
+        local st = NS.PartyStatus()
+        frame.share:SetText(("Share (%d)"):format(#st.missing))
+        frame.share:SetShown(#st.missing > 0)
+        partyOffset = 16
+    else
+        frame.partyLine:Hide(); partyOffset = 0
+    end
+    frame.listTop:SetPoint("TOPLEFT", 10, -46 - partyOffset)
     if not plan then
         frame.summary:SetText(NS.IsPlanning() and "Planning..." or (frame.status or "No plan yet. Click Plan."))
         for i = 1, ROWS do rows[i]:Hide() end
-        if not NS.db.sized then frame:SetHeight(80) end
+        if not NS.db.sized then frame:SetHeight(80 + partyOffset) end
         return
     end
     local need = (UnitXPMax("player") or 0) - (UnitXP("player") or 0)
@@ -118,7 +189,7 @@ local function Refresh()
     if #plan.route == 0 then
         frame.summary:SetText("Nothing worth doing nearby. Try /qr range 5000 or /qr above 4.")
     end
-    if not NS.db.sized then frame:SetHeight(58 + shown * ROW_H) end
+    if not NS.db.sized then frame:SetHeight(58 + partyOffset + shown * ROW_H) end
 end
 
 local function Build()
@@ -162,10 +233,30 @@ local function Build()
     frame.summary:SetPoint("RIGHT", -10, 0)
     frame.summary:SetJustifyH("LEFT")
 
+    frame.partyLine = CreateFrame("Button", nil, frame)
+    frame.partyLine:SetHeight(14)
+    frame.partyLine:SetPoint("TOPLEFT", 10, -44)
+    frame.partyLine:SetPoint("RIGHT", -10, 0)
+    frame.partyLine.text = frame.partyLine:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.partyLine.text:SetPoint("LEFT"); frame.partyLine.text:SetPoint("RIGHT", -74, 0)
+    frame.partyLine.text:SetJustifyH("LEFT"); frame.partyLine.text:SetWordWrap(false)
+    frame.partyLine:SetScript("OnEnter", PartyTooltip)
+    frame.partyLine:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.share = CreateFrame("Button", nil, frame.partyLine, "UIPanelButtonTemplate")
+    frame.share:SetSize(70, 16); frame.share:SetPoint("RIGHT")
+    frame.share:SetScript("OnClick", function()
+        local n = NS.ShareMissing()
+        NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
+    end)
+    frame.partyLine:Hide()
+    frame.listTop = CreateFrame("Frame", nil, frame)
+    frame.listTop:SetSize(1, 1)
+    frame.listTop:SetPoint("TOPLEFT", 10, -46)
+
     for i = 1, ROWS do
         local row = CreateFrame("Button", nil, frame)
         row:SetSize(450, ROW_H)
-        row:SetPoint("TOPLEFT", 10, -46 - (i - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", frame.listTop, "TOPLEFT", 0, -(i - 1) * ROW_H)
         row:RegisterForClicks("AnyUp")
         row.num = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.num:SetPoint("LEFT"); row.num:SetWidth(20); row.num:SetJustifyH("RIGHT")
@@ -252,6 +343,12 @@ end
 ------------------------------------------------------------------------
 local dirty = true          -- something changed: search all quests again
 function NS.MarkDirty() dirty = true end
+local partyPending
+function NS.RefreshParty()
+    if partyPending then return end
+    partyPending = true
+    C_Timer.After(0.5, function() partyPending = nil; Refresh() end)
+end
 function NS._plan() return plan end
 local lastFull = -999
 local wantFull = false      -- a manual "Plan" asked while busy
@@ -352,6 +449,8 @@ local function Help()
     print("  /qr size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /qr relearn      - forget learned speeds and rates")
     print("  /qr cleanup      - quests in your log that aren't worth their slot; /qr abandon drops them")
+    print("  /qr party        - party sync status; /qr party on|off, /qr party share (auto-share), /qr party help (stay to help)")
+    print("  /qr share        - share your quests that party members don't have")
     print("  /qr service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
     print("  Key bindings (Options > Keybindings > AddOns > TwizQuest): target step 1's mob/NPC, waypoint to step 1")
 end
@@ -385,6 +484,34 @@ SlashCmdList.QUESTROUTE = function(msg)
             for _, d in ipairs(drop) do print(("  %s - %s"):format(d.name, d.why)) end
             StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
         end
+        return
+    elseif cmd == "party" then
+        local arg = (rest or ""):lower()
+        if arg == "off" or arg == "on" then
+            NS.db.party = arg == "on"
+            NS.Print("party sync " .. (NS.db.party and "on" or "off"))
+            Refresh()
+        elseif arg == "share" then
+            NS.db.partyShare = not NS.db.partyShare
+            NS.Print("auto-share with new party members " .. (NS.db.partyShare and "on" or "off"))
+        elseif arg == "help" then
+            NS.db.partyHelp = not NS.db.partyHelp
+            NS.Print("stay to help party members finish kills " .. (NS.db.partyHelp and "on" or "off"))
+            NS.cache = nil; NS.Replan()
+        else
+            local st = NS.PartyStatus()
+            NS.Print(("party: %d syncing, %d to share, %d behind, %d ready to turn in."):format(
+                #st.members, #st.missing, #st.behind, #st.ready))
+            for _, m in ipairs(st.members) do
+                local p = NS.party[m]
+                print(("  %s: %d quests%s"):format(m, NS.Count(p.quests), p.step and (", heading to " .. p.step.text) or ""))
+            end
+            if #st.noAddon > 0 then print("  not syncing (no TwizQuest): " .. table.concat(st.noAddon, ", ")) end
+        end
+        return
+    elseif cmd == "share" then
+        local n = NS.ShareMissing()
+        NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
         return
     elseif cmd == "service" then
         NS.db.service = not NS.db.service

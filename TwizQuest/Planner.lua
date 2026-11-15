@@ -246,11 +246,13 @@ local function LogObjectives(id)
         local t = lo.type
         if t == "reputation" or t == "player" or t == "progressbar" then t = nil end
         if t == "log" then t = "event" end
-        local entry
+        local entry, key
         if t and db[t] then
             entry = db[t][queues[t]]
+            key = t:sub(1, 1) .. queues[t]
             queues[t] = queues[t] + 1
         end
+        if entry then entry._k = key end
         if not NS.safe(lo.finished) then
             local need = (tonumber(NS.safe(lo.numRequired)) or 1) - (tonumber(NS.safe(lo.numFulfilled)) or 0)
             if entry and need > 0 then
@@ -361,9 +363,19 @@ local function BuildQuest(id, inst, px, py, active)
     end
 
     local extra = 0
-    if not (active and active.complete) then
+    -- party members on this quest who still need kills or drops: credit is shared,
+    -- so staying to help them is worth planning for
+    local pneed = active and NS.PartyNeed and NS.PartyNeed(id)
+    if NS.PartyHas then
+        local n = NS.PartyHas(id)
+        q.party = n
+        q.pw = 1 + 0.25 * math.min(2, n)   -- doing a quest together beats doing it alone
+    end
+    if not (active and active.complete) or pneed then
         local objs, unknown
-        if active then
+        if active and active.complete then
+            objs, unknown = {}, 0
+        elseif active then
             objs, unknown = LogObjectives(id)
         else
             objs, unknown = {}, 0
@@ -371,12 +383,29 @@ local function BuildQuest(id, inst, px, py, active)
                 for _, o in ipairs(t) do o.need = DEFAULT_NEED[o.type] or 1; objs[#objs + 1] = o end
             end
         end
+        if pneed then
+            local have = {}
+            for _, o in ipairs(objs) do
+                local pn = o._k and pneed[o._k]
+                if pn and pn.need > (o.need or 0) then o.need, o.help = pn.need, pn.who end
+                if o._k then have[o._k] = true end
+            end
+            local db = DBObjectives(id)
+            for key, pn in pairs(pneed) do
+                if not have[key] then
+                    local t = (key:sub(1, 1) == "m") and "monster" or "item"
+                    local e = db[t] and db[t][tonumber(key:sub(2))]
+                    if e then e.need, e.help, e._k = pn.need, pn.who, key; objs[#objs + 1] = e end
+                end
+            end
+        end
         for _, o in ipairs(objs) do
-            if o.type == "item" then
+            if o.type == "item" and not o.help then
                 local b = BankStop(q, o, inst, rx, ry)
                 if b then q.stops[#q.stops + 1] = b end
             end
             local s = (o.need or 0) > 0 and EstimateObjective(o, inst, rx, ry) or nil
+            if s and o.help then s.help = o.help end
             if (o.need or 0) <= 0 then
                 -- the bank covers it all
             elseif s then
@@ -495,7 +524,7 @@ local function Totals(route, start)
         local bonus = math.min(k, rest)
         rest = rest - bonus
         xp = xp + k + bonus
-        if s.role == 3 then xp = xp + s.q.xp end
+        if s.role == 3 then xp = xp + s.q.xp * (s.q.pw or 1) end
         prev = s
     end
     return t, xp
@@ -709,6 +738,7 @@ function NS.Plan(full)
             NS.db.lastError = { msg = ("%d quest(s) skipped; first: %s"):format(NS.skipped, NS.firstSkip or "?"),
                                 stack = "", at = time and time() or 0 }
         end
+        if NS.PartyStep and route[1] then NS.PartyStep(route[1]) end
         if NS.OnPlan then NS.OnPlan(result) end
     end)
     runner:Show()
