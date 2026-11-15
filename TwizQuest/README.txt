@@ -1,5 +1,18 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.9.0 - GROUP PLAN
+- Group button (title bar, shown when someone in your party syncs; or
+  /tq group): plans the fastest XP for the whole group. Each quest counts the
+  XP of everyone who has it, can be shared it, or is the right level to pick
+  it up, so quests you share rise to the top. The route is sent to your
+  party - their TwizQuest follows it - and quests they're missing are shared.
+  Summary shows the group's XP/hr. Click Solo (or /tq solo) to go back; if
+  the person who started it goes solo or leaves, everyone goes back.
+- While you're synced with your party nothing is dropped: no cleanup
+  suggestions, every quest in your log stays in the route, ordered by the
+  best XP per hour (quests you both have first). Following someone's plan
+  puts their quests first without hiding yours.
+
 NEW IN 1.8.0 (with LeetStick's party-sync work)
 - Party sync understands Forever surnames: a friend's messages can arrive as
   "Bob Stone", "Bob-Stone" or with a realm; they're matched to the party

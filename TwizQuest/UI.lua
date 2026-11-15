@@ -178,6 +178,11 @@ end
 
 local function Refresh()
     if not frame then return end
+    if frame.groupBtn then
+        local can = NS.groupMode or (IsInGroup() and NS.SyncedCount and NS.SyncedCount() > 0)
+        frame.groupBtn:SetShown(can and true or false)
+        frame.groupBtn:SetText(NS.groupMode and "Solo" or "Group")
+    end
     local ptext = NS.db.party and NS.PartyStatus and PartyText(NS.PartyStatus()) or nil
     local nbars = 0
     -- flags: a second summary line, only when there is something to flag
@@ -225,7 +230,13 @@ local function Refresh()
     local need = (UnitXPMax("player") or 0) - (UnitXP("player") or 0)
     local toLevel = (plan.rate > 0) and (need / plan.rate * 3600) or nil
     local age = GetTime() - (plan.at or GetTime())
-    frame.summary:SetText(("|cff66ff66%s XP/hr|r   %s XP / %s%s   %s"):format(
+    local groupTag = ""
+    if plan.group then
+        groupTag = ("|cff66ccffGroup%s: %s XP/hr x%d|r   "):format(
+            plan.group.from and (" (" .. plan.group.from .. ")") or "",
+            NS.FormatNum(plan.group.rate), plan.group.members)
+    end
+    frame.summary:SetText(("%s|cff66ff66%s XP/hr|r   %s XP / %s%s   %s"):format(groupTag,
         NS.FormatNum(plan.rate), NS.FormatNum(plan.xp), NS.FormatTime(plan.time),
         toLevel and ("   Level: " .. NS.FormatTime(toLevel)) or "",
         NS.IsPlanning() and "|cffffff00Updating|r" or
@@ -310,6 +321,20 @@ local function Build()
     frame.dropAll:SetText("Drop All")
     frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd() end)
     Tip(frame.dropAll, "Drop All", "Abandons every quest (asks first)\nLow-value quests only: /tq cleanup")
+    frame.groupBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.groupBtn:SetSize(84, 22); frame.groupBtn:SetPoint("RIGHT", frame.dropAll, "LEFT", -6, 0)
+    frame.groupBtn:SetText("Group")
+    frame.groupBtn:SetScript("OnClick", function()
+        if NS.groupMode then NS.EndGroupPlan() else NS.StartGroupPlan() end
+    end)
+    Tip(frame.groupBtn, "Group plan", function()
+        if NS.groupMode then
+            return (NS.groupPlan and ("Following " .. NS.groupPlan.from .. "'s group plan") or "Your group plan is on")
+                .. "\nClick: back to your own route"
+        end
+        return "Plans the fastest XP for the whole group: quests count the XP of everyone who has them, can be shared them, or can pick them up\nSends the route to your party and shares the quests they're missing\nEveryone needs TwizQuest"
+    end)
+    frame.groupBtn:Hide()
 
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.summary:SetPoint("TOPLEFT", PAD, -38)
@@ -612,6 +637,8 @@ local function Help()
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
+    print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
+    print("  /tq solo         - back to your own route")
     print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
     print("  /tq dropall      - abandon every quest in your log, asks first (Drop All button)")
     print("  /tq service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
@@ -624,6 +651,10 @@ SLASH_QUESTROUTE3 = "/qr"          -- old shortcut still works
 SLASH_QUESTROUTE4 = "/questroute"
 SlashCmdList.QUESTROUTE = function(msg)
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    if (cmd == "cleanup" or cmd == "abandon") and NS.KeepAllQuests and NS.KeepAllQuests() then
+        NS.Print("you're synced with your party, so no quests are dropped - your route orders them by group XP instead.")
+        return
+    end
     if cmd == "cleanup" or cmd == "abandon" then
         local drop = plan and plan.drop or {}
         if #drop == 0 then NS.Print("every quest in your log is worth keeping right now."); return end
@@ -658,6 +689,10 @@ SlashCmdList.QUESTROUTE = function(msg)
         NS.UpdateMinimap()
         NS.Print("minimap button " .. (NS.db.minimap and "shown" or "hidden (/tq minimap to bring it back)"))
         return
+    elseif cmd == "group" then
+        NS.StartGroupPlan(); return
+    elseif cmd == "solo" then
+        NS.EndGroupPlan(); return
     elseif cmd == "shareall" then
         NS.ShareAllCmd(); return
     elseif cmd == "dropall" then

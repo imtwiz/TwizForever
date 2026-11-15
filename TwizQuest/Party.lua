@@ -244,6 +244,27 @@ local function OnMessage(msg, sender)
             p.level = lvl
             if NS.RefreshParty then NS.RefreshParty() end
         end
+    elseif kind == "G" then
+        -- a party member's group plan: the quests the group does together, in order
+        local ids = {}
+        for id in rest:gmatch("%d+") do ids[#ids + 1] = tonumber(id) end
+        if #ids == 0 then
+            if NS.groupPlan and NS.groupPlan.from == who then
+                NS.groupPlan, NS.groupMode = nil, false
+                NS.Print(who .. " ended the group plan - back to your own route.")
+                NS.cache = nil; if NS.Replan then NS.Replan() end
+            end
+        else
+            local set = {}
+            for i, id in ipairs(ids) do set[id] = i end
+            local fresh = not (NS.groupPlan and NS.groupPlan.from == who)
+            NS.groupPlan = { from = who, ids = ids, set = set, at = GetTime() }
+            NS.groupMode = true
+            if fresh then
+                NS.Print(("%s started a group plan (%d quests) - your route now follows it. Click Solo or /tq solo to leave it."):format(who, #ids))
+            end
+            NS.cache = nil; if NS.Replan then NS.Replan() end
+        end
     elseif kind == "N" then
         local id, step = rest:match("^(%d+)|(.*)$")
         p.step = id and { id = tonumber(id), text = step } or nil
@@ -276,6 +297,7 @@ end
 
 local members = {}
 local function RosterChanged()
+    if NS.groupMode and not InGroup() then NS.EndGroupPlan(true) end
     Prune()
     if not InGroup() then
         wipe(members); wipe(sendQ); mine = {}
@@ -433,6 +455,82 @@ AutoShare = function(who)
 end
 
 -- tell the party where you're heading (step 1 of your plan)
+------------------------------------------------------------------------
+-- Group plan: the fastest XP for the whole group
+------------------------------------------------------------------------
+-- How many synced party members would get this quest's XP too: they have it,
+-- you can share it with them, or it's a pickup at their level.
+function NS.GroupWho(id, active)
+    local n = 0
+    local rl = NS.Q(id, "requiredLevel") or 0
+    local ql = NS.Q(id, "questLevel") or rl
+    local push = active and C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id)
+    for _, p in pairs(NS.party) do
+        if p.synced then
+            local q = p.quests[id]
+            local lvl = p.level or (p.xp and p.xp.level)
+            if q then
+                n = n + 1
+            elseif lvl and lvl >= rl and (ql == -1 or ql > NS.GrayLevel(lvl)) and (push or not active) then
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+
+-- while you're synced with your party, no quest is dropped or suggested for dropping
+function NS.KeepAllQuests()
+    if NS.groupMode then return true end
+    if not InGroup() then return false end
+    for _, p in pairs(NS.party) do if p.synced then return true end end
+    return false
+end
+
+function NS.SyncedCount()
+    local n = 0
+    for _, p in pairs(NS.party) do if p.synced then n = n + 1 end end
+    return n
+end
+
+-- you started it: send the route's quests (in order) to the party, then share
+-- the ones they're missing
+function NS.SendGroupPlan(route)
+    local ids, seen = {}, {}
+    for _, st in ipairs(route or {}) do
+        local id = st.q and st.q.id
+        if id and id > 0 and not seen[id] then seen[id] = true; ids[#ids + 1] = id end
+    end
+    local chunk = {}
+    for _, id in ipairs(ids) do
+        chunk[#chunk + 1] = id
+        if #chunk >= 30 then break end   -- one message: the first 30 quests of the route
+    end
+    Send("G|" .. table.concat(chunk, ","))
+    C_Timer.After(1, function() NS.ShareMissing() end)
+end
+
+function NS.StartGroupPlan()
+    if not InGroup() then NS.Print("join a party first."); return end
+    if NS.SyncedCount() == 0 then
+        NS.Print("no one in your party is syncing TwizQuest yet (/tq party).")
+        return
+    end
+    NS.groupMode, NS.groupPlan = true, nil
+    NS.Print("planning the fastest XP for your group...")
+    NS.cache = nil
+    if NS.Replan then NS.Replan() end
+end
+
+function NS.EndGroupPlan(quiet)
+    local mine = NS.groupMode and not NS.groupPlan
+    NS.groupMode, NS.groupPlan = false, nil
+    if mine and InGroup() then Send("G|") end
+    if not quiet then NS.Print("back to your own route.") end
+    NS.cache = nil
+    if NS.Replan then NS.Replan() end
+end
+
 function NS.PartyStep(s)
     if not (s and s.q and s.q.id) then return end
     local txt = (s.role == 1 and "pick up " or s.role == 3 and "turn in " or "") .. (s.q.name or "")

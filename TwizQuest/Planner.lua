@@ -366,7 +366,11 @@ local function BuildQuest(id, inst, px, py, active)
     -- party members on this quest who still need kills or drops: credit is shared,
     -- so staying to help them is worth planning for
     local pneed = active and NS.PartyNeed and NS.PartyNeed(id)
-    if NS.PartyHas then
+    if NS.groupMode and NS.GroupWho then
+        -- group plan: each member who gets this quest's XP counts in full
+        q.groupN = NS.GroupWho(id, active)
+        q.pw = 1 + q.groupN
+    elseif NS.PartyHas then
         local n = NS.PartyHas(id)
         q.party = n
         q.pw = 1 + 0.25 * math.min(2, n)   -- doing a quest together beats doing it alone
@@ -501,6 +505,13 @@ local function Candidates(inst, px, py)
                     if q then list[#list + 1] = q end
                 end
             end
+        end
+    end
+    -- following a party member's group plan: their quests come first (none of yours are hidden)
+    local gp = NS.groupPlan
+    if gp and gp.set then
+        for _, q in ipairs(list) do
+            if gp.set[q.id] then q.pw = (q.pw or 1) * 1.5 end
         end
     end
     return list, math.max(0, free)
@@ -639,6 +650,15 @@ local function BuildRoute(cands, free, start)
         if not q.active then picked = picked + 1 end
         route, T, X = bestR, bestT, bestX
     end
+    -- synced with your party: never leave a quest from your log out of the route;
+    -- the leftovers go in where they cost least, after the best-XP ones
+    if NS.KeepAllQuests and NS.KeepAllQuests() then
+        local inRoute = {}
+        for _, st in ipairs(route) do if st.q then inRoute[st.q] = true end end
+        for _, q in ipairs(cands) do
+            if q.active and not inRoute[q] then route = InsertQuest(route, q, start) end
+        end
+    end
     Improve(route, start)
     return route
 end
@@ -717,7 +737,8 @@ function NS.Plan(full)
         local planRate = (t > 0) and xp / t or 0
         local gray = NS.GrayLevel(UnitLevel("player"))
         local drop = {}
-        for _, q in ipairs(cands) do
+        local keepAll = NS.KeepAllQuests and NS.KeepAllQuests()
+        for _, q in ipairs(keepAll and {} or cands) do
             -- judged on its own: XP/hour if you did just this quest from here
             local slow = planRate > 0 and (q.rate or 0) < planRate * 0.35
             if q.active and (slow or not inRoute[q]) then
@@ -730,7 +751,16 @@ function NS.Plan(full)
                 end
             end
         end
+        local groupXP = xp
+        if NS.groupMode then
+            for _, s in ipairs(route) do
+                if s.role == 3 and s.q.groupN then groupXP = groupXP + s.q.xp * s.q.groupN end
+            end
+        end
         local result = { route = route, time = t, xp = xp, rate = (t > 0) and xp / t * 3600 or 0,
+                         group = NS.groupMode and { rate = (t > 0) and groupXP / t * 3600 or 0,
+                             members = (NS.SyncedCount and NS.SyncedCount() or 0) + 1,
+                             from = NS.groupPlan and NS.groupPlan.from } or nil,
                          candidates = #cands, at = GetTime(), x = px, y = py, inst = inst, full = full,
                          skipped = NS.skipped or 0, drop = drop, service = service, rested = NS.restPool or 0,
                          logFull = (free or 0) <= 0 }
@@ -739,6 +769,7 @@ function NS.Plan(full)
                                 stack = "", at = time and time() or 0 }
         end
         if NS.PartyStep and route[1] then NS.PartyStep(route[1]) end
+        if NS.groupMode and not NS.groupPlan and NS.SendGroupPlan then NS.SendGroupPlan(route) end
         if NS.OnPlan then NS.OnPlan(result) end
     end)
     runner:Show()
