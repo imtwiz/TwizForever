@@ -12,7 +12,6 @@ local PREFIX = "TWZC"
 local VERSION = 2
 NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, recipes = { [id] = outItemID }, mats = { [id] = { made, {rid, qty}... } } } }, inv = { [itemID] = n }, synced }
 
-local function Me() return UnitName("player") end
 local function Ago(t)
     local d = time() - (t or 0)
     if d < 90 then return "just now" end
@@ -20,20 +19,11 @@ local function Ago(t)
     if d < 86400 then return math.floor(d / 3600) .. "h ago" end
     return math.floor(d / 86400) .. "d ago"
 end
--- offline friends' materials count unless you untick "include offline friends"
+-- offline friends' materials count unless you untick "Count offline friends"
 local function Counts(m) return m.online or not (NS.db and NS.db.friendsOnlineOnly) end
 local function Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
--- names are compared without the realm: "Bob-SomeRealm" and "Bob" are the same person
+-- a unit name without its realm ("Bob-SomeRealm" -> "Bob")
 local function Short(name) return name and (name:gsub("%-.*$", "")) or name end
--- party members' names right now (short)
-local function PartyNames()
-    local t = {}
-    for i = 1, 4 do
-        local n = UnitName("party" .. i)
-        if n and n ~= "" then t[Short(n)] = true end
-    end
-    return t
-end
 -- dungeon-finder groups talk on INSTANCE_CHAT, normal parties on PARTY
 local function Channel()
     if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
@@ -44,6 +34,65 @@ local function Channel()
 end
 local CHANNELS = { PARTY = true, INSTANCE_CHAT = true, RAID = true }
 local function InGroup() return IsInGroup and IsInGroup() and not (IsInRaid and IsInRaid()) end
+
+------------------------------------------------------------------------
+-- Names. On Forever characters have surnames: an addon message arrives from
+-- "First Last" (or "First-Last", with or without "-Realm"), while UnitName()
+-- gives only "First". So a sender is matched to a party unit, never compared
+-- as text.
+------------------------------------------------------------------------
+local function Norm(name) return (name:lower():gsub("[%s%-]+", " ")) end
+
+-- sender is exactly this name, or this name followed by more words
+local function Fits(sender, name)
+    return name ~= "" and (sender == name or sender:sub(1, #name + 1) == name .. " ")
+end
+
+-- { { unit = "party1", name = "Bob" }, ... }: the name each party member is
+-- listed under. Two members with the same first name are listed in full.
+local function Roster()
+    local list, seen = {}, {}
+    for i = 1, 4 do
+        local unit = "party" .. i
+        local first = NS.safe(UnitName(unit))
+        if first then
+            first = Short(first)
+            list[#list + 1] = { unit = unit, name = first }
+            seen[first] = (seen[first] or 0) + 1
+        end
+    end
+    for _, m in ipairs(list) do
+        if seen[m.name] > 1 then
+            m.name = NS.safe(GetUnitName and GetUnitName(m.unit, true)) or (m.name .. " (" .. m.unit .. ")")
+        end
+    end
+    return list
+end
+
+-- How well a sender name fits a unit: 2 = its full name, 1 = its first name
+local function Match(sender, unit)
+    local first = NS.safe(UnitName(unit))
+    if not first then return 0 end
+    local full = NS.safe(GetUnitName and GetUnitName(unit, true))
+    if full and Fits(sender, Norm(full)) then return 2 end
+    return Fits(sender, Norm(first)) and 1 or 0
+end
+
+-- The roster name of whoever sent an addon message; false when it was you,
+-- nil when it is nobody in your party (or can't be told apart).
+local function Member(sender)
+    sender = NS.safe(sender)
+    if type(sender) ~= "string" then return nil end
+    sender = Norm(sender)
+    local best, bestName, tied = Match(sender, "player"), false, false
+    for _, m in ipairs(Roster()) do
+        local score = Match(sender, m.unit)
+        if score > best then best, bestName, tied = score, m.name, false
+        elseif score == best and score > 0 then tied = true end
+    end
+    if best == 0 or tied then return nil end
+    return bestName
+end
 
 ------------------------------------------------------------------------
 -- Sending, paced so the game never throttles us
@@ -178,8 +227,8 @@ end
 ------------------------------------------------------------------------
 local lastFull = 0
 local function OnMessage(msg, sender)
-    local who = Short(sender)
-    if who == Me() then return end
+    local who = Member(sender)
+    if not who then return end -- yourself, or nobody in your party
     local kind, rest = msg:match("^(%a)|?(.*)$")
     if not kind then return end
     local m = NS.partyProfs[who]
@@ -241,8 +290,12 @@ end
 -- Group changes
 ------------------------------------------------------------------------
 local members = {}
-local function Roster()
-    local here = InGroup() and PartyNames() or {}
+-- friends who left stay in your saved data, marked offline
+local function RosterChanged()
+    local here = {}
+    if InGroup() then
+        for _, m in ipairs(Roster()) do here[m.name] = true end
+    end
     for name, m in pairs(NS.partyProfs) do
         local was = m.online
         m.online = here[name] and true or false
@@ -250,9 +303,9 @@ local function Roster()
     end
     if not InGroup() then wipe(members); wipe(sentSig); if NS.RefreshUI then NS.RefreshUI() end return end
     local now, joined = {}, false
-    for i = 1, 4 do
-        local n = UnitName("party" .. i)
-        if n then n = Short(n); now[n] = true; if not members[n] then joined = true end end
+    for _, m in ipairs(Roster()) do
+        now[m.name] = true
+        if not members[m.name] then joined = true end
     end
     members = now
     if joined then
@@ -553,9 +606,9 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         NS.partyProfs = NS.db.friends
         for _, m in pairs(NS.partyProfs) do m.online, m.incoming, m.sessionSynced = false, nil, nil end
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
-        C_Timer.After(4, Roster)
+        C_Timer.After(4, RosterChanged)
     elseif event == "GROUP_ROSTER_UPDATE" then
-        Roster()
+        RosterChanged()
     elseif event == "CHAT_MSG_ADDON" then
         if a1 == PREFIX and CHANNELS[a3] then OnMessage(a2, a4) end
     end

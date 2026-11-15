@@ -1,7 +1,10 @@
 -- TwizQuest window: the ordered steps, XP/hour, and click-to-waypoint.
 local ADDON, NS = ...
 
-local ROWS, DEFAULT_ROWS, ROW_H = 40, 16, 18
+local ROWS, DEFAULT_ROWS, ROW_H = 40, 16, 20
+local PAD = 12                 -- space between the window edge and its contents
+local LIST_Y = 58              -- where the step list starts with nothing above it
+local DEFAULT_W = 520
 local plan
 local frame, rows = nil, {}
 local wayUID
@@ -14,15 +17,15 @@ local KIND_TEXT = {
 local function StepText(s)
     local q = s.q
     if s.kind == "service" then
-        return ("|cffff9933%s|r at %s |cff999999- %s|r"):format(s.repair and "Sell & repair" or "Sell junk",
-            s.who or "a vendor", s.why or "")
+        return ("|cffff9933%s|r %s |cff999999- %s|r"):format(s.repair and "Sell & repair:" or "Sell:",
+            s.who or "vendor", s.why or "")
     end
     if s.kind == "bank" then
-        return ("  |cff40c0ffBank:|r get %d %s |cff999999- %s|r"):format(s.need or 0, s.name or "items", q.name)
+        return ("  |cff40c0ffBank:|r %d %s |cff999999- %s|r"):format(s.need or 0, s.name or "items", q.name)
     elseif s.kind == "useitem" then
-        return ("%s %s |cff999999- use your %s|r"):format(KIND_TEXT.pickup, q.name, s.name or "item")
+        return ("%s %s |cff999999- use %s|r"):format(KIND_TEXT.pickup, q.name, s.name or "item")
     elseif s.kind == "bankstart" then
-        return ("%s %s |cff999999- get %s from the bank, then use it|r"):format(KIND_TEXT.pickup, q.name, s.name or "the item")
+        return ("%s %s |cff999999- bank, use %s|r"):format(KIND_TEXT.pickup, q.name, s.name or "item")
     end
     if s.role == 1 then
         return ("%s %s%s"):format(KIND_TEXT.pickup, q.name, s.who and (" |cff999999- " .. s.who .. "|r") or "")
@@ -43,7 +46,7 @@ local function StepText(s)
         what = s.text or "Objective"
     end
     if s.elite then what = what .. " |cffff5555(elite)|r" end
-    if s.help then what = what .. (" |cff66ccff(helping %s)|r"):format(s.help) end
+    if s.help then what = what .. (" |cff66ccff(for %s)|r"):format(s.help) end
     return ("  %s |cff999999- %s|r"):format(what, q.name)
 end
 
@@ -76,16 +79,19 @@ end
 
 local function PartyText(st)
     if #st.members == 0 then
-        if #st.noAddon > 0 then return "|cff999999Party: no one else runs TwizQuest yet|r" end
+        if #st.noAddon > 0 then return ("|cff999999Party: synced 0/%d|r"):format(#st.noAddon) end
         return nil
     end
     local bits = { ("|cff66ccffParty:|r %s"):format(table.concat(st.members, ", ")) }
-    if #st.missing > 0 then bits[#bits + 1] = ("|cffffd100%d to share|r"):format(#st.missing) end
-    if #st.behind > 0 then bits[#bits + 1] = ("|cffff9933%d behind|r"):format(#st.behind) end
-    if #st.ready > 0 then bits[#bits + 1] = ("|cff66ff66%d ready to turn in|r"):format(#st.ready) end
-    if #st.theyHave > 0 then bits[#bits + 1] = ("|cff999999they have %d you don't|r"):format(#st.theyHave) end
-    if #bits == 1 then bits[#bits + 1] = "|cff66ff66in sync|r" end
-    return table.concat(bits, "  ")
+    if #st.noAddon > 0 then
+        bits[#bits + 1] = ("|cff999999Synced: %d/%d|r"):format(#st.members, #st.members + #st.noAddon)
+    end
+    if #st.missing > 0 then bits[#bits + 1] = ("|cffffd100Share: %d|r"):format(#st.missing) end
+    if #st.behind > 0 then bits[#bits + 1] = ("|cffff9933Behind: %d|r"):format(#st.behind) end
+    if #st.ready > 0 then bits[#bits + 1] = ("|cff66ff66Ready: %d|r"):format(#st.ready) end
+    if #st.theyHave > 0 then bits[#bits + 1] = ("|cff999999Theirs: %d|r"):format(#st.theyHave) end
+    if #st.missing + #st.behind + #st.ready + #st.theyHave == 0 then bits[#bits + 1] = "|cff66ff66In sync|r" end
+    return table.concat(bits, "   ")
 end
 
 local function PartyTooltip(self)
@@ -95,41 +101,42 @@ local function PartyTooltip(self)
     for _, m in ipairs(st.members) do
         local p = NS.party[m]
         GameTooltip:AddDoubleLine(m .. (p.level and (" (" .. p.level .. ")") or ""),
-            p.step and ("heading to: " .. p.step.text) or "", 1, 1, 1, 0.7, 0.7, 0.7)
+            p.step and ("Next: " .. p.step.text) or "", 1, 1, 1, 0.7, 0.7, 0.7)
     end
     if #st.missing > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("They don't have (click Share):", 1, 0.82, 0)
+        GameTooltip:AddLine("Share: they lack", 1, 0.82, 0)
         for _, m in ipairs(st.missing) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.behind > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("You're done, they still need (route keeps you there):", 1, 0.6, 0.2)
+        GameTooltip:AddLine("Behind: they still need", 1, 0.6, 0.2)
         for _, b in ipairs(st.behind) do GameTooltip:AddDoubleLine(QName(b.id), b.who .. " " .. b.left, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.ready > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Everyone's ready to turn in:", 0.4, 1, 0.4)
+        GameTooltip:AddLine("Ready: turn in together", 0.4, 1, 0.4)
         for _, id in ipairs(st.ready) do GameTooltip:AddLine(QName(id), 1, 1, 1) end
     end
     if #st.theyHave > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("They have, you don't (ask them to share):", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Theirs: you lack", 0.7, 0.7, 0.7)
         for _, m in ipairs(st.theyHave) do GameTooltip:AddDoubleLine(QName(m.id), m.who, 1, 1, 1, 0.7, 0.7, 0.7) end
     end
     if #st.noAddon > 0 then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Not syncing (no TwizQuest): " .. table.concat(st.noAddon, ", "), 0.6, 0.6, 0.6, true)
+        GameTooltip:AddLine("Not synced: " .. table.concat(st.noAddon, ", "), 0.6, 0.6, 0.6, true)
     end
     GameTooltip:Show()
 end
 
-local BAR_H = 13
+local BAR_H = 17
 local function XPRow(row, name, xp, classFile, isMe)
     row.name:SetText((isMe and "|cff66ff66" or "") .. name .. (isMe and "|r" or ""))
     if not xp or not xp.max or xp.max <= 0 then
         row.bar:SetValue(0); row.rest:SetValue(0)
-        row.right:SetText("|cff999999waiting for data|r")
+        row.text:SetText("")
+        row.right:SetText("|cff999999No data|r")
         return
     end
     row.bar:SetMinMaxValues(0, xp.max); row.bar:SetValue(xp.cur)
@@ -137,10 +144,10 @@ local function XPRow(row, name, xp, classFile, isMe)
     local color = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
     if color then row.bar:SetStatusBarColor(color.r, color.g, color.b) else row.bar:SetStatusBarColor(0.58, 0.0, 0.55) end
     local left = xp.max - xp.cur
-    local eta = (xp.rate or 0) > 0 and (" ~" .. NS.FormatTime(left / xp.rate * 3600)) or ""
+    local eta = (xp.rate or 0) > 0 and ("   " .. NS.FormatTime(left / xp.rate * 3600)) or ""
     row.text:SetText(("%d%%"):format(math.floor(xp.cur / xp.max * 100)))
-    row.right:SetText(("L%d  %s to go%s%s"):format(xp.level or 0, NS.FormatNum(left),
-        (xp.rest or 0) > 0 and (" |cff6699ff+" .. NS.FormatNum(xp.rest) .. " rested|r") or "", "|cff999999" .. eta .. "|r"))
+    row.right:SetText(("L%d   %s left%s%s"):format(xp.level or 0, NS.FormatNum(left),
+        (xp.rest or 0) > 0 and ("   |cff6699ff+" .. NS.FormatNum(xp.rest) .. " rested|r") or "", "|cff999999" .. eta .. "|r"))
 end
 
 local function MyXP()
@@ -150,15 +157,12 @@ local function MyXP()
 end
 
 local function UnitClassFile(name)
-    for i = 1, 4 do
-        local u = "party" .. i
-        local n = UnitName(u)
-        if n and (Ambiguate and Ambiguate(n, "none") or n) == name then return select(2, UnitClass(u)) end
-    end
+    local unit = NS.PartyUnit and NS.PartyUnit(name)
+    if unit then return select(2, UnitClass(unit)) end
 end
 
 local function RowsFit()
-    if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - 66 - partyOffset) / ROW_H))) end
+    if NS.db.sized then return math.max(1, math.min(ROWS, math.floor((frame:GetHeight() - LIST_Y - PAD - partyOffset) / ROW_H))) end
     return DEFAULT_ROWS
 end
 
@@ -167,8 +171,8 @@ local function Layout()
     if not frame then return end
     local w = frame:GetWidth()
     for _, row in ipairs(rows) do
-        row:SetWidth(w - 20)
-        row.text:SetWidth(math.max(80, w - 20 - 24 - 100))
+        row:SetWidth(w - 2 * PAD)
+        row.text:SetWidth(math.max(80, w - 2 * PAD - 28 - 110))
     end
 end
 
@@ -176,12 +180,25 @@ local function Refresh()
     if not frame then return end
     local ptext = NS.db.party and NS.PartyStatus and PartyText(NS.PartyStatus()) or nil
     local nbars = 0
+    -- flags: a second summary line, only when there is something to flag
+    local flags = {}
+    if plan then
+        if (plan.skipped or 0) > 0 then flags[#flags + 1] = ("|cffff8040Skipped: %d|r"):format(plan.skipped) end
+        if (plan.rested or 0) > 0 then flags[#flags + 1] = ("|cff6699ffRested: %s|r"):format(NS.FormatNum(plan.rested)) end
+        if #(plan.drop or {}) > 0 then flags[#flags + 1] = ("|cffffd100Drop: %d|r"):format(#plan.drop) end
+    end
+    local flagsOffset = #flags > 0 and 16 or 0
+    frame.flags:SetText(table.concat(flags, "   "))
+    frame.flags:SetShown(#flags > 0)
+    frame.partyLine:ClearAllPoints()
+    frame.partyLine:SetPoint("TOPLEFT", PAD, -(LIST_Y - 2 + flagsOffset))
+    frame.partyLine:SetPoint("RIGHT", -PAD, 0)
     if ptext then
         frame.partyLine.text:SetText(ptext); frame.partyLine:Show()
         local st = NS.PartyStatus()
         frame.share:SetText(("Share (%d)"):format(#st.missing))
         frame.share:SetShown(#st.missing > 0)
-        partyOffset = 16
+        partyOffset = 22
         if NS.db.partyXP and #st.members > 0 then
             nbars = 1
             XPRow(frame.xpRows[1], UnitName("player"), MyXP(), select(2, UnitClass("player")), true)
@@ -192,29 +209,27 @@ local function Refresh()
                 end
             end
         end
-        partyOffset = partyOffset + nbars * BAR_H + (nbars > 0 and 2 or 0)
+        partyOffset = partyOffset + nbars * BAR_H + (nbars > 0 and 6 or 0)
     else
         frame.partyLine:Hide(); partyOffset = 0
     end
+    partyOffset = partyOffset + flagsOffset
     for i, r in ipairs(frame.xpRows) do r:SetShown(i <= nbars) end
-    frame.listTop:SetPoint("TOPLEFT", 10, -46 - partyOffset)
+    frame.listTop:SetPoint("TOPLEFT", PAD, -LIST_Y - partyOffset)
     if not plan then
-        frame.summary:SetText(NS.IsPlanning() and "Planning..." or (frame.status or "No plan yet. Click Plan."))
+        frame.summary:SetText(NS.IsPlanning() and "Planning..." or (frame.status or "No plan"))
         for i = 1, ROWS do rows[i]:Hide() end
-        if not NS.db.sized then frame:SetHeight(80 + partyOffset) end
+        if not NS.db.sized then frame:SetHeight(LIST_Y + PAD + partyOffset) end
         return
     end
     local need = (UnitXPMax("player") or 0) - (UnitXP("player") or 0)
     local toLevel = (plan.rate > 0) and (need / plan.rate * 3600) or nil
     local age = GetTime() - (plan.at or GetTime())
-    frame.summary:SetText(("|cff66ff66%s xp/hr|r   %s xp in %s   %s%s"):format(
+    frame.summary:SetText(("|cff66ff66%s XP/hr|r   %s XP / %s%s   %s"):format(
         NS.FormatNum(plan.rate), NS.FormatNum(plan.xp), NS.FormatTime(plan.time),
-        toLevel and ("|cff999999level in ~" .. NS.FormatTime(toLevel) .. "|r") or "",
-        NS.IsPlanning() and "  |cffffff00updating...|r" or
-            ("  |cff777777" .. (age < 5 and "just now" or NS.FormatTime(age) .. " ago") .. "|r"))
-        .. (((plan.skipped or 0) > 0) and ("  |cffff8040(%d skipped, /tq error)|r"):format(plan.skipped) or "")
-        .. (((plan.rested or 0) > 0) and ("  |cff6699ffrested %s|r"):format(NS.FormatNum(plan.rested)) or "")
-        .. ((#(plan.drop or {}) > 0) and ("  |cffffd100%d to drop (/tq cleanup)|r"):format(#plan.drop) or ""))
+        toLevel and ("   Level: " .. NS.FormatTime(toLevel)) or "",
+        NS.IsPlanning() and "|cffffff00Updating|r" or
+            ("|cff777777Updated: " .. (age < 5 and "now" or NS.FormatTime(age)) .. "|r")))
     local shown, fit = 0, RowsFit()
     for i = 1, ROWS do
         local s = (i <= fit) and plan.route[i] or nil
@@ -233,14 +248,14 @@ local function Refresh()
         end
     end
     if #plan.route == 0 then
-        frame.summary:SetText("Nothing worth doing nearby. Try /tq range 5000 or /tq above 4.")
+        frame.summary:SetText("No quests in range")
     end
-    if not NS.db.sized then frame:SetHeight(58 + partyOffset + shown * ROW_H) end
+    if not NS.db.sized then frame:SetHeight(LIST_Y + PAD + partyOffset + shown * ROW_H) end
 end
 
 local function Build()
     frame = CreateFrame("Frame", "TwizQuestFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(470, 80)
+    frame:SetSize(DEFAULT_W, LIST_Y + PAD)
     frame:SetPoint("RIGHT", UIParent, "RIGHT", -60, 60)
     frame:SetMovable(true); frame:EnableMouse(true); frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
@@ -262,7 +277,7 @@ local function Build()
     end
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 10, -8)
+    title:SetPoint("TOPLEFT", PAD, -12)
     title:SetText("TwizQuest")
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -270,7 +285,7 @@ local function Build()
     close:SetScript("OnClick", function() frame:Hide(); NS.db.shown = false end)
 
     local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    btn:SetSize(56, 18); btn:SetPoint("TOPRIGHT", -28, -6)
+    btn:SetSize(64, 22); btn:SetPoint("TOPRIGHT", -30, -7)
     btn:SetText("Plan")
     btn:SetScript("OnClick", function() NS.Replan() end)
 
@@ -284,35 +299,39 @@ local function Build()
         b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     end
     frame.shareAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.shareAll:SetSize(64, 18); frame.shareAll:SetPoint("RIGHT", btn, "LEFT", -4, 0)
+    frame.shareAll:SetSize(84, 22); frame.shareAll:SetPoint("RIGHT", btn, "LEFT", -6, 0)
     frame.shareAll:SetText("Share All")
     frame.shareAll:SetScript("OnClick", function() NS.ShareAllCmd() end)
     Tip(frame.shareAll, "Share All", function()
-        return IsInGroup() and "Offer every shareable quest in your log to your party, one after another."
-            or "Join a party first - then this offers every shareable quest in your log to them."
+        return IsInGroup() and "Every shareable quest in your log" or "Needs a party"
     end)
     frame.dropAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.dropAll:SetSize(60, 18); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -4, 0)
+    frame.dropAll:SetSize(80, 22); frame.dropAll:SetPoint("RIGHT", frame.shareAll, "LEFT", -6, 0)
     frame.dropAll:SetText("Drop All")
     frame.dropAll:SetScript("OnClick", function() NS.DropAllCmd() end)
-    Tip(frame.dropAll, "Drop All", "Abandon every quest in your log (asks first). To drop only the ones not worth doing, use /tq cleanup.")
+    Tip(frame.dropAll, "Drop All", "Abandons every quest (asks first)\nLow-value quests only: /tq cleanup")
 
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.summary:SetPoint("TOPLEFT", 10, -28)
-    frame.summary:SetPoint("RIGHT", -10, 0)
-    frame.summary:SetJustifyH("LEFT")
+    frame.summary:SetPoint("TOPLEFT", PAD, -38)
+    frame.summary:SetPoint("RIGHT", -PAD, 0)
+    frame.summary:SetJustifyH("LEFT"); frame.summary:SetWordWrap(false)
+    frame.flags = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.flags:SetPoint("TOPLEFT", PAD, -54)
+    frame.flags:SetPoint("RIGHT", -PAD, 0)
+    frame.flags:SetJustifyH("LEFT"); frame.flags:SetWordWrap(false)
+    frame.flags:Hide()
 
     frame.partyLine = CreateFrame("Button", nil, frame)
-    frame.partyLine:SetHeight(14)
-    frame.partyLine:SetPoint("TOPLEFT", 10, -44)
-    frame.partyLine:SetPoint("RIGHT", -10, 0)
+    frame.partyLine:SetHeight(18)
+    frame.partyLine:SetPoint("TOPLEFT", PAD, -(LIST_Y - 2))
+    frame.partyLine:SetPoint("RIGHT", -PAD, 0)
     frame.partyLine.text = frame.partyLine:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.partyLine.text:SetPoint("LEFT"); frame.partyLine.text:SetPoint("RIGHT", -74, 0)
+    frame.partyLine.text:SetPoint("LEFT"); frame.partyLine.text:SetPoint("RIGHT", -86, 0)
     frame.partyLine.text:SetJustifyH("LEFT"); frame.partyLine.text:SetWordWrap(false)
     frame.partyLine:SetScript("OnEnter", PartyTooltip)
     frame.partyLine:SetScript("OnLeave", function() GameTooltip:Hide() end)
     frame.share = CreateFrame("Button", nil, frame.partyLine, "UIPanelButtonTemplate")
-    frame.share:SetSize(70, 16); frame.share:SetPoint("RIGHT")
+    frame.share:SetSize(80, 18); frame.share:SetPoint("RIGHT")
     frame.share:SetScript("OnClick", function()
         local n = NS.ShareMissing()
         NS.Print(n > 0 and ("sharing %d quest%s with your party."):format(n, n == 1 and "" or "s") or "nothing to share.")
@@ -322,13 +341,13 @@ local function Build()
     frame.xpRows = {}
     for i = 1, 5 do
         local r = CreateFrame("Frame", nil, frame)
-        r:SetHeight(BAR_H - 1)
-        r:SetPoint("TOPLEFT", frame.partyLine, "BOTTOMLEFT", 0, -2 - (i - 1) * BAR_H)
-        r:SetPoint("RIGHT", frame, "RIGHT", -10, 0)
+        r:SetHeight(BAR_H - 3)
+        r:SetPoint("TOPLEFT", frame.partyLine, "BOTTOMLEFT", 0, -4 - (i - 1) * BAR_H)
+        r:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
         r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.name:SetPoint("LEFT"); r.name:SetWidth(70); r.name:SetJustifyH("LEFT"); r.name:SetWordWrap(false)
+        r.name:SetPoint("LEFT"); r.name:SetWidth(96); r.name:SetJustifyH("LEFT"); r.name:SetWordWrap(false)
         r.rest = CreateFrame("StatusBar", nil, r)
-        r.rest:SetPoint("LEFT", 74, 0); r.rest:SetSize(120, BAR_H - 3)
+        r.rest:SetPoint("LEFT", 102, 0); r.rest:SetSize(140, BAR_H - 4)
         r.rest:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
         r.rest:SetStatusBarColor(0.25, 0.4, 0.9, 0.45)
         r.bar = CreateFrame("StatusBar", nil, r)
@@ -340,24 +359,24 @@ local function Build()
         r.text = r.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         r.text:SetPoint("CENTER")
         r.right = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.right:SetPoint("LEFT", r.rest, "RIGHT", 6, 0); r.right:SetPoint("RIGHT")
+        r.right:SetPoint("LEFT", r.rest, "RIGHT", 10, 0); r.right:SetPoint("RIGHT")
         r.right:SetJustifyH("LEFT"); r.right:SetWordWrap(false)
         r:Hide()
         frame.xpRows[i] = r
     end
     frame.listTop = CreateFrame("Frame", nil, frame)
     frame.listTop:SetSize(1, 1)
-    frame.listTop:SetPoint("TOPLEFT", 10, -46)
+    frame.listTop:SetPoint("TOPLEFT", PAD, -LIST_Y)
 
     for i = 1, ROWS do
         local row = CreateFrame("Button", nil, frame)
-        row:SetSize(450, ROW_H)
+        row:SetSize(DEFAULT_W - 2 * PAD, ROW_H)
         row:SetPoint("TOPLEFT", frame.listTop, "TOPLEFT", 0, -(i - 1) * ROW_H)
         row:RegisterForClicks("AnyUp")
         row.num = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.num:SetPoint("LEFT"); row.num:SetWidth(20); row.num:SetJustifyH("RIGHT")
+        row.num:SetPoint("LEFT"); row.num:SetWidth(22); row.num:SetJustifyH("RIGHT")
         row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.text:SetPoint("LEFT", 24, 0); row.text:SetWidth(330); row.text:SetJustifyH("LEFT")
+        row.text:SetPoint("LEFT", 28, 0); row.text:SetWidth(DEFAULT_W - 2 * PAD - 28 - 110); row.text:SetJustifyH("LEFT")
         row.text:SetWordWrap(false)
         row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.right:SetPoint("RIGHT"); row.right:SetJustifyH("RIGHT")
@@ -372,10 +391,10 @@ local function Build()
             local plain = StepText(s):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
             GameTooltip:AddLine(plain, 1, 1, 1, true)
             GameTooltip:AddDoubleLine("Travel", ("%d yd, %s"):format(s.dist or 0, NS.FormatTime(s.travel or 0)), 0.7, 0.7, 0.7, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Doing it", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
             if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
             if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-            GameTooltip:AddLine("Click for a waypoint", 0.5, 0.8, 1)
+            GameTooltip:AddLine("Click: waypoint", 0.5, 0.8, 1)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -384,7 +403,7 @@ local function Build()
     end
     local resizing
     NS.resetSize = NS.MakeResizable(frame, NS.db, {
-        minW = 320, minH = 100, maxW = 1400, maxH = 1000, defaultW = 470, defaultH = 80, savePos = true,
+        minW = 400, minH = 100, maxW = 1400, maxH = 1000, defaultW = DEFAULT_W, defaultH = LIST_Y + PAD, savePos = true,
         onResize = function()
             if resizing then return end
             resizing = true; Layout(); Refresh(); resizing = false
@@ -429,7 +448,7 @@ function NS.OnPlan(result, why)
         NS.UpdateTargetButton()
         if NS.db.autoWay and result.route[1] then SetWaypoint(result.route[1], true) end
     elseif frame then
-        frame.status = "Can't plan yet: " .. tostring(why or "unknown") .. "  (/tq error)"
+        frame.status = "No plan: " .. tostring(why or "unknown")
     end
     Refresh()
 end

@@ -1,5 +1,10 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.10.1 (with LeetStick's party-sync work)
+- Party crafters understand Forever surnames ("Bob Stone", "Bob-Stone",
+  with or without realm), ignore your own messages and strangers, and keep
+  two party members with the same first name apart.
+
 NEW IN 1.10.0 - FRIENDS DATABASE
 - Friends' professions, recipes and material counts are saved in your
   TwizCraft data, so they stay after a friend leaves your group or logs off.

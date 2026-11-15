@@ -1,5 +1,14 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.8.0 (with LeetStick's party-sync work)
+- Party sync understands Forever surnames: a friend's messages can arrive as
+  "Bob Stone", "Bob-Stone" or with a realm; they're matched to the party
+  member, two party members with the same first name stay separate, your own
+  messages and strangers are ignored.
+- Roomier window: taller rows, XP bars and buttons, wider by default; the
+  summary stays on one line, extra info gets its own line; labels instead of
+  sentences ("Party: synced 1/1", "Share: 2", "19,000 left").
+
 NEW IN 1.7.1
 - Party sync fixes: friends whose names came through with a realm attached
   were shown as "not running TwizQuest", every group change forgot synced
