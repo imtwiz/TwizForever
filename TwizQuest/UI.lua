@@ -534,7 +534,7 @@ function NS.ShareAllCmd()
     local n, why = NS.ShareAll()
     if why then NS.Print(why .. ".")
     elseif n == 0 then NS.Print("none of your quests can be shared.")
-    else NS.Print(("sharing %d quest%s with your party (one every 1.5s)."):format(n, n == 1 and "" or "s")) end
+    else NS.Print(("sharing %d quest%s with your party (one every 0.5s)."):format(n, n == 1 and "" or "s")) end
 end
 
 StaticPopupDialogs.TWIZQUEST_ABANDON_ALL = {

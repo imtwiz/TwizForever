@@ -292,7 +292,7 @@ local function ShareNext()
         C_QuestLog.SetSelectedQuest(id)
         QuestLogPushQuest()
     end
-    C_Timer.After(1.5, ShareNext)
+    C_Timer.After(0.5, ShareNext)
 end
 
 -- share every quest some synced member lacks (or only those `who` lacks)

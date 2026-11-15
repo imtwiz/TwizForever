@@ -8,7 +8,7 @@ NEW IN 1.6.0
 
 NEW IN 1.5.3
 - Share All button (title bar, or /tq shareall): offers every shareable quest
-  in your log to your party, one every 1.5 seconds.
+  in your log to your party, one every 0.5 seconds.
 - Drop All button (or /tq dropall): abandons every quest in your log after a
   confirmation - it warns you if any are complete and ready to turn in.
   To drop only quests not worth doing, use /tq cleanup.
