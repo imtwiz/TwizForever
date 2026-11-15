@@ -1,5 +1,10 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.9.2
+- When you're in a group and pick up a new quest, it's shared with the group
+  right away (skipped if everyone's synced and already has it). Nothing else
+  is shared on its own. /tq party pickup turns this off.
+
 NEW IN 1.9.1
 - Quests are never shared automatically - not when someone joins, not when
   you start a group plan. Use the Share / Share All buttons. (/tq party share

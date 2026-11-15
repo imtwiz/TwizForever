@@ -441,6 +441,23 @@ function NS.ShareAll()
     return n
 end
 
+-- a quest you just picked up: offer it to the group (skipped when everyone in
+-- the party is synced and already has it)
+function NS.ShareOnPickup(id)
+    if not (id and NS.db and NS.db.shareOnAccept ~= false) or not InGroup() then return end
+    if not (C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id)) then return end
+    local needs = false
+    for _, m in ipairs(Roster()) do
+        local p = NS.party[m.name]
+        if not (p and p.synced and p.quests[id]) then needs = true end
+    end
+    if not needs then return end
+    shareQ[#shareQ + 1] = id
+    if not sharing then sharing = true; C_Timer.After(0.5, ShareNext) end
+    local title = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id)
+    NS.Print("sharing your new quest with the group" .. (title and (": " .. title) or "") .. ".")
+end
+
 AutoShare = function(who)
     if not (NS.db and NS.db.party and NS.db.autoShare) then return end
     local st = NS.PartyStatus()
@@ -554,6 +571,7 @@ ev:RegisterEvent("CHAT_MSG_ADDON")
 ev:RegisterEvent("PLAYER_XP_UPDATE")
 ev:RegisterEvent("PLAYER_LEVEL_UP")
 ev:RegisterEvent("UPDATE_EXHAUSTION")
+ev:RegisterEvent("QUEST_ACCEPTED")
 local logTimer
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if event == "PLAYER_LOGIN" then
@@ -566,6 +584,10 @@ ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
             logTimer = true
             C_Timer.After(0.8, function() logTimer = nil; SendChanges() end)
         end
+    elseif event == "QUEST_ACCEPTED" then
+        -- modern clients pass the quest ID; older ones pass (log index, quest ID)
+        local id = (type(a2) == "number" and a2) or a1
+        NS.ShareOnPickup(id)
     elseif event == "PLAYER_XP_UPDATE" or event == "PLAYER_LEVEL_UP" or event == "UPDATE_EXHAUSTION" then
         NS.QueueXP()
         if NS.RefreshParty then NS.RefreshParty() end

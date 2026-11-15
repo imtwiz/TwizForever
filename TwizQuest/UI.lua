@@ -633,7 +633,7 @@ local function Help()
     print("  /tq size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /tq relearn      - forget learned speeds and rates")
     print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
-    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party share (auto-share, off by default), /tq party help (stay to help)")
+    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party pickup (share quests you pick up, on), /tq party share (share your log on join, off), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
@@ -707,6 +707,9 @@ SlashCmdList.QUESTROUTE = function(msg)
             NS.db.partyXP = not NS.db.partyXP
             NS.Print("party XP bars " .. (NS.db.partyXP and "on" or "off"))
             Refresh()
+        elseif arg == "pickup" then
+            NS.db.shareOnAccept = NS.db.shareOnAccept == false
+            NS.Print("share new quests with the group when you pick them up: " .. (NS.db.shareOnAccept and "on" or "off"))
         elseif arg == "share" then
             NS.db.autoShare = not NS.db.autoShare
             NS.Print("share quests automatically when someone joins: " .. (NS.db.autoShare and "on" or "off (use the Share button)"))
