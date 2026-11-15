@@ -1,5 +1,20 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.12.0 - EVERY PROFESSION, FOR FRIENDS TOO
+- Your crafting professions (Alchemy, Blacksmithing, Engineering, ...) are
+  read by themselves once a session, so friends see all your recipes
+  without you opening each window. The window opens and closes quickly,
+  only out of combat, and only for professions whose recipes are missing
+  or whose skill changed. /tc readall reads them now; /tc readall off stops
+  it at login.
+- Friends' crafting window: search by recipe or by profession name
+  ("herb", "skinning", "alchemy"). Gathering professions (Herbalism,
+  Skinning, Mining, Fishing) show up too, for friends in your group and
+  offline ones.
+- Item tooltips: "Friends can gather: Bob (Herbalism 95)" on herbs,
+  leather and ore, next to "Friends can make".
+- /tc find also searches your friends' recipes and professions.
+
 NEW IN 1.11.1
 - Merged the 1.10.2 party-sync change into the cleaner window: party sync
   shares every profession you have, not just the ones you've opened.

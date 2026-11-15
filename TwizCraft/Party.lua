@@ -357,6 +357,30 @@ function NS.PartyMakers(itemID)
     return out
 end
 
+-- Gathering professions have no recipes, so match by what kind of item it is:
+-- herbs -> Herbalism, leather/hides -> Skinning, ore/stone -> Mining
+local GATHER = { [9] = "Herbalism", [6] = "Skinning", [7] = "Mining" }
+NS.GATHER_BY_SUBCLASS = GATHER
+function NS.GatherProfFor(itemID)
+    local _, _, _, _, _, classID, subID = C_Item.GetItemInfoInstant(itemID)
+    if classID == 7 then return GATHER[subID] end
+end
+
+-- friends who have a profession (any kind): { "Bob (Herbalism 120)", ... }
+function NS.PartyWithProf(profName)
+    local out = {}
+    if not profName then return out end
+    for name, m in pairs(NS.partyProfs) do
+        for _, p in pairs(m.profs or {}) do
+            if p.name == profName then
+                out[#out + 1] = ("%s (%s %d)%s"):format(name, p.name, p.skill or 0, m.online and "" or " |cff999999offline|r")
+            end
+        end
+    end
+    table.sort(out)
+    return out
+end
+
 -- party-wide count of an item: you + every synced member
 function NS.PartyHave(id)
     local total, who = NS.Owned(id), {}
@@ -386,6 +410,9 @@ local function AddMakers(tt, itemID)
     if not itemID or NS.FriendCount() == 0 then return end
     local makers = NS.PartyMakers(itemID)
     if #makers > 0 then tt:AddLine("|cff66ccffFriends can make:|r " .. table.concat(makers, ", "), 1, 1, 1, true) end
+    local gather = NS.GatherProfFor(itemID)
+    local gatherers = NS.PartyWithProf(gather)
+    if #gatherers > 0 then tt:AddLine("|cff66ccffFriends can gather:|r " .. table.concat(gatherers, ", "), 1, 1, 1, true) end
 end
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt, data)
@@ -437,20 +464,24 @@ local function Rows()
         for _, line in ipairs(lines2) do
             local p = m.profs[line]
             local list = {}
+            local profHit = f ~= "" and p.name:lower():find(f, 1, true) ~= nil
             for id, out in pairs(p.recipes) do
                 local rn = RecipeName(line, id, out)
                 local need = p.mats and p.mats[id]
                 local can = NS.PartyCanMake(need)
-                if (f == "" or rn:lower():find(f, 1, true)) and (not makeableOnly or (can or 0) > 0) then
+                if (f == "" or profHit or rn:lower():find(f, 1, true)) and (not makeableOnly or (can or 0) > 0) then
                     list[#list + 1] = { id = id, out = out, name = rn, need = need, can = can }
                 end
             end
             table.sort(list, function(a, b) return a.name < b.name end)
             local key = name .. ":" .. line
             local expanded = open[key] or f ~= "" or makeableOnly
-            if (f == "" and not makeableOnly) or #list > 0 then
-                rows[#rows + 1] = { kind = "prof", key = key, text = ("  %s %s |cff66ff66%d/%d|r |cff999999%d recipes|r"):format(
-                    Count(p.recipes) > 0 and (expanded and "-" or "+") or " ", p.name, p.skill, p.max, Count(p.recipes)) }
+            local gathering = (p.name == "Herbalism" or p.name == "Skinning" or p.name == "Mining" or p.name == "Fishing")
+            if (f == "" and not makeableOnly) or #list > 0 or (profHit and not makeableOnly) then
+                local note = Count(p.recipes) > 0 and ("%d recipes"):format(Count(p.recipes))
+                    or (gathering and "gathering" or "recipes not read yet")
+                rows[#rows + 1] = { kind = "prof", key = key, text = ("  %s %s |cff66ff66%d/%d|r |cff999999%s|r"):format(
+                    Count(p.recipes) > 0 and (expanded and "-" or "+") or " ", p.name, p.skill, p.max, note) }
                 if expanded then
                     for _, r in ipairs(list) do
                         local mine = NS.Char().profs[line]
@@ -485,6 +516,7 @@ local function Draw()
     win.count:SetText(#rows > NLINES and ("%d-%d of %d"):format(offset + 1, math.min(#rows, offset + NLINES), #rows) or "")
 end
 NS._partyRows = function() return Rows() end
+NS._setPartyFilter = function(t) filter = t or "" end
 NS._partyOpen = open
 NS.RefreshPartyCrafters = function() if win and win:IsShown() then Draw() end end
 
@@ -509,7 +541,7 @@ local function Build()
     search:SetScript("OnTextChanged", function(self) filter = self:GetText() or ""; offset = 0; Draw() end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local hint = win:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("RIGHT", search, "LEFT", -8, 0); hint:SetText("search")
+    hint:SetPoint("RIGHT", search, "LEFT", -8, 0); hint:SetText("recipe or profession")
     local cb = CreateFrame("CheckButton", nil, win, "UICheckButtonTemplate")
     cb:SetSize(20, 20); cb:SetPoint("BOTTOMLEFT", 8, 4)
     cb:SetScript("OnClick", function(self) makeableOnly = self:GetChecked() and true or false; offset = 0; Draw() end)
@@ -593,6 +625,35 @@ function NS.FriendsCmd(rest)
     end
     NS.RefreshPartyCrafters()
     if NS.RefreshUI then NS.RefreshUI() end
+end
+
+-- /tc find: friends' recipes and professions (online and offline)
+function NS.FindFriends(text)
+    local found = 0
+    for name, m in pairs(NS.partyProfs) do
+        for line, p in pairs(m.profs or {}) do
+            local profHit = p.name:lower():find(text, 1, true) ~= nil
+            if profHit then
+                found = found + 1
+                print(("|cff66ccff%s|r has %s %d/%d (%s)%s"):format(name, p.name, p.skill or 0, p.max or 0,
+                    Count(p.recipes) > 0 and (Count(p.recipes) .. " recipes")
+                        or ((p.name == "Herbalism" or p.name == "Skinning" or p.name == "Mining" or p.name == "Fishing") and "gathering" or "recipes not read yet"),
+                    m.online and "" or (" - offline, synced " .. Ago(m.at))))
+            end
+            for id, out in pairs(p.recipes or {}) do
+                local rn = RecipeName(line, id, out)
+                local item = out and out > 0 and C_Item.GetItemInfo(out)
+                if not profHit and (rn:lower():find(text, 1, true) or (item and item:lower():find(text, 1, true))) then
+                    found = found + 1
+                    local can = NS.PartyCanMake(p.mats and p.mats[id])
+                    print(("|cff66ccff%s|r can make |cffffd100%s|r (%s %d)%s%s"):format(name, rn, p.name, p.skill or 0,
+                        can and can > 0 and (" - materials for " .. can) or "",
+                        m.online and "" or (" - offline, synced " .. Ago(m.at))))
+                end
+            end
+        end
+    end
+    return found
 end
 
 function NS.TogglePartyCrafters()

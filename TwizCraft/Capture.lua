@@ -140,7 +140,7 @@ Capture = function()
     if n == 0 then return end
     local c = NS.Char()
     local before = c.profs[line] and c.profs[line].count or 0
-    c.profs[line] = { name = name, line = line, recipes = recipes, count = n, at = time() }
+    c.profs[line] = { name = name, line = line, recipes = recipes, count = n, at = time(), skill = skill }
     if n ~= before then NS.Print(("remembered %d %s recipes."):format(n, name)) end
     NS.current = line
     if NS.Replan then NS.Replan() end
@@ -199,4 +199,78 @@ f:SetScript("OnEvent", function(_, event, a1, a2, a3)
     if queued then return end
     queued = true
     C_Timer.After(0.5, function() queued = false; pcall(Capture) end)
+end)
+
+------------------------------------------------------------------------
+-- Read every crafting profession by itself (Alchemy, Blacksmithing, ...), so
+-- friends see all your recipes without you opening each window. Runs once a
+-- session, out of combat, only for professions whose recipes are missing or
+-- whose skill moved since they were read. The window opens and closes quickly.
+------------------------------------------------------------------------
+local GATHERING = { Herbalism = true, Skinning = true, Mining = true, Fishing = true, Archaeology = true }
+local reading, readQueue = false, nil
+
+local function WindowOpen()
+    local frame = ProfessionsFrame or TradeSkillFrame
+    return frame and frame:IsShown()
+end
+
+local function CloseProfession()
+    if C_TradeSkillUI and C_TradeSkillUI.CloseTradeSkill then pcall(C_TradeSkillUI.CloseTradeSkill) end
+    local frame = ProfessionsFrame or TradeSkillFrame
+    if frame and frame:IsShown() and HideUIPanel then pcall(HideUIPanel, frame) end
+end
+
+local function ReadNext()
+    if not readQueue or #readQueue == 0 then
+        if reading then
+            reading = false
+            if NS.PartyRecipesChanged then NS.PartyRecipesChanged() end
+        end
+        return
+    end
+    if InCombatLockdown and InCombatLockdown() then C_Timer.After(5, ReadNext); return end
+    if WindowOpen() then C_Timer.After(5, ReadNext); return end -- you're using a profession: wait
+    local p = table.remove(readQueue, 1)
+    if not (C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill) or not pcall(C_TradeSkillUI.OpenTradeSkill, p.line) then
+        return C_Timer.After(0.2, ReadNext)
+    end
+    local tries = 0
+    local function Try()
+        tries = tries + 1
+        local n = NS.Capture and NS.Capture()
+        if (n and n > 0) or tries >= 6 then
+            CloseProfession()
+            C_Timer.After(0.5, ReadNext)
+        else
+            C_Timer.After(0.5, Try)
+        end
+    end
+    C_Timer.After(0.6, Try)
+end
+
+function NS.ReadAllProfessions(force)
+    if reading then return end
+    local c = NS.Char()
+    readQueue = {}
+    for _, p in ipairs(NS.Professions()) do
+        if p.line and not GATHERING[p.name] then
+            local have = c.profs[p.line]
+            if force or not have or (have.count or 0) == 0 or (have.skill and have.skill ~= p.skill) then
+                readQueue[#readQueue + 1] = p
+            end
+        end
+    end
+    if #readQueue == 0 then return end
+    reading = true
+    ReadNext()
+end
+
+local readEv = CreateFrame("Frame")
+readEv:RegisterEvent("PLAYER_ENTERING_WORLD")
+readEv:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    C_Timer.After(12, function()
+        if NS.db and NS.db.autoRead ~= false then NS.ReadAllProfessions() end
+    end)
 end)

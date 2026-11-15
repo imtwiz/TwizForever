@@ -560,6 +560,14 @@ SlashCmdList.CRAFTROUTE = function(msg)
         NS.db.wheelCraft = NS.db.wheelCraft == false
         NS.Print("mouse wheel = Craft All while a profession window is open: " .. (NS.db.wheelCraft and "on" or "off"))
         NS.UpdateCraftWheel()
+    elseif cmd == "readall" then
+        if rest == "off" or rest == "on" then
+            NS.db.autoRead = rest == "on"
+            NS.Print("read all professions at login: " .. rest)
+        else
+            NS.Print("reading every crafting profession's recipes...")
+            NS.ReadAllProfessions(true)
+        end
     elseif cmd == "refresh" then
         NS.RefreshAll()
     elseif cmd == "find" then
@@ -593,6 +601,7 @@ SlashCmdList.CRAFTROUTE = function(msg)
         print("  /tc odds       skill-up odds learned from your crafting")
         print("  /tc buy        at a vendor: buy everything on your list it sells")
         print("  /tc refresh    re-read recipes (profession window open) and re-plan")
+        print("  /tc readall    read every crafting profession now (on|off: do it at login)")
         print("  /tc find fish  everything TwizCraft knows about matching recipes/ingredients")
         print("  /tc size       reset the window size (drag the bottom-right corner to resize)")
     end
@@ -605,7 +614,7 @@ end
 function NS.Find(text)
     text = (text or ""):lower()
     local c = NS.Char()
-    if not next(c.profs) then
+    if not next(c.profs) and text == "" then
         NS.Print("no recipes recorded yet - open a profession window, then click Refresh.")
         return
     end
@@ -643,7 +652,8 @@ function NS.Find(text)
             end
         end
     end
+    if NS.FindFriends then found = found + NS.FindFriends(text) end
     if found == 0 then
-        NS.Print(("no recorded recipe or ingredient matches '%s'. Open that profession's window and click Refresh."):format(text))
+        NS.Print(("no recipe, ingredient or profession you or your friends have matches '%s'."):format(text))
     end
 end
