@@ -1,11 +1,16 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.9.1
+- Quests are never shared automatically - not when someone joins, not when
+  you start a group plan. Use the Share / Share All buttons. (/tq party share
+  turns sharing on join back on if you ever want it.)
+
 NEW IN 1.9.0 - GROUP PLAN
 - Group button (title bar, shown when someone in your party syncs; or
   /tq group): plans the fastest XP for the whole group. Each quest counts the
   XP of everyone who has it, can be shared it, or is the right level to pick
   it up, so quests you share rise to the top. The route is sent to your
-  party - their TwizQuest follows it - and quests they're missing are shared.
+  party - their TwizQuest follows it. Click Share to offer quests they lack.
   Summary shows the group's XP/hr. Click Solo (or /tq solo) to go back; if
   the person who started it goes solo or leaves, everyone goes back.
 - While you're synced with your party nothing is dropped: no cleanup
@@ -64,7 +69,7 @@ automatically (hidden addon messages, only what changed).
   quests everyone can turn in together, quests they have that you don't.
   Hover it for details and where each friend is heading next.
 - Share button (or /tq share) offers your quests they don't have. New members
-  get them offered automatically once (/tq party share to toggle).
+  are never offered automatically unless you turn it on (/tq party share).
 - Your route stays at a kill spot while a friend still needs kills or drops on
   a quest you've finished: "Kill 5 Kobold Vermin (helping Bob)". Shared credit
   means it costs you little and keeps you together (/tq party help to toggle).

@@ -442,7 +442,7 @@ function NS.ShareAll()
 end
 
 AutoShare = function(who)
-    if not (NS.db and NS.db.party and NS.db.partyShare) then return end
+    if not (NS.db and NS.db.party and NS.db.autoShare) then return end
     local st = NS.PartyStatus()
     local fresh = false
     for _, m in ipairs(st.missing) do
@@ -493,8 +493,7 @@ function NS.SyncedCount()
     return n
 end
 
--- you started it: send the route's quests (in order) to the party, then share
--- the ones they're missing
+-- you started it: send the route's quests (in order) to the party
 function NS.SendGroupPlan(route)
     local ids, seen = {}, {}
     for _, st in ipairs(route or {}) do
@@ -507,7 +506,13 @@ function NS.SendGroupPlan(route)
         if #chunk >= 30 then break end   -- one message: the first 30 quests of the route
     end
     Send("G|" .. table.concat(chunk, ","))
-    C_Timer.After(1, function() NS.ShareMissing() end)
+    -- quests are only shared when you click Share; just say how many they're missing
+    C_Timer.After(1, function()
+        local st = NS.PartyStatus()
+        if #st.missing > 0 then
+            NS.Print(("your party is missing %d of these quests - click Share to offer them."):format(#st.missing))
+        end
+    end)
 end
 
 function NS.StartGroupPlan()

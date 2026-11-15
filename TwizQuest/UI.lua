@@ -332,7 +332,7 @@ local function Build()
             return (NS.groupPlan and ("Following " .. NS.groupPlan.from .. "'s group plan") or "Your group plan is on")
                 .. "\nClick: back to your own route"
         end
-        return "Plans the fastest XP for the whole group: quests count the XP of everyone who has them, can be shared them, or can pick them up\nSends the route to your party and shares the quests they're missing\nEveryone needs TwizQuest"
+        return "Plans the fastest XP for the whole group: quests count the XP of everyone who has them, can be shared them, or can pick them up\nSends the route to your party (click Share to offer quests they're missing)\nEveryone needs TwizQuest"
     end)
     frame.groupBtn:Hide()
 
@@ -633,7 +633,7 @@ local function Help()
     print("  /tq size         - reset the window size (drag the bottom-right corner to resize)")
     print("  /tq relearn      - forget learned speeds and rates")
     print("  /tq cleanup      - quests in your log that aren't worth their slot; /tq abandon drops them")
-    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party share (auto-share), /tq party help (stay to help)")
+    print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party share (auto-share, off by default), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq minimap      - show/hide the minimap button")
@@ -708,8 +708,8 @@ SlashCmdList.QUESTROUTE = function(msg)
             NS.Print("party XP bars " .. (NS.db.partyXP and "on" or "off"))
             Refresh()
         elseif arg == "share" then
-            NS.db.partyShare = not NS.db.partyShare
-            NS.Print("auto-share with new party members " .. (NS.db.partyShare and "on" or "off"))
+            NS.db.autoShare = not NS.db.autoShare
+            NS.Print("share quests automatically when someone joins: " .. (NS.db.autoShare and "on" or "off (use the Share button)"))
         elseif arg == "sync" then
             if NS.PartyResync() then NS.Print("asked your party to resync quests.") else NS.Print("you're not in a party.") end
         elseif arg == "help" then
