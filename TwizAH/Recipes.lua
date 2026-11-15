@@ -249,9 +249,23 @@ local function Quote(r, all, retried)
     if commodity then
         StartCommodity()
     elseif l and l.rows[1] then
-        -- prices were refreshed a moment ago: ready to buy straight away
+        -- prices were refreshed a moment ago: ready to buy straight away, and
+        -- search it again right now so the AH has this listing fresh when you confirm
         b.fromLive = true
         Ready(b, l.rows[1].unit, l.rows[1].auctionID)
+        if ns.recipeBuy ~= b then return end
+        b.fresh = function(rows)
+            StoreLive(r.itemID, rows)
+            if ns.recipeBuy ~= b or b.stage ~= "ready" or rows == nil then return end
+            local nl = live[r.itemID]
+            local row = nl and not nl.commodity and nl.rows[1]
+            if not row then
+                skipped[r.itemID] = true
+                return Done(Name(r.itemID) .. " isn't on the AH any more. Skipped.")
+            end
+            if row.auctionID ~= b.auctionID or row.unit ~= b.price then Ready(b, row.unit, row.auctionID) end
+        end
+        ns.QueueLookup(r.itemID, nil, false, b.fresh, true)
         return
     else
         b.lookup = function(rows)
@@ -286,17 +300,39 @@ local function Quote(r, all, retried)
     ns.UI.Refresh()
 end
 
+-- The purchase went through when your gold drops by the price (the AH's own
+-- "purchase complete" signals aren't reliable on every client).
+local function PaidFor(b)
+    return b.moneyBefore and GetMoney() <= b.moneyBefore - math.floor(b.price * 0.9)
+end
+
+local function NotThrough(b)
+    -- gold didn't move, so nothing was bought: forget that listing and look again
+    local l = live[b.itemID]
+    if l then
+        for i, row in ipairs(l.rows) do if row.auctionID == b.auctionID then table.remove(l.rows, i); break end end
+    end
+    live[b.itemID] = nil
+    ns.recipeBuy = nil
+    if not b.retried then
+        return Quote(b.r, b.all, true)
+    end
+    skipped[b.itemID] = true
+    Done(Name(b.itemID) .. " wouldn't go through - skipped.")
+end
+
 local function Confirm(b)
     if b.price > GetMoney() then return Done("Not enough gold for " .. Name(b.itemID) .. ".", true) end
-    b.stage, b.at = "buying", GetTime()
+    b.stage, b.at, b.moneyBefore = "buying", GetTime(), GetMoney()
     if b.commodity then
         C_AuctionHouse.ConfirmCommoditiesPurchase(b.itemID, 1)
     else
         C_AuctionHouse.PlaceBid(b.auctionID, b.price)
     end
-    C_Timer.After(8, function()
+    C_Timer.After(5, function()
         if ns.recipeBuy == b and b.stage == "buying" then
-            Done("No answer from the AH about " .. Name(b.itemID) .. " - check your mailbox before buying it again.", true)
+            if PaidFor(b) then return Bought(b) end
+            NotThrough(b)
         end
     end)
     ns.UI.Refresh()
@@ -551,7 +587,7 @@ end)
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE", "COMMODITY_PURCHASE_SUCCEEDED",
     "COMMODITY_PURCHASE_FAILED", "AUCTION_HOUSE_PURCHASE_COMPLETED", "AUCTION_HOUSE_SHOW_ERROR",
-    "AUCTION_HOUSE_CLOSED", "AUCTION_HOUSE_SHOW", "CHAT_MSG_SYSTEM", "NEW_RECIPE_LEARNED", "SKILL_LINES_CHANGED" }) do
+    "AUCTION_HOUSE_CLOSED", "AUCTION_HOUSE_SHOW", "CHAT_MSG_SYSTEM", "PLAYER_MONEY", "NEW_RECIPE_LEARNED", "SKILL_LINES_CHANGED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
@@ -564,6 +600,8 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         if b and b.commodity and b.stage == "buying" then Bought(b) end
     elseif event == "COMMODITY_PURCHASE_FAILED" then
         if b and b.commodity and b.stage == "buying" then skipped[b.itemID] = true; Done("Purchase failed for " .. Name(b.itemID) .. " - skipped.") end
+    elseif event == "PLAYER_MONEY" then
+        if b and b.stage == "buying" and PaidFor(b) then Bought(b) end
     elseif event == "AUCTION_HOUSE_PURCHASE_COMPLETED" then
         if b and not b.commodity and b.stage == "buying" and (not a1 or a1 == b.auctionID) then Bought(b) end
     elseif event == "AUCTION_HOUSE_SHOW_ERROR" then

@@ -88,6 +88,15 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.4
+  - Fixes "No answer from the AH about <recipe>": a purchase now counts as
+    done when your gold drops by its price, instead of waiting for an AH
+    message this client doesn't always send. If your gold doesn't move, the
+    recipe is looked up again and the next press buys it (or it's skipped
+    after a second try) - the run keeps going instead of stopping.
+  - When Buy All uses refreshed prices it also re-searches that recipe right
+    away, so the AH has the listing fresh when you confirm.
+
 WHAT'S NEW IN 2.4.3
   - Recipes tab: "Refresh prices" looks every recipe on the list up on the
     AH right now, drops the ones that sold and updates prices. It also runs

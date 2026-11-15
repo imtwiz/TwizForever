@@ -15,9 +15,12 @@ end
 recipe(7001, "Pattern: One", 1000)
 recipe(7002, "Pattern: Sold Since Scan", 1200, {})
 recipe(7003, "Pattern: Two", 1500)
+-- this client never sends a "purchase completed" event: only your gold changes.
+-- The first try at Pattern: Two is silently ignored (a stale listing).
+local ignoredOnce = false
 SIM.onPlaceBid = function(auctionID, amount)
-    SIM.money = SIM.money - amount
-    C_Timer.After(0.3, function() SIM.Fire("AUCTION_HOUSE_PURCHASE_COMPLETED", auctionID) end)
+    if auctionID == 70030 and not ignoredOnce then ignoredOnce = true; return end
+    C_Timer.After(0.4, function() SIM.money = SIM.money - amount; SIM.Fire("PLAYER_MONEY") end)
 end
 AuctionHouseFrame.__shown = true; SIM.Fire("AUCTION_HOUSE_SHOW"); SIM.Advance(1)
 ns.S.recipeBudget = 100000; ns.db.recipeSpent = 0
@@ -35,7 +38,7 @@ local realSend = C_AuctionHouse.SendSearchQuery
 C_AuctionHouse.SendSearchQuery = function(...) searches = searches + 1 return realSend(...) end
 btns[1]:Click(); SIM.Advance(0.1)
 L("first press -> stage " .. tostring(ns.recipeBuy and ns.recipeBuy.stage))
-for i = 1, 6 do if ns.recipeRun then SIM.Wheel(); SIM.Advance(0.5) end end
+for i = 1, 30 do if ns.recipeRun then SIM.Wheel(); SIM.Advance(0.5) end end
 L(("bought %d, searches during run %d, spent %d"):format(#(SIM.bids or {}), searches, ns.db.recipeSpent))
 -- recipes arrive in the bags (from the mailbox): Learn button + mouse wheel at the mailbox
 AuctionHouseFrame.__shown = false; SIM.Fire("AUCTION_HOUSE_CLOSED"); SIM.Advance(1)
