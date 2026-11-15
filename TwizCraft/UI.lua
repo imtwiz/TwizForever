@@ -40,9 +40,10 @@ end
 local function Refresh()
     if not frame or not frame:IsShown() then return end
     if frame.partyBtn then
-        local n = NS.PartyCrafterCount and NS.PartyCrafterCount() or 0
-        frame.partyBtn:SetText(("Party (%d)"):format(n))
-        frame.partyBtn:SetShown(n > 0)
+        local online = NS.PartyCrafterCount and NS.PartyCrafterCount() or 0
+        local all = NS.FriendCount and NS.FriendCount() or 0
+        frame.partyBtn:SetText(online > 0 and ("Party (%d)"):format(online) or ("Friends (%d)"):format(all))
+        frame.partyBtn:SetShown(all > 0)
     end
     -- profession tabs
     local profs, i = NS.Professions(), 0
@@ -385,7 +386,7 @@ local function Build()
     frame.partyBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("Party crafters")
-        GameTooltip:AddLine("Professions and known recipes of party members who run TwizCraft. Item tooltips also show who can make an item.", 1, 1, 1, true)
+        GameTooltip:AddLine("Professions, recipes and materials of friends who run TwizCraft - kept after they leave your group. Item tooltips also show who can make an item.", 1, 1, 1, true)
         GameTooltip:Show()
     end)
     frame.partyBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -555,6 +556,8 @@ SlashCmdList.CRAFTROUTE = function(msg)
         else frame:Show(); NS.db.shown = true; NS.Replan(true) end
     elseif cmd == "party" then
         NS.TogglePartyCrafters()
+    elseif cmd == "friends" then
+        NS.FriendsCmd(rest)
     elseif cmd == "craftall" or cmd == "all" then
         NS.CraftAll()
     elseif cmd == "wheel" then
@@ -585,7 +588,8 @@ SlashCmdList.CRAFTROUTE = function(msg)
     else
         NS.Print("commands:")
         print("  /tc            show or hide the window")
-        print("  /tc party      professions and recipes of party members running TwizCraft")
+        print("  /tc party      friends' professions, recipes and materials (kept after they leave)")
+        print("  /tc friends    list saved friends; /tc friends forget <name>")
         print("  /tc craftall   craft the next batch of everything you can make (Craft All button)")
         print("  /tc wheel      mouse wheel presses Craft All while a profession window is open (on)")
         print("  /tc target 225 plan up to this skill instead of your cap (/tc target to clear)")

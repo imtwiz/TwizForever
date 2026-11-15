@@ -1,5 +1,17 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.10.0 - FRIENDS DATABASE
+- Friends' professions, recipes and material counts are saved in your
+  TwizCraft data, so they stay after a friend leaves your group or logs off.
+  Each time you group again, it re-syncs and updates them.
+- The window (Party/Friends button, /tc party) lists friends in your group
+  first, then offline ones with when they last synced. Their materials count
+  toward "how many can we make" (tick off "Count offline friends" to use only
+  people in your group). Tooltips show how old offline counts are.
+- Item tooltips say "Friends can make: Bob (Engineering)".
+- /tc friends lists saved friends; /tc friends forget <name>;
+  /tc friends clear removes everyone who's offline.
+
 NEW IN 1.9.0 - PARTY MATERIALS
 - Party sharing is on automatically when you group with someone running
   TwizCraft: professions, recipes (with their ingredients) and now crafting

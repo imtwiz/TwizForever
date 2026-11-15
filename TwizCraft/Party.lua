@@ -4,6 +4,8 @@
 -- your party can make that item. Members also share how many crafting
 -- materials they hold (bags + bank + mailbox), so the window shows how many
 -- of every recipe the party can make with everyone's materials combined.
+-- Everything is kept in your saved data, so friends you've grouped with stay
+-- in the list (marked offline, with when they last synced) after they leave.
 local ADDON, NS = ...
 
 local PREFIX = "TWZC"
@@ -11,6 +13,15 @@ local VERSION = 2
 NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, recipes = { [id] = outItemID }, mats = { [id] = { made, {rid, qty}... } } } }, inv = { [itemID] = n }, synced }
 
 local function Me() return UnitName("player") end
+local function Ago(t)
+    local d = time() - (t or 0)
+    if d < 90 then return "just now" end
+    if d < 3600 then return math.floor(d / 60) .. "m ago" end
+    if d < 86400 then return math.floor(d / 3600) .. "h ago" end
+    return math.floor(d / 86400) .. "d ago"
+end
+-- offline friends' materials count unless you untick "include offline friends"
+local function Counts(m) return m.online or not (NS.db and NS.db.friendsOnlineOnly) end
 local function Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
 -- names are compared without the realm: "Bob-SomeRealm" and "Bob" are the same person
 local function Short(name) return name and (name:gsub("%-.*$", "")) or name end
@@ -173,6 +184,7 @@ local function OnMessage(msg, sender)
     if not kind then return end
     local m = NS.partyProfs[who]
     if not m then m = { profs = {} }; NS.partyProfs[who] = m end
+    m.online, m.at = true, time()
     if kind == "H" then
         if GetTime() - lastFull > 3 then lastFull = GetTime(); C_Timer.After(0.5 + math.random(), SendAll) end
     elseif kind == "B" then
@@ -212,8 +224,8 @@ local function OnMessage(msg, sender)
     elseif kind == "E" then
         if m.incoming then m.profs, m.incoming = m.incoming, nil end
         NS.PartyInvChanged()
-        local first = not m.synced
-        m.synced = true
+        local first = not m.sessionSynced
+        m.synced, m.sessionSynced = true, true
         if first then
             local names = {}
             for _, p in pairs(m.profs) do names[#names + 1] = ("%s %d"):format(p.name, p.skill) end
@@ -230,8 +242,11 @@ end
 ------------------------------------------------------------------------
 local members = {}
 local function Roster()
-    for name in pairs(NS.partyProfs) do
-        if not (InGroup() and PartyNames()[name]) then NS.partyProfs[name] = nil end
+    local here = InGroup() and PartyNames() or {}
+    for name, m in pairs(NS.partyProfs) do
+        local was = m.online
+        m.online = here[name] and true or false
+        if was and not m.online then m.sessionSynced = nil end
     end
     if not InGroup() then wipe(members); wipe(sentSig); if NS.RefreshUI then NS.RefreshUI() end return end
     local now, joined = {}, false
@@ -247,7 +262,14 @@ local function Roster()
     if NS.RefreshUI then NS.RefreshUI() end
 end
 
+-- synced friends in your group right now
 function NS.PartyCrafterCount()
+    local n = 0
+    for _, m in pairs(NS.partyProfs) do if m.synced and m.online then n = n + 1 end end
+    return n
+end
+-- every friend in your saved data
+function NS.FriendCount()
     local n = 0
     for _, m in pairs(NS.partyProfs) do if m.synced then n = n + 1 end end
     return n
@@ -259,7 +281,10 @@ function NS.PartyMakers(itemID)
     for name, m in pairs(NS.partyProfs) do
         for _, p in pairs(m.profs) do
             for _, o in pairs(p.recipes) do
-                if o == itemID then out[#out + 1] = ("%s (%s)"):format(name, p.name); break end
+                if o == itemID then
+                    out[#out + 1] = ("%s (%s)%s"):format(name, p.name, m.online and "" or " |cff999999offline|r")
+                    break
+                end
             end
         end
     end
@@ -273,7 +298,10 @@ function NS.PartyHave(id)
     if total > 0 then who[#who + 1] = ("you %d"):format(total) end
     for name, m in pairs(NS.partyProfs) do
         local n = m.inv and m.inv[id] or 0
-        if n > 0 then total = total + n; who[#who + 1] = ("%s %d"):format(name, n) end
+        if n > 0 and Counts(m) then
+            total = total + n
+            who[#who + 1] = ("%s %d%s"):format(name, n, m.online and "" or (" (" .. Ago(m.at) .. ")"))
+        end
     end
     return total, who
 end
@@ -290,9 +318,9 @@ end
 -- Tooltips: "Party can make: Bob (Engineering)"
 ------------------------------------------------------------------------
 local function AddMakers(tt, itemID)
-    if not itemID or NS.PartyCrafterCount() == 0 then return end
+    if not itemID or NS.FriendCount() == 0 then return end
     local makers = NS.PartyMakers(itemID)
-    if #makers > 0 then tt:AddLine("|cff66ccffParty can make:|r " .. table.concat(makers, ", "), 1, 1, 1, true) end
+    if #makers > 0 then tt:AddLine("|cff66ccffFriends can make:|r " .. table.concat(makers, ", "), 1, 1, 1, true) end
 end
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt, data)
@@ -328,11 +356,16 @@ local function Rows()
     local rows = {}
     local names = {}
     for name, m in pairs(NS.partyProfs) do if m.synced then names[#names + 1] = name end end
-    table.sort(names)
+    table.sort(names, function(a, b)
+        local ma, mb = NS.partyProfs[a], NS.partyProfs[b]
+        if (ma.online and true or false) ~= (mb.online and true or false) then return ma.online and true or false end
+        return a < b
+    end)
     local f = filter:lower()
     for _, name in ipairs(names) do
         local m = NS.partyProfs[name]
-        rows[#rows + 1] = { kind = "member", text = ("|cffffd100%s|r"):format(name) }
+        rows[#rows + 1] = { kind = "member", text = ("|cffffd100%s|r %s"):format(name,
+            m.online and "|cff66ff66in your group|r" or ("|cff999999offline - synced " .. Ago(m.at) .. "|r")) }
         local lines2 = {}
         for line in pairs(m.profs) do lines2[#lines2 + 1] = line end
         table.sort(lines2, function(a, b) return m.profs[a].name < m.profs[b].name end)
@@ -365,7 +398,7 @@ local function Rows()
             end
         end
     end
-    if #rows == 0 then rows[1] = { kind = "info", text = "|cff999999No one in your party runs TwizCraft yet.|r" } end
+    if #rows == 0 then rows[1] = { kind = "info", text = "|cff999999No friends synced yet - group with someone running TwizCraft.|r" } end
     return rows
 end
 
@@ -392,7 +425,7 @@ NS.RefreshPartyCrafters = function() if win and win:IsShown() then Draw() end en
 
 local function Build()
     win = CreateFrame("Frame", "TwizCraftPartyFrame", UIParent, "BackdropTemplate")
-    win:SetSize(400, 64 + NLINES * LINE_H)
+    win:SetSize(420, 66 + NLINES * LINE_H)
     win:SetPoint("CENTER", 200, 40)
     win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton"); win:SetClampedToScreen(true)
     win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
@@ -403,7 +436,7 @@ local function Build()
         win:SetBackdropColor(0, 0, 0, 0.9)
     end
     local title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 10, -8); title:SetText("Party crafters")
+    title:SetPoint("TOPLEFT", 10, -8); title:SetText("Friends' crafting")
     local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", 2, 2)
     local search = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
@@ -416,7 +449,13 @@ local function Build()
     cb:SetSize(20, 20); cb:SetPoint("BOTTOMLEFT", 8, 4)
     cb:SetScript("OnClick", function(self) makeableOnly = self:GetChecked() and true or false; offset = 0; Draw() end)
     local cbt = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    cbt:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbt:SetText("Only what the party has materials for")
+    cbt:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbt:SetText("Only makeable")
+    local cb2 = CreateFrame("CheckButton", nil, win, "UICheckButtonTemplate")
+    cb2:SetSize(20, 20); cb2:SetPoint("LEFT", cbt, "RIGHT", 10, 0)
+    cb2:SetChecked(not NS.db.friendsOnlineOnly)
+    cb2:SetScript("OnClick", function(self) NS.db.friendsOnlineOnly = not self:GetChecked(); Draw() end)
+    local cb2t = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    cb2t:SetPoint("LEFT", cb2, "RIGHT", 2, 0); cb2t:SetText("Count offline friends")
     win.count = win:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     win.count:SetPoint("BOTTOMRIGHT", -10, 8)
     for i = 1, NLINES do
@@ -442,7 +481,7 @@ local function Build()
                 if d.out and d.out > 0 then GameTooltip:SetItemByID(d.out) end
                 if d.need then
                     GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(("Made by %s - materials across the party:"):format(d.crafter), 0.4, 0.8, 1)
+                    GameTooltip:AddLine(("Made by %s - materials you and your friends have:"):format(d.crafter), 0.4, 0.8, 1)
                     for _, g in ipairs(d.need) do
                         local have, who = NS.PartyHave(g[1])
                         local ok = have >= g[2]
@@ -462,6 +501,35 @@ local function Build()
     win:Hide()
 end
 
+function NS.FriendsCmd(rest)
+    local cmd, arg = (rest or ""):match("^(%S*)%s*(.-)$")
+    cmd = (cmd or ""):lower()
+    if cmd == "forget" and arg ~= "" then
+        local key
+        for name in pairs(NS.partyProfs) do if name:lower() == arg:lower() then key = name end end
+        if key then NS.partyProfs[key] = nil; NS.Print("forgot " .. key .. ".") else NS.Print("no saved friend called " .. arg .. ".") end
+    elseif cmd == "clear" then
+        for name, m in pairs(NS.partyProfs) do if not m.online then NS.partyProfs[name] = nil end end
+        NS.Print("cleared offline friends.")
+    else
+        local names = {}
+        for name, m in pairs(NS.partyProfs) do
+            if m.synced then
+                local profs = {}
+                for _, p in pairs(m.profs or {}) do profs[#profs + 1] = ("%s %d"):format(p.name, p.skill) end
+                names[#names + 1] = ("  %s - %s (%s, %d materials)"):format(name, table.concat(profs, ", "),
+                    m.online and "in your group" or ("synced " .. Ago(m.at)), Count(m.inv))
+            end
+        end
+        table.sort(names)
+        NS.Print(("%d friend%s saved:"):format(#names, #names == 1 and "" or "s"))
+        for _, l in ipairs(names) do print(l) end
+        print("  /tc friends forget <name>, /tc friends clear (removes offline ones)")
+    end
+    NS.RefreshPartyCrafters()
+    if NS.RefreshUI then NS.RefreshUI() end
+end
+
 function NS.TogglePartyCrafters()
     if not win then Build() end
     if win:IsShown() then win:Hide() else win:Show(); Draw() end
@@ -479,6 +547,11 @@ ev:RegisterEvent("BANKFRAME_CLOSED")
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     if event == "BAG_UPDATE_DELAYED" or event == "BANKFRAME_CLOSED" then NS.PartyInvChanged(); return end
     if event == "PLAYER_LOGIN" then
+        -- friends you've synced with before live in your saved data
+        NS.db.friends = NS.db.friends or {}
+        for name, m in pairs(NS.partyProfs) do NS.db.friends[name] = m end
+        NS.partyProfs = NS.db.friends
+        for _, m in pairs(NS.partyProfs) do m.online, m.incoming, m.sessionSynced = false, nil, nil end
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
         C_Timer.After(4, Roster)
     elseif event == "GROUP_ROSTER_UPDATE" then

@@ -4,7 +4,8 @@ C_ChatInfo = C_ChatInfo or {}
 C_ChatInfo.RegisterAddonMessagePrefix = function() return true end
 C_ChatInfo.SendAddonMessage = function(p, m) if p == "TWZC" then SIM.sent[#SIM.sent + 1] = m end end
 IsInGroup = function() return SIM.inGroup end
-UnitInParty = function() return false end   -- the game's name check: never relied on
+UnitInParty = function() return false end
+time = function() return math.floor(SIM.gt) + 1800000000 end   -- the game's name check: never relied on
 local realUN = UnitName
 UnitName = function(u) local i = u and tonumber(u:match("^party(%d)$") or "") if i then return SIM.partyNames[i] end return realUN(u) end
 GetSpellInfo = function(id) return "Spell " .. id end
@@ -58,4 +59,19 @@ L("inventory update sent: " .. table.concat(SIM.sent, "  ||  "))
 -- Bob leaves
 SIM.inGroup, SIM.partyNames = false, {}
 SIM.Fire("GROUP_ROSTER_UPDATE"); SIM.Advance(1)
-L("after Bob left: crafters " .. NS.PartyCrafterCount())
+L("after Bob left: in group " .. NS.PartyCrafterCount() .. ", saved friends " .. NS.FriendCount())
+L("saved in CraftRouteDB.friends: " .. tostring(CraftRouteDB.friends and CraftRouteDB.friends.Bob ~= nil))
+SIM.Advance(7200)
+local have, who = NS.PartyHave(2836)
+L(("Coarse Stone with offline Bob: %d (%s)"):format(have, table.concat(who, ", ")))
+L("rows: " .. rowtext())
+CraftRouteDB.friendsOnlineOnly = true
+have = NS.PartyHave(2836)
+L("counting only online friends: " .. have)
+CraftRouteDB.friendsOnlineOnly = nil
+SlashCmdList.CRAFTROUTE("friends")
+-- next login: still there
+SIM.Fire("PLAYER_LOGIN"); SIM.Advance(5)
+L("after relog: saved friends " .. NS.FriendCount() .. ", Bob online " .. tostring(NS.partyProfs.Bob.online))
+SlashCmdList.CRAFTROUTE("friends forget bob")
+L("after forget: " .. NS.FriendCount())
