@@ -1,12 +1,14 @@
 -- TwizCraft party crafters: party members running TwizCraft share their
 -- professions, skill levels and learned recipes. Browse them in the Party
 -- window (/tc party or the Party button), and item tooltips tell you who in
--- your party can make that item.
+-- your party can make that item. Members also share how many crafting
+-- materials they hold (bags + bank + mailbox), so the window shows how many
+-- of every recipe the party can make with everyone's materials combined.
 local ADDON, NS = ...
 
 local PREFIX = "TWZC"
-local VERSION = 1
-NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, recipes = { [id] = outItemID } } }, synced }
+local VERSION = 2
+NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, recipes = { [id] = outItemID }, mats = { [id] = { made, {rid, qty}... } } } }, inv = { [itemID] = n }, synced }
 
 local function Me() return UnitName("player") end
 local function Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
@@ -57,7 +59,11 @@ local function Mine()
         if line ~= 0 and p.name and p.name ~= "" then
             local list = {}
             for id, r in pairs(p.recipes or {}) do
-                if r.learned then list[#list + 1] = id .. ":" .. (r.out or 0) end
+                if r.learned then
+                    local mats = {}
+                    for _, g in ipairs(r.reagents or {}) do mats[#mats + 1] = g.id .. "*" .. (g.qty or 1) end
+                    list[#list + 1] = ("%d:%d:%d:%s"):format(id, r.out or 0, r.made or 1, table.concat(mats, "/"))
+                end
             end
             table.sort(list)
             local lp = live[p.name]
@@ -84,10 +90,12 @@ local function SendProf(line, p)
     sentSig[line] = p.sig
 end
 
+local SendInvFull
 local function SendAll()
     Send("B|" .. VERSION)
     for line, p in pairs(Mine()) do SendProf(line, p) end
     Send("E")
+    if SendInvFull then SendInvFull() end
 end
 
 -- after a profession window is read: send only professions that changed
@@ -101,6 +109,57 @@ function NS.PartyRecipesChanged()
             if sentSig[line] ~= p.sig then SendProf(line, p) end
         end
     end)
+end
+
+------------------------------------------------------------------------
+-- Your materials: how many of each item that any recipe in the party uses
+-- (yours or a party member's) you hold in bags + bank + mailbox
+------------------------------------------------------------------------
+local function MaterialIDs()
+    local ids = {}
+    for _, p in pairs(NS.Char().profs or {}) do
+        for _, r in pairs(p.recipes or {}) do
+            if r.learned then for _, g in ipairs(r.reagents or {}) do ids[g.id] = true end end
+        end
+    end
+    for _, m in pairs(NS.partyProfs) do
+        for _, p in pairs(m.profs or {}) do
+            for _, need in pairs(p.mats or {}) do
+                for _, g in ipairs(need) do ids[g[1]] = true end
+            end
+        end
+    end
+    return ids
+end
+
+local sentInv = {}
+local function SendInv(full)
+    local chunk, len = {}, 0
+    local function flush()
+        if #chunk > 0 then Send("I|" .. table.concat(chunk, ",")) end
+        chunk, len = {}, 0
+    end
+    local ids = MaterialIDs()
+    for id in pairs(sentInv) do ids[id] = true end      -- so used-up items go to 0
+    for id in pairs(ids) do
+        local n = NS.Owned(id)
+        if full and n > 0 or (not full and (sentInv[id] or 0) ~= n) then
+            local e = id .. ":" .. n
+            if len + #e + 1 > 230 then flush() end
+            chunk[#chunk + 1] = e; len = len + #e + 1
+        end
+        sentInv[id] = (n > 0) and n or nil
+    end
+    flush()
+end
+
+SendInvFull = function() wipe(sentInv); SendInv(true) end
+
+local invTimer
+function NS.PartyInvChanged()
+    if not InGroup() or invTimer then return end
+    invTimer = true
+    C_Timer.After(5, function() invTimer = nil; SendInv(false) end)
 end
 
 ------------------------------------------------------------------------
@@ -129,11 +188,30 @@ local function OnMessage(msg, sender)
         local t = m.incoming or m.profs
         local p = line and t[tonumber(line)]
         if p then
-            for id, out in list:gmatch("(%d+):(%d+)") do p.recipes[tonumber(id)] = tonumber(out) end
+            p.mats = p.mats or {}
+            for entry in list:gmatch("[^,]+") do
+                local id, out, made, mats = entry:match("^(%d+):(%d+):?(%d*):?(.*)$")
+                if id then
+                    id = tonumber(id)
+                    p.recipes[id] = tonumber(out)
+                    local need = { made = tonumber(made) or 1 }
+                    for rid, qty in (mats or ""):gmatch("(%d+)%*(%d+)") do need[#need + 1] = { tonumber(rid), tonumber(qty) } end
+                    if #need > 0 then p.mats[id] = need end
+                end
+            end
         end
         if not m.incoming and NS.RefreshPartyCrafters then NS.RefreshPartyCrafters() end
+        NS.PartyInvChanged()
+    elseif kind == "I" then
+        m.inv = m.inv or {}
+        for id, n in rest:gmatch("(%d+):(%d+)") do
+            n = tonumber(n)
+            m.inv[tonumber(id)] = (n > 0) and n or nil
+        end
+        if NS.RefreshPartyCrafters then NS.RefreshPartyCrafters() end
     elseif kind == "E" then
         if m.incoming then m.profs, m.incoming = m.incoming, nil end
+        NS.PartyInvChanged()
         local first = not m.synced
         m.synced = true
         if first then
@@ -189,6 +267,25 @@ function NS.PartyMakers(itemID)
     return out
 end
 
+-- party-wide count of an item: you + every synced member
+function NS.PartyHave(id)
+    local total, who = NS.Owned(id), {}
+    if total > 0 then who[#who + 1] = ("you %d"):format(total) end
+    for name, m in pairs(NS.partyProfs) do
+        local n = m.inv and m.inv[id] or 0
+        if n > 0 then total = total + n; who[#who + 1] = ("%s %d"):format(name, n) end
+    end
+    return total, who
+end
+
+-- how many crafts of a party recipe everyone's materials cover
+function NS.PartyCanMake(need)
+    if not need or #need == 0 then return nil end
+    local n = math.huge
+    for _, g in ipairs(need) do n = math.min(n, math.floor(NS.PartyHave(g[1]) / math.max(1, g[2]))) end
+    return n == math.huge and 0 or n
+end
+
 ------------------------------------------------------------------------
 -- Tooltips: "Party can make: Bob (Engineering)"
 ------------------------------------------------------------------------
@@ -213,6 +310,7 @@ end
 -- Party crafters window
 ------------------------------------------------------------------------
 local win, lines, open, filter = nil, {}, {}, ""
+local makeableOnly = false
 local LINE_H, NLINES = 16, 22
 local offset = 0
 
@@ -243,20 +341,25 @@ local function Rows()
             local list = {}
             for id, out in pairs(p.recipes) do
                 local rn = RecipeName(line, id, out)
-                if f == "" or rn:lower():find(f, 1, true) then list[#list + 1] = { id = id, out = out, name = rn } end
+                local need = p.mats and p.mats[id]
+                local can = NS.PartyCanMake(need)
+                if (f == "" or rn:lower():find(f, 1, true)) and (not makeableOnly or (can or 0) > 0) then
+                    list[#list + 1] = { id = id, out = out, name = rn, need = need, can = can }
+                end
             end
             table.sort(list, function(a, b) return a.name < b.name end)
             local key = name .. ":" .. line
-            local expanded = open[key] or f ~= ""
-            if f == "" or #list > 0 then
+            local expanded = open[key] or f ~= "" or makeableOnly
+            if (f == "" and not makeableOnly) or #list > 0 then
                 rows[#rows + 1] = { kind = "prof", key = key, text = ("  %s %s |cff66ff66%d/%d|r |cff999999%d recipes|r"):format(
                     expanded and "-" or "+", p.name, p.skill, p.max, Count(p.recipes)) }
                 if expanded then
                     for _, r in ipairs(list) do
                         local mine = NS.Char().profs[line]
                         local iKnow = mine and mine.recipes[r.id] and mine.recipes[r.id].learned
-                        rows[#rows + 1] = { kind = "recipe", out = r.out, text = ("      %s%s"):format(r.name,
-                            iKnow and "" or " |cff66ccff(you don't know)|r") }
+                        rows[#rows + 1] = { kind = "recipe", out = r.out, need = r.need, crafter = name,
+                            text = ("      %s%s"):format(r.name, iKnow and "" or " |cff66ccff(you don't know)|r"),
+                            right = r.can and (r.can > 0 and ("|cff66ff66x%d|r"):format(r.can) or "|cff777777-|r") or "" }
                     end
                 end
             end
@@ -275,6 +378,7 @@ local function Draw()
         if r then
             l.data = r
             l.text:SetText(r.text)
+            l.right:SetText(r.right or "")
             l:Show()
         else
             l:Hide()
@@ -288,7 +392,7 @@ NS.RefreshPartyCrafters = function() if win and win:IsShown() then Draw() end en
 
 local function Build()
     win = CreateFrame("Frame", "TwizCraftPartyFrame", UIParent, "BackdropTemplate")
-    win:SetSize(380, 60 + NLINES * LINE_H)
+    win:SetSize(400, 64 + NLINES * LINE_H)
     win:SetPoint("CENTER", 200, 40)
     win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton"); win:SetClampedToScreen(true)
     win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
@@ -308,13 +412,20 @@ local function Build()
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local hint = win:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("RIGHT", search, "LEFT", -8, 0); hint:SetText("search")
+    local cb = CreateFrame("CheckButton", nil, win, "UICheckButtonTemplate")
+    cb:SetSize(20, 20); cb:SetPoint("BOTTOMLEFT", 8, 4)
+    cb:SetScript("OnClick", function(self) makeableOnly = self:GetChecked() and true or false; offset = 0; Draw() end)
+    local cbt = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    cbt:SetPoint("LEFT", cb, "RIGHT", 2, 0); cbt:SetText("Only what the party has materials for")
     win.count = win:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     win.count:SetPoint("BOTTOMRIGHT", -10, 8)
     for i = 1, NLINES do
         local l = CreateFrame("Button", nil, win)
-        l:SetSize(360, LINE_H); l:SetPoint("TOPLEFT", 10, -30 - (i - 1) * LINE_H)
+        l:SetSize(380, LINE_H); l:SetPoint("TOPLEFT", 10, -30 - (i - 1) * LINE_H)
+        l.right = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        l.right:SetPoint("RIGHT"); l.right:SetJustifyH("RIGHT")
         l.text = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        l.text:SetPoint("LEFT"); l.text:SetPoint("RIGHT"); l.text:SetJustifyH("LEFT"); l.text:SetWordWrap(false)
+        l.text:SetPoint("LEFT"); l.text:SetPoint("RIGHT", -40, 0); l.text:SetJustifyH("LEFT"); l.text:SetWordWrap(false)
         local hl = l:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.07)
         l:SetScript("OnClick", function(self)
             local d = self.data
@@ -326,9 +437,20 @@ local function Build()
         end)
         l:SetScript("OnEnter", function(self)
             local d = self.data
-            if d and d.kind == "recipe" and d.out and d.out > 0 then
+            if d and d.kind == "recipe" then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetItemByID(d.out)
+                if d.out and d.out > 0 then GameTooltip:SetItemByID(d.out) end
+                if d.need then
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine(("Made by %s - materials across the party:"):format(d.crafter), 0.4, 0.8, 1)
+                    for _, g in ipairs(d.need) do
+                        local have, who = NS.PartyHave(g[1])
+                        local ok = have >= g[2]
+                        GameTooltip:AddDoubleLine(("%dx %s"):format(g[2], NS.ItemName(g[1])),
+                            (#who > 0 and table.concat(who, ", ") or "nobody has any"),
+                            ok and 0.4 or 1, ok and 1 or 0.4, 0.4, 0.8, 0.8, 0.8)
+                    end
+                end
                 GameTooltip:Show()
             end
         end)
@@ -352,7 +474,10 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("GROUP_ROSTER_UPDATE")
 ev:RegisterEvent("CHAT_MSG_ADDON")
+ev:RegisterEvent("BAG_UPDATE_DELAYED")
+ev:RegisterEvent("BANKFRAME_CLOSED")
 ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+    if event == "BAG_UPDATE_DELAYED" or event == "BANKFRAME_CLOSED" then NS.PartyInvChanged(); return end
     if event == "PLAYER_LOGIN" then
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX) end
         C_Timer.After(4, Roster)

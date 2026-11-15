@@ -1,5 +1,17 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.9.0 - PARTY MATERIALS
+- Party sharing is on automatically when you group with someone running
+  TwizCraft: professions, recipes (with their ingredients) and now crafting
+  materials - how many of every ingredient used by anyone's recipes each of
+  you holds in bags, bank and mailbox. Counts update as bags change.
+- Party window (/tc party): every recipe shows how many the party can make
+  with everyone's materials combined (green xN). Hover a recipe to see each
+  ingredient and who has it ("you 3, Bob 5"). Tick "Only what the party has
+  materials for" to list just the makeable ones.
+- Your bank is counted from the game's cache - open your bank once per
+  session so it's up to date.
+
 NEW IN 1.8.2
 - Party crafters: same sync fixes as TwizQuest (realm names, group changes,
   dungeon-finder groups).

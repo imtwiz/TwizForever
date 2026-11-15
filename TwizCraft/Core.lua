@@ -7,6 +7,7 @@ NS.DEFAULTS = {
     confirmOver = 50000, -- ask before spending more than 5g at a vendor in one go
     resellAH = false,   -- count AH resale of what you craft (default: vendor value only)
     steps   = 12,       -- steps shown
+    partyShare = true,  -- share professions, recipes and crafting materials with party members running TwizCraft
     chars   = {},
     odds    = { yellow = { p = 0, a = 0 }, green = { p = 0, a = 0 } }, -- learned skill-up odds
 }

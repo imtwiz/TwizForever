@@ -38,6 +38,23 @@ NS._partyOpen["Bob:202"] = true
 L("expanded: " .. rowtext())
 -- main window button
 
+-- materials: I hold 3 Coarse Stone, Bob reports 5 more plus Linen
+SIM.PutInBags(2836, 3)
+SIM.Fire("CHAT_MSG_ADDON", "TWZC", "I|2836:5,2589:2", "PARTY", "Bob-Realm"); SIM.Advance(0.5)
+local function recipeRows()
+  local o = {}
+  for _, r in ipairs(NS._partyRows()) do
+    if r.kind == "recipe" then o[#o + 1] = (r.text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^%s+", "")) .. " " .. ((r.right or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+  end
+  return table.concat(o, " / ")
+end
+L("party can make: " .. recipeRows())
+local have, who = NS.PartyHave(2836)
+L(("Coarse Stone across party: %d (%s)"):format(have, table.concat(who, ", ")))
+-- my bags change -> only changed counts are sent
+SIM.sent = {}
+SIM.Fire("BAG_UPDATE_DELAYED"); SIM.Advance(6)
+L("inventory update sent: " .. table.concat(SIM.sent, "  ||  "))
 -- Bob leaves
 SIM.inGroup, SIM.partyNames = false, {}
 SIM.Fire("GROUP_ROSTER_UPDATE"); SIM.Advance(1)
