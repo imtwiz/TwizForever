@@ -232,7 +232,23 @@ end
 ------------------------------------------------------------------------
 ns.recipeBuy = nil -- { itemID, stage = "quote" | "ready" | "buying", price, auctionID, commodity, all, expensive }
 
-local function Name(id) return C_Item.GetItemInfo(id) or ("item " .. id) end
+-- A recipe's name even before the game has cached the item: item cache, then the
+-- AH's item key, then the tooltip's first line. Asks the game to load it either way.
+local function Name(id)
+    local n = C_Item.GetItemInfo(id)
+    if n then return n end
+    if C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+    local ok, info = pcall(C_AuctionHouse.GetItemKeyInfo, C_AuctionHouse.MakeItemKey(id))
+    if ok and type(info) == "table" and info.itemName and info.itemName ~= "" then return info.itemName end
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local okT, data = pcall(C_TooltipInfo.GetItemByID, id)
+        local line = okT and data and data.lines and data.lines[1]
+        if line and TooltipUtil and TooltipUtil.SurfaceArgs and not line.leftText then pcall(TooltipUtil.SurfaceArgs, line) end
+        local t = line and Strip(line.leftText)
+        if t and t ~= "" and not t:find("^Retrieving") then return t end
+    end
+    return "a recipe"
+end
 
 -- Buy All run: once started, prices are looked up automatically and each
 -- click / wheel notch / key press buys one recipe. Gone or pricier-than-usual
@@ -820,6 +836,7 @@ lev:SetScript("OnEvent", function(_, event)
     C_Timer.After(0.4, function()
         pendingLearn = false
         if ns.S then pcall(ns.UpdateLearnButton) end
+        if event == "GET_ITEM_INFO_RECEIVED" then ns.UI.Refresh() end
     end)
 end)
 

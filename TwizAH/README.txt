@@ -88,6 +88,11 @@ USE
     the market median, how many sell a day (and the chance for 2h/8h/24h),
     and how your own auctions of it have done.
 
+WHAT'S NEW IN 2.4.7
+  - Recipe names show properly instead of "item 4410": if the game hasn't
+    loaded a recipe yet, TwizAH uses the AH's name for it or its tooltip,
+    asks the game to load it, and redraws when it arrives.
+
 WHAT'S NEW IN 2.4.6
   - No confirm step: clicking a recipe's row buys it, and the first Buy All
     click buys the first recipe. Each further click, wheel notch or key
