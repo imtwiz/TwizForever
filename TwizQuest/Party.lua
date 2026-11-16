@@ -152,6 +152,11 @@ function NS.QueueXP()
     C_Timer.After(2, function() xpTimer = nil; SendXP() end)
 end
 
+C_Timer.NewTicker(30, function()
+    if not InGroup() or not (NS.db and NS.db.party) then return end
+    SendXP()
+end)
+
 local function SendFull()
     SendXP()
     local snap = Snapshot()
@@ -228,6 +233,7 @@ local function OnMessage(msg, sender)
         if p.incoming then p.quests, p.incoming = p.incoming, nil end
         local first = not p.synced
         p.synced = true
+        if not p.xp then C_Timer.After(1, SendXP) end -- they'll answer in kind on their next tick
         Changed()
         C_Timer.After(2, NS.AutoGroupPlan)
         if first then
@@ -360,6 +366,18 @@ function NS.PartyNeed(id)
 end
 
 -- Summary for the party line: members, quests to share, who's behind, ready together
+-- { { name, xp = {..} or nil, level, unit, addon = bool }, ... } for every party member
+function NS.PartyXPList()
+    local out = {}
+    if not InGroup() then return out end
+    for _, m in ipairs(Roster()) do
+        local p = NS.party[m.name]
+        out[#out + 1] = { name = m.name, unit = m.unit, xp = p and p.xp, addon = p ~= nil,
+            level = (p and p.xp and p.xp.level) or (UnitLevel and UnitLevel(m.unit)) or nil }
+    end
+    return out
+end
+
 function NS.PartyStatus()
     local st = { members = {}, missing = {}, theyHave = {}, behind = {}, ready = {}, noAddon = {}, same = {}, sameSome = 0 }
     if not InGroup() then return st end

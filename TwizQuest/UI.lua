@@ -162,12 +162,12 @@ local function PartyTooltip(self)
     GameTooltip:Show()
 end
 
-local function XPRow(row, name, xp, classFile, isMe)
+local function XPRow(row, name, xp, classFile, isMe, note)
     row.name:SetText(isMe and S.Color("green", "You") or name)
     if not xp or not xp.max or xp.max <= 0 then
         row.bar:SetValue(0); row.bar.behind:SetValue(0)
         row.text:SetText("")
-        row.right:SetText(S.Color("faint", "no data"))
+        row.right:SetText(S.Color("faint", note or "no data"))
         return
     end
     row.bar:SetMinMaxValues(0, xp.max); row.bar:SetValue(xp.cur)
@@ -231,13 +231,15 @@ local function Refresh()
     frame.share:SetText("Share " .. missing)
     frame.share:SetShown(missing > 0)
     local nbars = 0
-    if st and NS.db.partyXP and #st.members > 0 then
+    local everyone = NS.PartyXPList and NS.PartyXPList() or {}
+    if st and NS.db.partyXP and #everyone > 0 then
         nbars = 1
         XPRow(frame.xpRows[1], UnitName("player"), MyXP(), select(2, UnitClass("player")), true)
-        for _, m in ipairs(st.members) do
+        for _, m in ipairs(everyone) do
             if nbars < #frame.xpRows then
                 nbars = nbars + 1
-                XPRow(frame.xpRows[nbars], m, NS.party[m].xp, UnitClassFile(m))
+                XPRow(frame.xpRows[nbars], m.name, m.xp, m.unit and select(2, UnitClass(m.unit)), false,
+                    not m.xp and (m.addon and "waiting for XP..." or ("L%s · no TwizQuest"):format(m.level or "?")))
             end
         end
     end
@@ -930,7 +932,8 @@ SlashCmdList.QUESTROUTE = function(msg)
                 #st.members, #st.missing, #st.behind, #st.ready))
             for _, m in ipairs(st.members) do
                 local p = NS.party[m]
-                print(("  %s: %d quests%s"):format(m, NS.Count(p.quests), p.step and (", heading to " .. p.step.text) or ""))
+                local xp = p.xp and ("L%d %d/%d XP"):format(p.xp.level or 0, p.xp.cur or 0, p.xp.max or 0) or "no XP received yet"
+                print(("  %s: %d quests, %s%s"):format(m, NS.Count(p.quests), xp, p.step and (", heading to " .. p.step.text) or ""))
             end
             if #st.noAddon > 0 then
                 print("  not syncing: " .. table.concat(st.noAddon, ", ")

@@ -1,5 +1,13 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.16.0
+  - Party XP bars show every party member, not only fully synced ones:
+    their XP when TwizQuest has sent it, "waiting for XP..." while it's on
+    its way, or their level and "no TwizQuest" when they don't run it.
+  - Your XP is resent to the party every 30 seconds, so a missed message
+    never leaves someone's bar empty.
+  - /tq party lists each member's XP (or that none has arrived yet).
+
 NEW IN 1.15.0
   - The distance on the next-step card updates live: every yard you move.
 
