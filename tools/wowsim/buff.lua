@@ -8,9 +8,17 @@ local units = {
   party2 = { name = "Sue", class = "MAGE", power = 0, auras = {} },
   party3 = { name = "Far", class = "PRIEST", power = 0, auras = {}, far = true },
   target = { name = "Stranger", class = "ROGUE", power = 3, auras = {} },
+  nameplate1 = { name = "Passerby", class = "PALADIN", power = 0, auras = {} },
+  nameplate2 = { name = "Flagged", class = "MAGE", power = 0, auras = {}, pvp = true },
+  nameplate3 = { name = "Sue", class = "MAGE", power = 0, auras = {}, same = "party2" },
 }
+UnitIsUnit = function(a, b) return a == b end
+UnitIsPVP = function(u) return units[u] and units[u].pvp or false end
+SIM.cvars = { nameplateShowFriends = "0" }
+GetCVar = function(k) return SIM.cvars[k] end
+SetCVar = function(k, v) SIM.cvars[k] = tostring(v) end
 UnitExists = function(u) return units[u] ~= nil end
-UnitGUID = function(u) return units[u] and ("GUID-" .. units[u].name) end
+UnitGUID = function(u) local x = units[u] if not x then return nil end return "GUID-" .. (x.same and units[x.same].name or x.name) end
 UnitName = function(u) return units[u] and units[u].name end
 UnitClass = function(u) local x = units[u or "player"] return x.class:lower(), x.class end
 UnitPowerType = function(u) return units[u].power end
@@ -36,6 +44,7 @@ local function show()
   local b = TwizBuffButton
   return table.concat(o, ", ") .. "  || button: " .. tostring(b.label:GetText()) .. " [" .. tostring(b:GetAttribute("spell")) .. " @ " .. tostring(b:GetAttribute("unit")) .. "]"
 end
+L("friendly nameplates now: " .. SIM.cvars.nameplateShowFriends)
 L("druid: " .. show())
 L("window: " .. tostring(TwizBuffFrame.__shown) .. ", " .. TwizBuffFrame.count:GetText())
 -- 3 in the group need it and she knows Gift of the Wild with berries: group cast
@@ -55,5 +64,7 @@ SIM.known = { ["Arcane Intellect"] = 1459 }
 for _, u in pairs(units) do u.auras = {} end
 SIM.Advance(1.5)
 L("mage: " .. show())
+SlashCmdList.TWIZBUFF("strangers off"); SIM.Advance(1.5)
+L("strangers off: " .. show() .. " | plates " .. SIM.cvars.nameplateShowFriends)
 SlashCmdList.TWIZBUFF("wheel on"); SIM.Advance(1.5)
 L("wheel: " .. tostring(SIM.overrides["MOUSEWHEELDOWN"]))

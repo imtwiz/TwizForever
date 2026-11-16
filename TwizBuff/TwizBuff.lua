@@ -14,7 +14,7 @@
 local ADDON, NS = ...
 TwizBuff = NS
 
-local DEFAULTS = { shown = true, wheel = false, shadowProt = false, thorns = false, hideWhenDone = true, minGroup = 3 }
+local DEFAULTS = { shown = true, wheel = false, shadowProt = false, thorns = false, hideWhenDone = true, minGroup = 3, strangers = true }
 
 -- names: what to cast; also = auras that already count (group versions, greater blessings)
 -- mana = only for people who use mana; group = group version (needs a reagent)
@@ -132,7 +132,20 @@ local function Units()
     else
         for i = 1, 4 do add("party" .. i) end
     end
-    if UnitExists("target") and UnitIsPlayer("target") and UnitIsFriend("player", "target") then add("target") end
+    -- strangers: your target, whoever is under your mouse, and every friendly player with a
+    -- nameplate (friendly nameplates show who's near you)
+    local function stranger(u)
+        if not UnitExists(u) or not UnitIsPlayer(u) or not UnitIsFriend("player", u) then return end
+        if UnitIsUnit and UnitIsUnit(u, "player") then return end
+        -- buffing someone flagged for PvP flags you too: skip them unless you already are
+        if UnitIsPVP and UnitIsPVP(u) and not UnitIsPVP("player") then return end
+        add(u)
+    end
+    stranger("target")
+    if db.strangers then
+        stranger("mouseover")
+        for i = 1, 40 do stranger("nameplate" .. i) end
+    end
     return list
 end
 
@@ -172,8 +185,8 @@ function NS.Missing()
     -- the target first, then you, then everyone in range before those out of range
     table.sort(out, function(a, b)
         if a.inRange ~= b.inRange then return a.inRange end
-        local pa = a.unit == "target" and 0 or (a.unit == "player" and 1 or 2)
-        local pb = b.unit == "target" and 0 or (b.unit == "player" and 1 or 2)
+        local function rank(u) return u == "target" and 0 or (u == "player" and 1) or (GroupUnit(u) and 2) or 3 end
+        local pa, pb = rank(a.unit), rank(b.unit)
         if pa ~= pb then return pa < pb end
         return a.unit < b.unit
     end)
@@ -320,6 +333,7 @@ end
 ------------------------------------------------------------------------
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA", "PLAYER_TARGET_CHANGED",
+    "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UPDATE_MOUSEOVER_UNIT",
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "SPELLS_CHANGED", "UNIT_CONNECTION", "PLAYER_LEVEL_UP", "BAG_UPDATE_DELAYED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -332,6 +346,14 @@ ev:SetScript("OnEvent", function(_, event, a1)
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
         NS.db = db
         return
+    end
+    if event == "PLAYER_ENTERING_WORLD" and db.strangers and not db.platesSet and not InCombatLockdown() and GetCVar and SetCVar then
+        db.platesWas = GetCVar("nameplateShowFriends")
+        if db.platesWas ~= "1" then
+            SetCVar("nameplateShowFriends", "1")
+            Print("turned on friendly nameplates so I can see nearby players who need buffs. /tb strangers off puts them back.")
+        end
+        db.platesSet = true
     end
     if not db then return end
     if event == "PLAYER_REGEN_DISABLED" then SetWheel(false) end
@@ -366,10 +388,21 @@ SlashCmdList.TWIZBUFF = function(msg)
         db[k] = not db[k]
         Print((cmd == "shadow" and "Shadow Protection" or "Thorns") .. ": " .. (db[k] and "included" or "left out"))
         NS.Update()
+    elseif cmd == "strangers" then
+        db.strangers = rest == "on" or (rest == "" and not db.strangers)
+        if not InCombatLockdown() and SetCVar then
+            if db.strangers then
+                db.platesWas = db.platesWas or GetCVar("nameplateShowFriends"); SetCVar("nameplateShowFriends", "1"); db.platesSet = true
+            elseif db.platesWas then
+                SetCVar("nameplateShowFriends", db.platesWas); db.platesSet = nil
+            end
+        end
+        Print("buff nearby strangers (friendly players with nameplates or under your mouse): " .. (db.strangers and "on" or "off"))
+        NS.Update()
     elseif cmd == "group" and tonumber(rest) then
         db.minGroup = math.max(2, math.min(tonumber(rest), 40))
         Print(("group buff when %d or more need it"):format(db.minGroup))
     else
-        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb group N - group version at N people")
+        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb group N - group version at N people")
     end
 end
