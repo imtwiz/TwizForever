@@ -59,7 +59,7 @@ local function now()
     .. " | " .. tostring(TwizHealFrame.next:GetText()):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 end
 SIM.Advance(0.3); L("1: " .. now())
-L("macro: " .. tostring(TwizHealButton:GetAttribute("macrotext")))
+L("macro: " .. tostring(TwizHealButton:GetAttribute("macrotext1")))
 units.party2.hp = 300; SIM.Advance(0.3); L("2 (rogue in danger): " .. now())
 units.party2.hp = 1300; units.party1.hp = 1950; SIM.Advance(0.3); L("3 (tank nearly full, healer 90%): " .. now())
 units.player.hp = 1000; units.party1.hp = 2000; SIM.Advance(0.3); L("4 (all full): " .. now())
@@ -78,7 +78,7 @@ SIM.Advance(0.3); L("9 (rogue hidden): " .. now() .. " | shown=" .. tostring(Twi
 for _, u in pairs(units) do u.hp = "SECRET" end
 SIM.Advance(0.3); L("10 (all hidden): " .. now())
 SlashCmdList.TWIZHEAL("debug")
-L("hidden-mode key: " .. tostring(TwizHealButton:GetAttribute("macrotext")))
+L("hidden-mode key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")))
 L("hidden-mode bar: " .. tostring(TwizHealBar2:GetAttribute("macrotext")))
 -- the game's party/raid frames get Alt-click heals
 local pf = CreateFrame("Button", "CompactPartyFrameMember2")

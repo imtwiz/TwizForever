@@ -378,6 +378,17 @@ local function SmartMacro(unit, ooc, only)
 end
 NS.SmartMacro = SmartMacro
 
+-- the instant heal: your HoT (Rejuvenation / Renew), castable while moving, in or out of combat
+local function InstantMacro(unit, only)
+    local hot = Best("hot")
+    local spell = hot or Best("fast") or Best("direct")
+    if not spell then return "" end
+    local _, class = UnitClass("player")
+    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    return pre .. "/cast " .. Chain("", unit, only) .. " " .. spell.label
+end
+NS.InstantMacro = InstantMacro
+
 local function SetMacro(b, text)
     if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
 end
@@ -523,12 +534,16 @@ local function Build()
         if b.SetFrameRef then b:SetFrameRef("key", btn) end
         b:SetAttribute("_onenter", [[
             local key = self:GetFrameRef("key")
-            local m = self:GetAttribute("healmacro")
-            if key and m then key:SetAttribute("macrotext", m) end
+            local m, m2 = self:GetAttribute("healmacro"), self:GetAttribute("healmacro2")
+            if key and m then key:SetAttribute("macrotext1", m) end
+            if key and m2 then key:SetAttribute("macrotext2", m2) end
         ]])
         b:SetAttribute("_onleave", [[
             local key = self:GetFrameRef("key")
-            if key then key:SetAttribute("macrotext", key:GetAttribute("basemacro")) end
+            if key then
+                key:SetAttribute("macrotext1", key:GetAttribute("basemacro"))
+                key:SetAttribute("macrotext2", key:GetAttribute("basemacro2"))
+            end
         ]])
         b:HookScript("OnEnter", function(self) NS.hoverUnit = self:GetAttribute("unit") end)
         b:HookScript("OnLeave", function() NS.hoverUnit = nil end)
@@ -916,21 +931,26 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base = SmartMacro(fallback, ooc)
-        btn:SetAttribute("basemacro", base)
-        local hovered
-        -- each bar keeps its own heal: clicking it, or hovering it and pressing the key, uses that
+        local base, base2 = SmartMacro(fallback, ooc), InstantMacro(fallback)
+        btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2)
+        local hovered, hovered2
+        -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
+        -- key = your HoT; hovering a bar points both keys at that person
         for _, b in ipairs(bars) do
             local unit = b:GetAttribute("unit")
             if UnitExists(unit) then
                 local r, w = OocRule(unit)
-                local m = SmartMacro(unit, r, true)
+                local m, m2 = SmartMacro(unit, r, true), InstantMacro(unit, true)
                 SetMacro(b, m)
+                if b:GetAttribute("macrotext2") ~= m2 then b:SetAttribute("macrotext2", m2) end
                 if b:GetAttribute("healmacro") ~= m then b:SetAttribute("healmacro", m) end
-                if NS.hoverUnit == unit then hovered = m end
+                if b:GetAttribute("healmacro2") ~= m2 then b:SetAttribute("healmacro2", m2) end
+                if NS.hoverUnit == unit then hovered, hovered2 = m, m2 end
             end
         end
-        SetMacro(btn, hovered or base)
+        local k1, k2 = hovered or base, hovered2 or base2
+        if btn:GetAttribute("macrotext1") ~= k1 then btn:SetAttribute("macrotext1", k1) end
+        if btn:GetAttribute("macrotext2") ~= k2 then btn:SetAttribute("macrotext2", k2) end
     end
     if not inCombat then
         if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
@@ -1030,6 +1050,10 @@ fbTick:SetScript("OnUpdate", function()
     local who = press.who or "?"
     if press.err then
         Print(("couldn't heal %s: %s"):format(who, press.err))
+        if press.err:lower():find("moving") and not NS.toldInstant then
+            NS.toldInstant = true
+            Print("while moving, use your instant-heal key (Options > Keybindings > AddOns > TwizHeal > \"Instant heal\"), or right-click a bar - it casts Rejuvenation, which works on the run.")
+        end
     elseif press.failed then
         Print(("the heal on %s failed (range, line of sight or mana?)"):format(who))
     else
@@ -1092,7 +1116,7 @@ end)
 
 _G["BINDING_HEADER_TWIZHEAL"] = "TwizHeal"
 _G["BINDING_NAME_CLICK TwizHealButton:LeftButton"] = "Heal whoever needs it most"
-_G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Heal whoever needs it most (same, second key)"
+_G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Instant heal (Rejuvenation / Renew) - use while moving"
 
 SLASH_TWIZHEAL1 = "/th"
 SLASH_TWIZHEAL2 = "/twizheal"
@@ -1120,9 +1144,12 @@ SlashCmdList.TWIZHEAL = function(msg)
         db.feedback = db.feedback == false
         Print("messages when a heal doesn't go out: " .. (db.feedback and "on" or "off"))
     elseif cmd == "test" then
-        local m = TwizHealButton and TwizHealButton:GetAttribute("macrotext") or "(none)"
+        local m = TwizHealButton and TwizHealButton:GetAttribute("macrotext1") or "(none)"
         Print("the key runs:")
         for line in tostring(m):gmatch("[^\n]+") do Print("  " .. line) end
+        local m2 = TwizHealButton and TwizHealButton:GetAttribute("macrotext2") or "(none)"
+        Print("the instant-heal key runs:")
+        for line in tostring(m2):gmatch("[^\n]+") do Print("  " .. line) end
         Print(("it heals: %s; moving: %s"):format(Who(), tostring(Moving())))
     elseif cmd == "debug" then
         pcall(NS.ReadRanks)

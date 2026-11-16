@@ -44,7 +44,7 @@ C_Spell.GetSpellPowerCost = function(id) return { { cost = cost[id] } } end
 local NS = SIM.LoadAddon(REPO .. "/TwizHeal", "TwizHeal")
 SIM.Fire("ADDON_LOADED", "TwizHeal"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(0.5)
 local function txt() return (tostring(TwizHealFrame.next:GetText()):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
-local function key() return (tostring(TwizHealButton:GetAttribute("macrotext")):gsub("\n", " || ")) end
+local function key() return (tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || ")) end
 SIM.Advance(0.3); L("1 tank 90%, no HoT: " .. txt())
 L("   key: " .. key())
 SIM.hots.party1 = { { "Rejuvenation", 10 } }; SIM.Advance(0.3); L("2 tank 90%, Rejuv on: " .. txt())
@@ -157,3 +157,7 @@ L(("tall, 288 wide: name %dpx | pct '%s' | icons %d at %s"):format(b.name:GetWid
 TwizHeal.db.barH = 16; TwizHeal.db.width = 200; TwizHeal.Layout(); SIM.Advance(0.3)
 for i = 1, 3 do local b = _G["TwizHealBar" .. i]; b.bar:SetWidth(b:GetWidth() - 2); TwizHeal.Arrange(b) end
 L(("short, 200 wide: name %dpx, one line, icons in line"):format(b.name:GetWidth()))
+-- 1.11.0: instant-heal key (right button) and right-click a bar
+L("instant key: " .. tostring(TwizHealButton:GetAttribute("macrotext2")):gsub("\n", " || "))
+L("bar2 right-click: " .. tostring(TwizHealBar2:GetAttribute("macrotext2")):gsub("\n", " || ") .. " | hover m2: " .. tostring(TwizHealBar2:GetAttribute("healmacro2") ~= nil))
+L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:RightButton"]))

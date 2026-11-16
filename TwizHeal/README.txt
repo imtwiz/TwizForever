@@ -1,4 +1,4 @@
-TwizHeal 1.10.1 - one hotkey heals whoever needs it most
+TwizHeal 1.11.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -47,9 +47,14 @@ WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
     - standing -> your fast heal (Regrowth, Flash Heal, Flash of Light...)
     - moving   -> the fast heal can't start, so your HoT goes out instead
   /th test shows what the key will do and who it will heal.
-  Moving, in or out of combat: if the heal picked can't start because
-  you're moving (Regrowth, Healing Touch), the key casts Rejuvenation /
-  Renew instead on the same press - it never gets stuck on a cast-time heal.
+  Moving: out of combat the key switches to Rejuvenation the moment you
+  move. In combat the game won't let the key change, and a Regrowth refused
+  for moving uses up the press - so bind the INSTANT HEAL key (new in
+  1.11.0): Options > Keybindings > AddOns > TwizHeal > "Instant heal". It
+  always casts Rejuvenation / Renew on your mouseover, friendly target or
+  the tank - works on the run, in combat too. Right-clicking a bar in the
+  party window does the same for that person, and hovering a bar points
+  the instant key at them.
   When the game hides health or buffs, the rules that need them are skipped
   (no endless re-casting of a HoT it can't see).
 
