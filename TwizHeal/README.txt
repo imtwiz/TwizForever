@@ -1,4 +1,4 @@
-TwizHeal 1.5.0 - one hotkey heals whoever needs it most
+TwizHeal 1.5.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -53,8 +53,10 @@ WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
   Hover a bar and press your TwizHeal key: it heals that person, in or out
-  of combat. Clicking a bar heals them too. Drag the window to move it;
-  /th window hides or shows it.
+  of combat. Clicking a bar heals them too.
+  Move: drag the title or a bar. Resize: drag the grip in the bottom-right
+  corner - width sets the bar width, height sets the bar height. Both are
+  saved, and only work out of combat. /th window hides or shows it.
 
 ON THE GAME'S PARTY AND RAID FRAMES
   TwizHeal also works on the normal party and raid frames:

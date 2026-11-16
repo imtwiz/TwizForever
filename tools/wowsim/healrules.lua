@@ -91,3 +91,6 @@ L("hovering bar2, key: " .. key())
 L("window: " .. txt())
 TwizHeal.hoverUnit = nil; SIM.Advance(0.3)
 L("left bar, key back to: " .. key())
+-- 1.5.1: move + resize
+TwizHeal.db.width, TwizHeal.db.barH = 300, 30; TwizHeal.Layout()
+L(("resized: window %dx%d, bar1 %dx%d"):format(TwizHealFrame:GetWidth(), TwizHealFrame:GetHeight(), TwizHealBar1:GetWidth(), TwizHealBar1:GetHeight()))

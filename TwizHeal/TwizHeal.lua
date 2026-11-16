@@ -384,7 +384,7 @@ local function Build()
     frame:SetSize(220, 40 + MAXBARS * 22)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 40, -260)
     frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag("LeftButton"); frame:SetClampedToScreen(true)
-    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStart", function(self) if not InCombatLockdown() then self:StartMoving() end end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local p, _, rp, x, y = self:GetPoint(); db.pos = { p, rp, x, y }
@@ -396,12 +396,40 @@ local function Build()
     local close = Skin.IconButton(frame, "x", "Hide (/th to show)", function() if not InCombatLockdown() then db.shown = false; frame:Hide() end end)
     close:SetPoint("TOPRIGHT", -6, -5)
 
+    -- resize: drag the grip in the bottom-right corner (out of combat - the game locks secure frames)
+    frame:SetResizable(true)
+    if frame.SetResizeBounds then frame:SetResizeBounds(140, 50, 600, 500)
+    elseif frame.SetMinResize then frame:SetMinResize(140, 50); frame:SetMaxResize(600, 500) end
+    local grip = CreateFrame("Button", nil, frame)
+    grip:SetSize(14, 14); grip:SetPoint("BOTTOMRIGHT", -2, 2); grip:SetFrameLevel(frame:GetFrameLevel() + 10)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:SetScript("OnMouseDown", function()
+        if InCombatLockdown() then return end
+        frame.sizing = true; frame:StartSizing("BOTTOMRIGHT")
+    end)
+    grip:SetScript("OnMouseUp", function()
+        if not frame.sizing then return end
+        frame:StopMovingOrSizing(); frame.sizing = false
+        -- bar height from the new height, spread over the people shown
+        local n = math.max(1, frame.shownBars or 1)
+        db.barH = math.max(12, math.min(60, math.floor((frame:GetHeight() - 36) / n) - 2))
+        db.width = math.floor(frame:GetWidth())
+        NS.Layout()
+        local p, _, rp, x, y = frame:GetPoint(); db.pos = { p, rp, x, y }
+    end)
+    frame:SetScript("OnSizeChanged", function() if frame.sizing then NS.Layout(true) end end)
+
     -- party bars: hover one and press your TwizHeal key to heal that person (works in combat too:
     -- a secure hover handler swaps the key to that bar's heal); clicking a bar heals as well
     for i = 1, MAXBARS do
         local b = CreateFrame("Button", "TwizHealBar" .. i, frame, "SecureUnitButtonTemplate,SecureHandlerEnterLeaveTemplate,BackdropTemplate")
         b:SetSize(200, 20)
         b:SetPoint("TOPLEFT", 10, -30 - (i - 1) * 22)
+        b:RegisterForDrag("LeftButton") -- dragging a bar moves the window
+        b:SetScript("OnDragStart", function() if not InCombatLockdown() then frame:StartMoving() end end)
+        b:SetScript("OnDragStop", function() frame:GetScript("OnDragStop")(frame) end)
         b:RegisterForClicks("AnyUp")
         b:SetAttribute("type", "macro")
         b:SetAttribute("unit", i == 1 and "player" or ("party" .. (i - 1)))
@@ -440,6 +468,21 @@ local function Build()
         b:HookScript("OnLeave", function() NS.hoverUnit = nil end)
     end
     frame:Hide() -- shown by the first successful update
+end
+
+-- lay the bars out to the window's width and the saved bar height
+-- live = while dragging the grip (keep the height the mouse sets)
+function NS.Layout(live)
+    if not frame or InCombatLockdown() then return end
+    local w = live and frame:GetWidth() or (db.width or 220)
+    local h = db.barH or 20
+    if live then h = math.max(12, math.min(60, math.floor((frame:GetHeight() - 36) / math.max(1, frame.shownBars or 1)) - 2)) end
+    if not live then frame:SetWidth(w) end
+    for i, b in ipairs(bars) do
+        b:SetSize(math.max(60, w - 20), h)
+        b:ClearAllPoints(); b:SetPoint("TOPLEFT", 10, -30 - (i - 1) * (h + 2))
+    end
+    if not live then frame:SetHeight(36 + math.max(1, frame.shownBars or 1) * (h + 2)) end
 end
 
 local function HealthColor(pct)
@@ -538,7 +581,7 @@ Update = function()
         SetMacro(btn, hovered or base)
     end
     if not inCombat then
-        frame:SetHeight(36 + math.max(1, shown) * 22)
+        if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
         frame:SetShown(db.shown and #ranks > 0)
     end
     NS.pick = pick
