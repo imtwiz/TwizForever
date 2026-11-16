@@ -1,4 +1,4 @@
-TwizHeal 1.5.1 - one hotkey heals whoever needs it most
+TwizHeal 1.6.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -46,15 +46,16 @@ WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
   moving, so it's one fixed rule:
     - standing -> your fast heal (Regrowth, Flash Heal, Flash of Light...)
     - moving   -> the fast heal can't start, so your HoT goes out instead
-  The window shows what the key will do and why, e.g.
-  "Rejuvenation(Rank 4) -> Bob (topping off)".
+  /th test shows what the key will do and who it will heal.
   When the game hides health or buffs, the rules that need them are skipped
   (no endless re-casting of a HoT it can't see).
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
   Hover a bar and press your TwizHeal key: it heals that person, in or out
   of combat. Clicking a bar heals them too.
-  Move: drag the title or a bar. Resize: drag the grip in the bottom-right
+  No title bar - just the bars. Each bar has a thin row under it: mana
+  (blue, shown even in cat/bear form) and energy/rage beside it.
+  Move: drag a bar. Resize: drag the grip in the bottom-right
   corner - width sets the bar width, height sets the bar height. Both are
   saved, and only work out of combat. /th window hides or shows it.
 

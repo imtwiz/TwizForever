@@ -395,6 +395,8 @@ local function Build()
     frame.next = Skin.Text(frame, "small"); frame.next:SetPoint("LEFT", frame.title, "RIGHT", 8, 0); frame.next:SetPoint("RIGHT", -28, 0)
     local close = Skin.IconButton(frame, "x", "Hide (/th to show)", function() if not InCombatLockdown() then db.shown = false; frame:Hide() end end)
     close:SetPoint("TOPRIGHT", -6, -5)
+    -- no title bar: just the bars (drag a bar to move, /th window to hide)
+    frame.title:Hide(); frame.next:Hide(); close:Hide()
 
     -- resize: drag the grip in the bottom-right corner (out of combat - the game locks secure frames)
     frame:SetResizable(true)
@@ -414,7 +416,7 @@ local function Build()
         frame:StopMovingOrSizing(); frame.sizing = false
         -- bar height from the new height, spread over the people shown
         local n = math.max(1, frame.shownBars or 1)
-        db.barH = math.max(12, math.min(60, math.floor((frame:GetHeight() - 36) / n) - 2))
+        db.barH = NS.HealthHeightFor(frame:GetHeight(), n)
         db.width = math.floor(frame:GetWidth())
         NS.Layout()
         local p, _, rp, x, y = frame:GetPoint(); db.pos = { p, rp, x, y }
@@ -443,6 +445,15 @@ local function Build()
         b.bar:SetMinMaxValues(0, 1)
         b.name = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.name:SetPoint("LEFT", 4, 0)
         b.pct = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.pct:SetPoint("RIGHT", -4, 0)
+        -- mana (always, even in cat/bear form) and energy/rage under the health bar
+        for _, k in ipairs({ "mana", "power" }) do
+            local pb = CreateFrame("StatusBar", nil, b)
+            pb:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+            pb:SetMinMaxValues(0, 1); pb:SetValue(0)
+            pb.bg = pb:CreateTexture(nil, "BACKGROUND"); pb.bg:SetAllPoints(); pb.bg:SetColorTexture(0.05, 0.05, 0.07, 1)
+            b[k] = pb
+        end
+        b.mana:SetStatusBarColor(0.0, 0.44, 0.87)
         b:Hide()
         bars[i] = b
     end
@@ -470,20 +481,66 @@ local function Build()
     frame:Hide() -- shown by the first successful update
 end
 
--- lay the bars out to the window's width and the saved bar height
+-- layout: each row = health bar + a thin power row (mana | energy) under it; no title bar
+local TOP = 6
+local function PowerH(h) return math.max(3, math.floor(h / 4)) end
+local function RowH(h) return h + PowerH(h) + 1 end
+function NS.HealthHeightFor(height, n)
+    local row = (height - 2 * TOP) / math.max(1, n) - 2
+    return math.max(10, math.min(60, math.floor((row - 1) * 0.8)))
+end
 -- live = while dragging the grip (keep the height the mouse sets)
 function NS.Layout(live)
     if not frame or InCombatLockdown() then return end
+    local n = math.max(1, frame.shownBars or 1)
     local w = live and frame:GetWidth() or (db.width or 220)
-    local h = db.barH or 20
-    if live then h = math.max(12, math.min(60, math.floor((frame:GetHeight() - 36) / math.max(1, frame.shownBars or 1)) - 2)) end
+    local h = live and NS.HealthHeightFor(frame:GetHeight(), n) or (db.barH or 20)
     if not live then frame:SetWidth(w) end
+    local ph = PowerH(h)
     for i, b in ipairs(bars) do
-        b:SetSize(math.max(60, w - 20), h)
-        b:ClearAllPoints(); b:SetPoint("TOPLEFT", 10, -30 - (i - 1) * (h + 2))
+        b:SetSize(math.max(60, w - 12), RowH(h))
+        b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, -TOP - (i - 1) * (RowH(h) + 2))
+        b.bar:ClearAllPoints(); b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, ph + 1)
+        b.powerH = ph
+        b.laid = nil -- power bars re-anchor on the next update
     end
-    if not live then frame:SetHeight(36 + math.max(1, frame.shownBars or 1) * (h + 2)) end
+    if not live then frame:SetHeight(2 * TOP + n * (RowH(h) + 2) - 2) end
 end
+
+local POWER_COLOR = { [0] = { 0.0, 0.44, 0.87 }, [1] = { 0.78, 0.25, 0.25 }, [2] = { 1, 0.5, 0.25 }, [3] = { 1, 0.82, 0 }, [6] = { 0, 0.82, 1 } }
+local MANA_CLASS = { DRUID = true, PRIEST = true, MAGE = true, WARLOCK = true, PALADIN = true, SHAMAN = true, HUNTER = true, EVOKER = true, MONK = false }
+-- mana always (if their class has it, even shapeshifted); their current power too when it isn't mana
+local function DrawPower(b, unit)
+    local _, class = UnitClass(unit)
+    local ptype = safe(UnitPowerType and UnitPowerType(unit)) or 0
+    local hasMana = MANA_CLASS[class] or ptype == 0
+    local other = ptype ~= 0 and ptype or nil
+    local mode = (hasMana and other) and "both" or hasMana and "mana" or other and "power" or "none"
+    if b.laid ~= mode then
+        b.laid = mode
+        local ph = b.powerH or 5
+        for _, pb in ipairs({ b.mana, b.power }) do pb:ClearAllPoints(); pb:Hide() end
+        local function place(pb, l, r)
+            pb:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", l, 1); pb:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", r, ph + 1); pb:Show()
+        end
+        if mode == "both" then
+            b.mana:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 1, 1); b.mana:SetPoint("TOPRIGHT", b, "BOTTOM", -1, ph + 1); b.mana:Show()
+            b.power:SetPoint("BOTTOMLEFT", b, "BOTTOM", 1, 1); b.power:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -1, ph + 1); b.power:Show()
+        elseif mode == "mana" then place(b.mana, 1, -1)
+        elseif mode == "power" then place(b.power, 1, -1) end
+    end
+    if hasMana then
+        pcall(b.mana.SetMinMaxValues, b.mana, 0, UnitPowerMax(unit, 0) or 1)
+        pcall(b.mana.SetValue, b.mana, UnitPower(unit, 0) or 0)
+    end
+    if other then
+        local c = POWER_COLOR[other] or POWER_COLOR[3]
+        b.power:SetStatusBarColor(c[1], c[2], c[3])
+        pcall(b.power.SetMinMaxValues, b.power, 0, UnitPowerMax(unit, other) or 1)
+        pcall(b.power.SetValue, b.power, UnitPower(unit, other) or 0)
+    end
+end
+NS.DrawPower = DrawPower
 
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
@@ -521,6 +578,7 @@ Update = function()
             pcall(b.bar.SetMinMaxValues, b.bar, 0, UnitHealthMax(unit) or 1)
             pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
             b.bar:SetStatusBarColor(HealthColor(pct))
+            pcall(DrawPower, b, unit)
             local dead = UnitIsDeadOrGhost(unit)
             b.name:SetText(("%s |cff9aa1ab%s|r"):format(safe(UnitName(unit)) or unit, m and ROLE_TEXT[m.role] or (dead and "dead" or "")))
             b.pct:SetText(m and ("%d%%"):format(pct * 100 + 0.5) or "")

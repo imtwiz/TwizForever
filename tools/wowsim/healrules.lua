@@ -94,3 +94,14 @@ L("left bar, key back to: " .. key())
 -- 1.5.1: move + resize
 TwizHeal.db.width, TwizHeal.db.barH = 300, 30; TwizHeal.Layout()
 L(("resized: window %dx%d, bar1 %dx%d"):format(TwizHealFrame:GetWidth(), TwizHealFrame:GetHeight(), TwizHealBar1:GetWidth(), TwizHealBar1:GetHeight()))
+-- 1.6.0: no title bar; mana (even in cat form) + energy under each health bar
+UnitPowerMax = function(u, t) return t == 0 and 1000 or 100 end
+UnitPower = function(u, t) return t == 0 and 640 or 35 end
+UnitPowerType = function(u) return u == "player" and 3 or (units[u] and units[u].class == "WARRIOR" and 1 or 0) end
+SIM.Advance(0.3)
+local b1, b2 = TwizHealBar1, TwizHealBar2
+L(("title shown: %s | spell text shown: %s"):format(tostring(TwizHealFrame.title.__shown), tostring(TwizHealFrame.next.__shown)))
+L(("you (cat): mana shown=%s val=%s | energy shown=%s val=%s"):format(tostring(b1.mana.__shown), tostring(b1.mana.__value), tostring(b1.power.__shown), tostring(b1.power.__value)))
+L(("tank (warrior): mana shown=%s | rage shown=%s"):format(tostring(b2.mana.__shown), tostring(b2.power.__shown)))
+TwizHeal.db.barH = 24; TwizHeal.Layout()
+L(("layout: window h=%d, row h=%d, health ends %s above bottom"):format(TwizHealFrame:GetHeight(), b1:GetHeight(), tostring(b1.powerH + 1)))
