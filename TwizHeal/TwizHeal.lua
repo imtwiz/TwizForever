@@ -32,6 +32,18 @@ local ROLE_TEXT = { TANK = "tank", HEALER = "healer", DAMAGER = "dps" }
 local db
 local function Print(m) print("|cff8fe08fTwizHeal|r: " .. tostring(m)) end
 
+-- This client can hand addons "secret" values (health, auras... in some fights)
+-- that can be shown but not compared or added. Treat those as unknown.
+local function safe(v)
+    if v == nil then return nil end
+    if issecretvalue then
+        local ok, s = pcall(issecretvalue, v)
+        if ok and s then return nil end
+    end
+    return v
+end
+NS.safe = safe
+
 ------------------------------------------------------------------------
 -- Your heal ranks: { name, rank, label = "Heal(Rank 3)", avg, cost, fast }
 ------------------------------------------------------------------------
@@ -116,7 +128,7 @@ NS.ranks = ranks
 -- covers the deficit within the overheal allowance and that you can afford
 local function PickRank(deficit, kind)
     if kind == true then kind = "fast" elseif not kind then kind = "direct" end
-    local mana = UnitPower("player", 0) or 0
+    local mana = safe(UnitPower("player", 0)) or 0
     local best
     for _, r in ipairs(ranks) do
         if r.kind == kind and r.cost <= mana then
@@ -134,10 +146,10 @@ NS.PickRank = PickRank
 -- Who needs it
 ------------------------------------------------------------------------
 local function Role(unit)
-    local r = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
+    local r = UnitGroupRolesAssigned and safe(UnitGroupRolesAssigned(unit))
     if r == "TANK" or r == "HEALER" or r == "DAMAGER" then return r end
     -- whoever enemies are attacking is tanking
-    local threat = UnitThreatSituation and UnitThreatSituation(unit)
+    local threat = UnitThreatSituation and safe(UnitThreatSituation(unit))
     if threat and threat >= 2 then return "TANK" end
     local _, class = UnitClass(unit)
     if class == "WARRIOR" then return "TANK" end
@@ -161,6 +173,7 @@ local function InRange(unit, spell)
     if unit == "player" then return true end
     if UnitInRange then
         local inRange, checked = UnitInRange(unit)
+        inRange, checked = safe(inRange), safe(checked)
         if checked then return inRange end
     end
     if spell and C_Spell and C_Spell.IsSpellInRange then
@@ -179,13 +192,14 @@ local function MyHoTs(unit)
     for i = 1, 40 do
         local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
         if not a then break end
-        if watch[a.name] and (a.sourceUnit == "player" or a.isFromPlayerOrPlayerPet) then
-            local left = a.expirationTime and a.expirationTime > 0 and (a.expirationTime - GetTime()) or 0
-            out[a.name] = math.max(0, left)
+        local name, exp, src = safe(a.name), safe(a.expirationTime), safe(a.sourceUnit)
+        if name and watch[name] and (src == "player" or safe(a.isFromPlayerOrPlayerPet)) then
+            local left = exp and exp > 0 and (exp - GetTime()) or 0
+            out[name] = math.max(0, left)
             -- the strongest rank you know of it, scaled by the time left
             for j = #ranks, 1, -1 do
                 local r = ranks[j]
-                if r.name == a.name and r.hot > 0 and r.dur > 0 then incoming = incoming + r.hot * math.min(1, left / r.dur); break end
+                if r.name == name and r.hot > 0 and r.dur > 0 then incoming = incoming + r.hot * math.min(1, left / r.dur); break end
             end
         end
     end
@@ -198,12 +212,14 @@ function NS.Scan()
     local out = {}
     for _, u in ipairs(Units()) do
         if UnitIsConnected(u) and not UnitIsDeadOrGhost(u) then
-            local hp, max = UnitHealth(u) or 0, UnitHealthMax(u) or 1
-            if max > 0 then
+            local hp, max = safe(UnitHealth(u)), safe(UnitHealthMax(u))
+            if not hp or not max then
+                NS.hidden = true   -- the game is hiding health right now: TwizHeal can't judge this person
+            elseif max > 0 then
                 local hots, incoming = MyHoTs(u)
                 -- what's still missing once your HoTs finish ticking
                 local deficit = max - hp
-                out[#out + 1] = { unit = u, name = UnitName(u), hp = hp, max = max, pct = hp / max, deficit = deficit,
+                out[#out + 1] = { unit = u, name = safe(UnitName(u)) or u, hp = hp, max = max, pct = hp / max, deficit = deficit,
                     need = math.max(0, deficit - incoming), hots = hots, incoming = incoming,
                     role = Role(u), inRange = InRange(u, ranks[1] and ranks[1].name) }
             end
@@ -332,6 +348,7 @@ local function Build()
     btn:SetSize(1, 1); btn:SetPoint("BOTTOMLEFT"); btn:SetAlpha(0)
     btn:RegisterForClicks("AnyDown")
     btn:SetAttribute("type", "macro")
+    frame:Hide() -- shown by the first successful update
 end
 
 local function HealthColor(pct)
@@ -339,8 +356,19 @@ local function HealthColor(pct)
     return 0.56, 0.88, 0.56
 end
 
+local Update
+local reported
 function NS.Update()
     if not db then return end
+    NS.hidden = false
+    local ok, err = pcall(Update)
+    if not ok and not reported then
+        reported = true
+        Print("something went wrong drawing the window (please tell Alan/Claude): " .. tostring(err))
+    end
+end
+
+Update = function()
     if not frame then Build() end
     local list = NS.Scan()
     local pick, emergency = NS.Pick(list)
@@ -354,10 +382,13 @@ function NS.Update()
         local m = byUnit[unit]
         if UnitExists(unit) then
             shown = i
-            local pct = m and m.pct or 0
-            b.bar:SetValue(pct)
+            local pct = m and m.pct or 1
+            -- the bar takes the game's numbers directly, so it fills even when they're hidden from addons
+            pcall(b.bar.SetMinMaxValues, b.bar, 0, UnitHealthMax(unit) or 1)
+            pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
             b.bar:SetStatusBarColor(HealthColor(pct))
-            b.name:SetText(("%s |cff9aa1ab%s|r"):format(UnitName(unit) or unit, m and ROLE_TEXT[m.role] or "dead"))
+            local dead = UnitIsDeadOrGhost(unit)
+            b.name:SetText(("%s |cff9aa1ab%s|r"):format(safe(UnitName(unit)) or unit, m and ROLE_TEXT[m.role] or (dead and "dead" or "")))
             b.pct:SetText(m and ("%d%%"):format(pct * 100 + 0.5) or "")
             local picked = pick and pick.unit == unit
             if b.SetBackdropBorderColor then
@@ -403,7 +434,7 @@ function NS.Update()
             end
         end
     else
-        frame.next:SetText("|cff8fe08feveryone's fine|r")
+        frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden by the game|r" or "|cff8fe08feveryone's fine|r")
         if not inCombat then
             -- nobody needs healing: in combat the hotkey still heals your mouseover/target with a mid heal
             local mid = ranks[math.max(1, math.ceil(#ranks / 2))]
@@ -436,7 +467,8 @@ ev:SetScript("OnEvent", function(_, event, a1)
     end
     if not db then return end
     if event ~= "GROUP_ROSTER_UPDATE" and event ~= "PLAYER_REGEN_ENABLED" then
-        NS.ReadRanks()
+        local ok, err = pcall(NS.ReadRanks)
+        if not ok then Print("couldn't read your spellbook: " .. tostring(err)) end
         if event == "PLAYER_ENTERING_WORLD" and #ranks > 0 and not db.told then
             db.told = true
             Print("bind a key in Options > Keybindings > AddOns > TwizHeal. Out of combat it heals whoever needs it most with the smartest spell; in combat hover a TwizHeal bar (the gold one is the pick) and press it - plain = main heal, Shift = fast heal, Ctrl = HoT. The window shows which one to use.")
@@ -469,6 +501,13 @@ SlashCmdList.TWIZHEAL = function(msg)
         db.danger = math.max(0.05, math.min(n / 100, 0.9)); Print(("anyone at %d%% or less is healed first, whatever their role"):format(db.danger * 100))
     elseif cmd == "threshold" and n then
         db.threshold = math.max(0.3, math.min(n / 100, 1)); Print(("people below %d%% are worth a heal"):format(db.threshold * 100))
+    elseif cmd == "debug" then
+        pcall(NS.ReadRanks)
+        local hp = UnitHealth("player")
+        Print(("heals found: %d; your health %s; window %s; in group: %s"):format(#ranks,
+            safe(hp) and tostring(hp) or "HIDDEN by the game", frame and (frame:IsShown() and "shown" or "hidden") or "not built",
+            tostring(IsInGroup and IsInGroup())))
+        reported = nil; NS.Update()
     elseif cmd == "ranks" then
         NS.ReadRanks()
         if #ranks == 0 then Print("no direct heals found in your spellbook.") end

@@ -64,3 +64,10 @@ units.party1.hp = 1960; SIM.hots.party1 = { { "Renew", 14 } }; SIM.Advance(0.3);
 SIM.hots.party1 = nil; SIM.Advance(0.3); L("7 (tank -40, no Renew): " .. now())
 -- rogue at 60%: big need -> direct heal sized to what Renew won't cover
 units.party2.hp = 780; SIM.Advance(0.3); L("8 (rogue 60%): " .. now())
+-- the game hides health (secret values): no errors, that person is skipped, bars still drawn
+issecretvalue = function(v) return v == "SECRET" end
+units.party2.hp = "SECRET"; units.party1.hp = 1200
+SIM.Advance(0.3); L("9 (rogue hidden): " .. now() .. " | shown=" .. tostring(TwizHealFrame.__shown))
+for _, u in pairs(units) do u.hp = "SECRET" end
+SIM.Advance(0.3); L("10 (all hidden): " .. now())
+SlashCmdList.TWIZHEAL("debug")

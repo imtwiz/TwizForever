@@ -1,4 +1,4 @@
-TwizHeal 1.1.0 - one hotkey heals whoever needs it most
+TwizHeal 1.1.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -44,8 +44,16 @@ USE
   TwizHeal would use, e.g. "Rejuvenation(Rank 4) (ctrl) -> Bob". Every heal
   needs a key press or click - no addon can cast on its own.
 
+WHEN THE GAME HIDES HEALTH
+  This client can hide health and buff details from addons (they show as
+  "secret"). The bars still fill from the game's own numbers, but TwizHeal
+  can't judge someone whose health is hidden: they're skipped, and the
+  window says "health hidden by the game" when it can't see anyone.
+
 COMMANDS (/th or /twizheal)
   /th               show / hide the window (out of combat)
   /th danger 30     heal anyone at 30% or less first, whatever their role
   /th threshold 90  people below 90% are worth a heal
   /th ranks         list your heals
+  /th debug         what TwizHeal can see (heals found, whether health is
+                    hidden) - handy if the window looks empty
