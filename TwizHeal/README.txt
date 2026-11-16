@@ -1,4 +1,4 @@
-TwizHeal 1.9.3 - one hotkey heals whoever needs it most
+TwizHeal 1.10.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -77,6 +77,9 @@ THE PARTY WINDOW (back in 1.5.0, shown by default)
   section after the incoming heals shows how much damage the shield will
   soak, the shield's icon and amount appear beside the health text, and the
   bar gets a soft blue glow while it's up.
+  Your buffs on each person (Mark of the Wild, Thorns, Rejuvenation...)
+  show as small icons in the top-right corner of their bar, with a sweep
+  showing how much time is left.
   Move: drag a bar. Resize: drag the grip in the bottom-right
   corner - width sets the bar width, height sets the bar height. Both are
   saved, and only work out of combat. /th window hides or shows it.

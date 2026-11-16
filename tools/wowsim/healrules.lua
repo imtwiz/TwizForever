@@ -140,3 +140,8 @@ L("standing, tank 40%: " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
 SIM.Fire("PLAYER_STARTED_MOVING"); L("moving (speed hidden): " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
 L("   key: " .. key())
 SIM.Fire("PLAYER_STOPPED_MOVING"); L("stopped: " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
+-- 1.10.0: your buffs as icons top-right
+SIM.hots.party1 = { { "Mark of the Wild", 1700 }, { "Thorns", 500 }, { "Rejuvenation", 8 } }
+SIM.Advance(0.3)
+local names = {} for i = 1, (TwizHealBar2.myBuffs or 0) do names[#names + 1] = tostring(TwizHealBar2.buffIcons[i].name) end
+L("tank buff icons: " .. table.concat(names, ", ") .. " | you: " .. tostring(TwizHealBar1.myBuffs))

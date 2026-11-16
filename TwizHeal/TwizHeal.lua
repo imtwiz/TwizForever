@@ -555,6 +555,7 @@ function NS.Layout(live)
         if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2); b.absBar:SetWidth(math.max(60, w - 12) - 2) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
+        b.iconSize = math.max(8, math.min(18, math.floor(h * 0.5)))
     end
     if not live then frame:SetHeight(2 * TOP + n * (RowH(h) + 2) - 2) end
 end
@@ -730,6 +731,43 @@ function NS.DrawAbsorb(b, unit)
     b.absorb, b.shieldAura = n, auraName
 end
 
+-- your buffs on them (Mark of the Wild, Thorns, Rejuvenation...): small icons in the bar's
+-- top-right corner, right to left, with a sweep showing the time left
+local MAXICONS = 6
+function NS.DrawMyBuffs(b, unit)
+    b.buffIcons = b.buffIcons or {}
+    local size = b.iconSize or 10
+    local n = 0
+    for i = 1, 40 do
+        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+        if not a or n >= MAXICONS then break end
+        local src = safe(a.sourceUnit)
+        if src == nil or src == "player" or src == "pet" then
+            n = n + 1
+            local ic = b.buffIcons[n]
+            if not ic then
+                ic = CreateFrame("Frame", nil, b.over)
+                ic.tex = ic:CreateTexture(nil, "ARTWORK"); ic.tex:SetAllPoints(); ic.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                ic.cd = CreateFrame("Cooldown", nil, ic, "CooldownFrameTemplate"); ic.cd:SetAllPoints()
+                if ic.cd.SetHideCountdownNumbers then ic.cd:SetHideCountdownNumbers(true) end
+                if ic.cd.SetDrawEdge then ic.cd:SetDrawEdge(false) end
+                ic.cd:SetReverse(true)
+                b.buffIcons[n] = ic
+            end
+            ic:SetSize(size, size)
+            ic:ClearAllPoints()
+            ic:SetPoint("TOPRIGHT", b.over, "TOPRIGHT", -1 - (n - 1) * (size + 1), -1)
+            pcall(ic.tex.SetTexture, ic.tex, a.icon)
+            local dur, exp = safe(a.duration), safe(a.expirationTime)
+            if dur and exp and dur > 0 then pcall(ic.cd.SetCooldown, ic.cd, exp - dur, dur); ic.cd:Show() else ic.cd:Hide() end
+            ic.name = safe(a.name)
+            ic:Show()
+        end
+    end
+    for k = n + 1, #b.buffIcons do b.buffIcons[k]:Hide() end
+    b.myBuffs = n
+end
+
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
     return 0.16, 0.78, 0.30
@@ -772,6 +810,7 @@ Update = function()
             b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " dead" or ""))
             pcall(NS.SetRoleIcon, b.role, Role(unit))
             pcall(NS.DrawStatus, b, unit)
+            pcall(NS.DrawMyBuffs, b, unit)
             pcall(NS.DrawHPText, b, unit)
             pcall(NS.DrawAbsorb, b, unit)
             local picked = pick and pick.unit == unit
