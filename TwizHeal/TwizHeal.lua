@@ -308,13 +308,27 @@ local MAXBARS = 5
 
 -- plain = the smart choice (out of combat) / main heal (in combat); shift = fast heal; ctrl = HoT.
 -- In combat: your mouseover (a party bar), else a friendly target, else the last pick.
-local function MacroFor(unit, spellLabel, fastLabel, hotLabel)
+-- always = mouseover/target win out of combat too (when health is hidden and there's no pick)
+local function MacroFor(unit, spellLabel, fastLabel, hotLabel, always)
     local f = fastLabel or spellLabel
     local h = hotLabel or spellLabel
+    local c = always and "" or "combat,"
     local function part(mod, label)
-        return ("[%s@mouseover,help,nodead,combat][%scombat,@target,help,nodead][%s@%s] %s"):format(mod, mod, mod, unit, label)
+        local txt = ("[%s@mouseover,help,nodead,%s][%s%s@target,help,nodead][%s@%s] %s"):format(mod, (c:gsub(",$", "")), mod, c, mod, unit, label)
+        return (txt:gsub(",%]", "]"))
     end
-    return "/cast " .. part("mod:ctrl,", h) .. "; " .. part("mod:shift,", f) .. "; " .. part("", spellLabel)
+    local _, class = UnitClass("player")
+    -- druids: drop cat/bear/travel form first (heals can't be cast in them)
+    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    return pre .. "/cast " .. part("mod:ctrl,", h) .. "; " .. part("mod:shift,", f) .. "; " .. part("", spellLabel)
+end
+NS.MacroFor = MacroFor
+
+-- the strongest rank of a kind you can cast (used when health is hidden)
+local function Best(kind, step)
+    local list = {}
+    for _, r in ipairs(ranks) do if r.kind == kind then list[#list + 1] = r end end
+    return list[math.max(1, #list - (step or 0))]
 end
 
 local function Build()
@@ -440,17 +454,37 @@ Update = function()
                     local ff = PickRank(m.max * 0.4, "fast")
                     local hh = Has("hot") and PickRank(m.max * 0.2, "hot")
                     if rr then
-                        b:SetAttribute("macrotext", ("/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(
+                        local _, class = UnitClass("player")
+                        b:SetAttribute("macrotext", ("%s/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(
+                            class == "DRUID" and "/cancelform [form]\n" or "",
                             unit, (hh or rr).label, unit, (ff or rr).label, unit, rr.label))
                     end
                 end
             end
         end
+    elseif NS.hidden then
+        -- The game hides health from addons, so TwizHeal can't tell who's lowest. Your key heals
+        -- whoever you hover (the bars still show health), else your friendly target, else the tank.
+        local tank = "player"
+        for _, u in ipairs(Units()) do if u ~= "player" and Role(u) == "TANK" then tank = u; break end end
+        local main = Best("direct", 1) or Best("direct") or ranks[#ranks]
+        local fast, hot = Best("fast"), Best("hot")
+        frame.next:SetText("|cff9aa1abhealth hidden - hover the lowest bar|r")
+        if not inCombat and main then
+            btn:SetAttribute("macrotext", MacroFor(tank, main.label, fast and fast.label, hot and hot.label, true))
+            local _, class = UnitClass("player")
+            local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+            for _, b in ipairs(bars) do
+                local unit = b:GetAttribute("unit")
+                b:SetAttribute("macrotext", ("%s/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(pre,
+                    unit, (hot or main).label, unit, (fast or main).label, unit, main.label))
+            end
+        end
     else
-        frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden by the game|r" or "|cff8fe08feveryone's fine|r")
+        frame.next:SetText("|cff8fe08feveryone's fine|r")
         if not inCombat then
             -- nobody needs healing: in combat the hotkey still heals your mouseover/target with a mid heal
-            local mid = ranks[math.max(1, math.ceil(#ranks / 2))]
+            local mid = Best("direct", 1) or ranks[math.max(1, math.ceil(#ranks / 2))]
             if mid then btn:SetAttribute("macrotext", MacroFor("player", mid.label)) end
         end
     end

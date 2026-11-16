@@ -78,3 +78,5 @@ SIM.Advance(0.3); L("9 (rogue hidden): " .. now() .. " | shown=" .. tostring(Twi
 for _, u in pairs(units) do u.hp = "SECRET" end
 SIM.Advance(0.3); L("10 (all hidden): " .. now())
 SlashCmdList.TWIZHEAL("debug")
+L("hidden-mode key: " .. tostring(TwizHealButton:GetAttribute("macrotext")))
+L("hidden-mode bar: " .. tostring(TwizHealBar2:GetAttribute("macrotext")))
