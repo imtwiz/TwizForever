@@ -85,7 +85,7 @@ local pf = CreateFrame("Button", "CompactPartyFrameMember2")
 local rf = CreateFrame("Button", "CompactRaidFrame7")
 TwizHeal.ApplyClickCast()
 L("party frame alt-click: " .. tostring(pf:GetAttribute("alt-type1")) .. " / " .. tostring(pf:GetAttribute("alt-macrotext1")))
-L("raid frame alt-right: " .. tostring(rf:GetAttribute("alt-macrotext2")) .. " | ctrl-alt: " .. tostring(rf:GetAttribute("alt-ctrl-macrotext1")))
+L("raid frame alt-right (gone): " .. tostring(rf:GetAttribute("alt-macrotext2")) .. " | ctrl-alt: " .. tostring(rf:GetAttribute("alt-ctrl-macrotext1")))
 local late = CreateFrame("Button", "LateFrame")
 ClickCastFrames[late] = true
 L("frame registered later: " .. tostring(late:GetAttribute("alt-macrotext1")))

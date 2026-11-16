@@ -1,4 +1,4 @@
-TwizHeal 1.3.0 - one hotkey heals whoever needs it most
+TwizHeal 1.4.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -30,44 +30,50 @@ WHICH HEAL
   heal (Flash Heal, Regrowth, Flash of Light, Lesser Healing Wave).
   /th ranks lists your heals with how much each one heals and costs.
 
-ON THE GAME'S PARTY AND RAID FRAMES (new in 1.3.0)
+WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
+  One key, no modifiers. TwizHeal decides:
+  Out of combat (it rewrites the key as you move, hover and target):
+    - you're moving                     -> your HoT (Rejuvenation, Renew):
+                                           it's instant, so it casts on the run
+    - they're under half health         -> a real heal sized to the gap
+                                           (Regrowth if it isn't on them,
+                                           else Healing Touch / Heal)
+    - topping off, no HoT of yours on   -> your HoT (cheap, ticks while
+      them                                 everyone drinks)
+    - topping off, your HoT already on  -> the smallest direct heal that
+                                           covers what's missing
+  In combat the game locks the key and doesn't tell macros whether you're
+  moving, so it's one fixed rule:
+    - standing -> your fast heal (Regrowth, Flash Heal, Flash of Light...)
+    - moving   -> the fast heal can't start, so your HoT goes out instead
+  The window shows what the key will do and why, e.g.
+  "Rejuvenation(Rank 4) -> Bob (topping off)".
+  When the game hides health or buffs, the rules that need them are skipped
+  (no endless re-casting of a HoT it can't see).
+
+ON THE GAME'S PARTY AND RAID FRAMES
   TwizHeal works on the normal party and raid frames - its own window is
   off (/th window shows it again).
     - Hover a party/raid frame and press your TwizHeal key (or the TwizBuff
-      key): plain = strong direct heal, Shift = fast heal, Ctrl = HoT.
-    - Or click-cast on the frames:
-        Alt + left-click     strong direct heal
-        Alt + right-click    fast heal (Regrowth, Flash Heal...)
-        Ctrl + Alt + click   HoT (Rejuvenation, Renew)
-      Plain clicks still target and open the menu as before.
+      key).
+    - Or Alt+click a frame: same rules, on that person. Plain clicks still
+      target and open the menu as before.
     - /th clicks turns the Alt-click healing off or on.
   Works on the player, target, focus, party and raid frames, including raid
   frames the game creates later.
 
 USE
   Bind a key: Options > Keybindings > AddOns > TwizHeal.
-  Out of combat: press it - it heals TwizHeal's pick with the right rank.
-  In combat the game locks what an addon can aim at, so:
-    - hover a bar in the TwizHeal window (the gold-bordered one is who
-      TwizHeal picks, and the window shows which heal) and press your key -
-      it heals the person under your mouse;
-    - or have a friendly player targeted - it heals your target;
-    - or click a bar to heal that person.
-  In combat: plain = your direct heal, Shift = fast heal (Regrowth, Flash
-  Heal...), Ctrl = HoT (Rejuvenation, Renew). The window tells you which one
-  TwizHeal would use, e.g. "Rejuvenation(Rank 4) (ctrl) -> Bob". Every heal
-  needs a key press or click - no addon can cast on its own.
+  The key heals whoever you hover, else your friendly target, else
+  TwizHeal's pick (or the tank when health is hidden). Every heal needs a
+  key press or click - no addon can cast on its own.
 
 WHEN THE GAME HIDES HEALTH (WoW: Forever does)
   This client hides everyone's health from addons ("secret" values) - even
   out of combat. Addons may draw health bars from it but not compare it, so
-  TwizHeal can't work out who is lowest by itself. When that's the case:
-    - the bars still show everyone's health (the game draws them);
-    - your key heals whoever you hover - hover the lowest bar and press it -
-      else your friendly target, else the tank;
-    - plain = a strong direct heal, Shift = your best fast heal, Ctrl = your
-      best HoT; clicking a bar does the same for that person.
-  The window says "health hidden - hover the lowest bar" in this mode.
+  TwizHeal can't work out who is lowest by itself. Hover the lowest frame
+  and press your key. The window says "health hidden - hover the lowest
+  bar" in this mode.
   Druids: the key drops cat/bear/travel form first, since heals can't be
   cast in those forms.
 

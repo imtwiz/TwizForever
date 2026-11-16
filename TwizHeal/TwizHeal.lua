@@ -198,7 +198,7 @@ end
 
 -- your HoTs on a unit: { [spellName] = seconds left }, and the healing they still have to do
 local function MyHoTs(unit)
-    local out, incoming = {}, 0
+    local out, incoming, hidden = {}, 0, false
     local _, class = UnitClass("player")
     local set = SPELLS[class] or {}
     local watch = { [set.hot or "-"] = true, [set.fast or "-"] = true }
@@ -206,6 +206,7 @@ local function MyHoTs(unit)
         local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
         if not a then break end
         local name, exp, src = safe(a.name), safe(a.expirationTime), safe(a.sourceUnit)
+        if not name then hidden = true end
         if name and watch[name] and (src == "player" or safe(a.isFromPlayerOrPlayerPet)) then
             local left = exp and exp > 0 and (exp - GetTime()) or 0
             out[name] = math.max(0, left)
@@ -216,7 +217,7 @@ local function MyHoTs(unit)
             end
         end
     end
-    return out, incoming
+    return out, incoming, hidden
 end
 NS.MyHoTs = MyHoTs
 
@@ -298,7 +299,6 @@ function NS.Choose(m, emergency)
     end
     return PickRank(m.need, "direct"), "direct"
 end
-local MOD_TEXT = { hot = "ctrl", fast = "shift", direct = "" }
 
 ------------------------------------------------------------------------
 -- The hotkey button and party bars
@@ -306,29 +306,74 @@ local MOD_TEXT = { hot = "ctrl", fast = "shift", direct = "" }
 local frame, btn, bars = nil, nil, {}
 local MAXBARS = 5
 
--- plain = the smart choice (out of combat) / main heal (in combat); shift = fast heal; ctrl = HoT.
--- In combat: your mouseover (a party bar), else a friendly target, else the last pick.
--- always = mouseover/target win out of combat too (when health is hidden and there's no pick)
-local function MacroFor(unit, spellLabel, fastLabel, hotLabel, always)
-    local f = fastLabel or spellLabel
-    local h = hotLabel or spellLabel
-    local c = always and "" or "combat,"
-    local function part(mod, label)
-        local txt = ("[%s@mouseover,help,nodead,%s][%s%s@target,help,nodead][%s@%s] %s"):format(mod, (c:gsub(",$", "")), mod, c, mod, unit, label)
-        return (txt:gsub(",%]", "]"))
-    end
-    local _, class = UnitClass("player")
-    -- druids: drop cat/bear/travel form first (heals can't be cast in them)
-    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
-    return pre .. "/cast " .. part("mod:ctrl,", h) .. "; " .. part("mod:shift,", f) .. "; " .. part("", spellLabel)
-end
-NS.MacroFor = MacroFor
-
 -- the strongest rank of a kind you can cast (used when health is hidden)
 local function Best(kind, step)
     local list = {}
     for _, r in ipairs(ranks) do if r.kind == kind then list[#list + 1] = r end end
     return list[math.max(1, #list - (step or 0))]
+end
+
+------------------------------------------------------------------------
+-- The rules (no Shift/Ctrl - one key does the right thing)
+--   Out of combat (TwizHeal rewrites the key live):
+--     you're moving               -> HoT (Rejuvenation / Renew): it's instant
+--     they're under half health   -> a real heal sized to the gap (Regrowth if it isn't on them, else Healing Touch)
+--     topping off, no HoT of yours -> HoT (cheap, ticks while everyone drinks)
+--     topping off, HoT already on -> the smallest direct heal that covers the gap
+--   In combat (the game locks the key and hides movement from macros):
+--     standing -> fast heal (Regrowth / Flash Heal); moving -> the fast heal can't start, so the
+--     next line casts your HoT instead.
+------------------------------------------------------------------------
+local function Moving()
+    local s = GetUnitSpeed and safe(GetUnitSpeed("player"))
+    return (s and s > 0) or (IsFalling and IsFalling() and true) or false
+end
+NS.Moving = Moving
+
+local function OocRule(unit)
+    local hot, fast = Best("hot"), Best("fast")
+    if Moving() then
+        if hot then return hot, "moving" end
+    end
+    local hots, hidden = {}, true
+    if unit and UnitExists(unit) then
+        local h, _, hid = MyHoTs(unit)
+        hots, hidden = h, hid
+    end
+    local cur, mx = safe(UnitHealth(unit or "player")), safe(UnitHealthMax(unit or "player"))
+    local pct = cur and mx and mx > 0 and cur / mx or nil
+    local need = pct and (mx - cur) or nil
+    if pct and pct < 0.5 then
+        if fast and not hidden and not hots[fast.name] then return PickRank(need, "fast") or fast, "low" end
+        return PickRank(need, "direct") or Best("direct"), "low"
+    end
+    if hot and not hidden and not hots[hot.name] then return (need and need > 0 and PickRank(need, "hot")) or hot, "topping off" end
+    return (need and need > 0 and PickRank(need, "direct")) or Best("direct", 2) or Best("direct") or hot, "topping off"
+end
+NS.OocRule = OocRule
+
+local function Chain(c, unit, only)
+    if only then return ("[%s@%s]"):format(c, unit) end
+    return ("[%s@mouseover,help,nodead][%s@target,help,nodead][%s@%s]"):format(c, c, c, unit)
+end
+-- ooc = the spell the rules picked for out of combat (nil = do nothing out of combat)
+-- only = heal exactly that unit (TwizHeal's own bars)
+local function SmartMacro(unit, ooc, only)
+    local fast, hot = Best("fast"), Best("hot")
+    local combat = fast or Best("direct", 1) or Best("direct")
+    local _, class = UnitClass("player")
+    local lines = {}
+    -- druids: drop cat/bear/travel form first (heals can't be cast in them)
+    if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
+    if ooc then lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label end
+    if combat then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label end
+    if hot and combat and combat ~= hot then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. hot.label end
+    return table.concat(lines, "\n")
+end
+NS.SmartMacro = SmartMacro
+
+local function SetMacro(b, text)
+    if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
 end
 
 local function Build()
@@ -435,57 +480,32 @@ Update = function()
         for name, left in pairs(m and m.hots or {}) do tags[#tags + 1] = ("%s %d"):format(name:sub(1, 5), left) end
         if #tags > 0 then b.pct:SetText(("|cff8fe08f%s|r  %s"):format(table.concat(tags, " "), b.pct:GetText() or "")) end
     end
-    if pick then
-        local r, kind = NS.Choose(pick, emergency)
-        local mod = MOD_TEXT[kind or "direct"]
-        frame.next:SetText(r and ("%s%s|r%s -> %s"):format(emergency and "|cffff8060" or "|cfff0c45c", r.label,
-            mod ~= "" and (" |cff9aa1ab(" .. mod .. ")|r") or "", pick.unit == "player" and "you" or pick.name) or "no heal known")
-        if not inCombat and r then
-            local fast = PickRank(pick.need, "fast")
-            local hot = Has("hot") and PickRank(pick.need, "hot")
-            btn:SetAttribute("macrotext", MacroFor(pick.unit, r.label, fast and fast.label, hot and hot.label))
-            -- clicking a bar heals that person: the rank for a typical deficit (40% of their health)
-            for _, b in ipairs(bars) do
-                local unit = b:GetAttribute("unit")
-                local m = byUnit[unit]
-                if m then
-                    local typical = math.max(m.need, m.max * 0.4)
-                    local rr = PickRank(typical, "direct")
-                    local ff = PickRank(m.max * 0.4, "fast")
-                    local hh = Has("hot") and PickRank(m.max * 0.2, "hot")
-                    if rr then
-                        local _, class = UnitClass("player")
-                        b:SetAttribute("macrotext", ("%s/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(
-                            class == "DRUID" and "/cancelform [form]\n" or "",
-                            unit, (hh or rr).label, unit, (ff or rr).label, unit, rr.label))
-                    end
-                end
-            end
-        end
-    elseif NS.hidden then
-        -- The game hides health from addons, so TwizHeal can't tell who's lowest. Your key heals
-        -- whoever you hover (the bars still show health), else your friendly target, else the tank.
-        local tank = "player"
-        for _, u in ipairs(Units()) do if u ~= "player" and Role(u) == "TANK" then tank = u; break end end
-        local main = Best("direct", 1) or Best("direct") or ranks[#ranks]
-        local fast, hot = Best("fast"), Best("hot")
-        frame.next:SetText("|cff9aa1abhealth hidden - hover the lowest bar|r")
-        if not inCombat and main then
-            btn:SetAttribute("macrotext", MacroFor(tank, main.label, fast and fast.label, hot and hot.label, true))
-            local _, class = UnitClass("player")
-            local pre = class == "DRUID" and "/cancelform [form]\n" or ""
-            for _, b in ipairs(bars) do
-                local unit = b:GetAttribute("unit")
-                b:SetAttribute("macrotext", ("%s/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(pre,
-                    unit, (hot or main).label, unit, (fast or main).label, unit, main.label))
-            end
-        end
+    -- who the key heals: your mouseover, else a friendly target, else the pick (or the tank when health is hidden)
+    local fallback = pick and pick.unit
+    if not fallback then
+        fallback = "player"
+        if NS.hidden then for _, u in ipairs(Units()) do if u ~= "player" and Role(u) == "TANK" then fallback = u; break end end end
+    end
+    local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
+    local who = friend("mouseover") and "mouseover" or friend("target") and "target" or fallback
+    local ooc, why
+    if pick or NS.hidden or who ~= fallback then ooc, why = OocRule(who) end
+    if inCombat then
+        local fast, hot = Best("fast") or Best("direct", 1), Best("hot")
+        frame.next:SetText(fast and ("|cfff0c45c%s|r%s"):format(fast.name, hot and (" |cff9aa1ab(moving: " .. hot.name .. ")|r") or "") or "no heal known")
+    elseif ooc then
+        frame.next:SetText(("%s%s|r -> %s |cff9aa1ab(%s)|r"):format(why == "low" and "|cffff8060" or "|cfff0c45c", ooc.label,
+            UnitIsUnit and UnitIsUnit(who, "player") and "you" or (safe(UnitName(who)) or who), why))
     else
-        frame.next:SetText("|cff8fe08feveryone's fine|r")
-        if not inCombat then
-            -- nobody needs healing: in combat the hotkey still heals your mouseover/target with a mid heal
-            local mid = Best("direct", 1) or ranks[math.max(1, math.ceil(#ranks / 2))]
-            if mid then btn:SetAttribute("macrotext", MacroFor("player", mid.label)) end
+        frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden - hover the lowest bar|r" or "|cff8fe08feveryone's fine|r")
+    end
+    NS.ooc, NS.oocWhy = ooc, why
+    if not inCombat then
+        SetMacro(btn, SmartMacro(fallback, ooc))
+        -- clicking a bar heals that person by the same rules
+        for _, b in ipairs(bars) do
+            local unit = b:GetAttribute("unit")
+            if UnitExists(unit) then SetMacro(b, SmartMacro(unit, (OocRule(unit)), true)) end
         end
     end
     if not inCombat then
@@ -499,9 +519,7 @@ end
 -- The game's own party and raid frames
 --   Hover a frame and press your TwizHeal key (or the TwizBuff key) - that works on any
 --   unit frame. And click-casting right on the frames:
---     Alt + left-click   strong direct heal
---     Alt + right-click  fast heal (Regrowth, Flash Heal...)
---     Ctrl + Alt + click HoT (Rejuvenation, Renew)
+--     Alt + click   the TwizHeal key's rules on that person
 --   Plain clicks still target / open the menu as before.
 ------------------------------------------------------------------------
 local applied, pending = setmetatable({}, { __mode = "k" }), {}
@@ -511,27 +529,15 @@ for i = 1, 5 do STATIC[#STATIC + 1] = "CompactPartyFrameMember" .. i end
 for i = 1, 40 do STATIC[#STATIC + 1] = "CompactRaidFrame" .. i end
 for g = 1, 8 do for m = 1, 5 do STATIC[#STATIC + 1] = ("CompactRaidGroup%dMember%d"):format(g, m) end end
 
-local function Spells()
-    local main = Best("direct", 1) or Best("direct") or ranks[#ranks]
-    local fast, hot = Best("fast"), Best("hot")
-    return main, fast or main, hot or main
-end
-
 local function ApplyFrame(f)
     if not f or type(f) ~= "table" or not f.SetAttribute or not db or not db.clickCast then return end
     if InCombatLockdown() then pending[f] = true; return end
-    local main, fast, hot = Spells()
-    if not main then return end
-    local _, class = UnitClass("player")
-    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
-    local function set(prefix, btnN, spell)
-        pcall(f.SetAttribute, f, prefix .. "type" .. btnN, "macro")
-        pcall(f.SetAttribute, f, prefix .. "macrotext" .. btnN, pre .. "/cast [@mouseover,help,nodead] " .. spell.label)
-    end
-    set("alt-", 1, main)
-    set("alt-", 2, fast)
-    set("alt-ctrl-", 1, hot)
-    set("alt-ctrl-", 2, hot)
+    if #ranks == 0 then return end
+    -- the frame you click is your mouseover, so this runs the TwizHeal key's rules on it
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    pcall(f.SetAttribute, f, "alt-type1", "macro")
+    pcall(f.SetAttribute, f, "alt-macrotext1", "/click TwizHealButton" .. (keyDown and " LeftButton 1" or ""))
+    for _, k in ipairs({ "alt-type2", "alt-ctrl-type1", "alt-ctrl-type2" }) do pcall(f.SetAttribute, f, k, nil) end
     applied[f] = true
 end
 
@@ -568,7 +574,7 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
     "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE",
-    "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
+    "PLAYER_STARTED_MOVING", "PLAYER_STOPPED_MOVING", "UPDATE_MOUSEOVER_UNIT", "PLAYER_TARGET_CHANGED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, a1)
@@ -582,12 +588,17 @@ ev:SetScript("OnEvent", function(_, event, a1)
         return
     end
     if not db then return end
+    -- moving / hovering / targeting: just re-run the rules so the key is right when you press it
+    if event == "PLAYER_STARTED_MOVING" or event == "PLAYER_STOPPED_MOVING" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_TARGET_CHANGED" then
+        if #ranks > 0 then NS.Update() end
+        return
+    end
     if event ~= "GROUP_ROSTER_UPDATE" and event ~= "PLAYER_REGEN_ENABLED" then
         local ok, err = pcall(NS.ReadRanks)
         if not ok then Print("couldn't read your spellbook: " .. tostring(err)) end
         if event == "PLAYER_ENTERING_WORLD" and #ranks > 0 and not db.told then
             db.told = true
-            Print("works on the game's own party and raid frames: hover one and press your TwizHeal key (Options > Keybindings > AddOns > TwizHeal; Shift = fast heal, Ctrl = HoT), or Alt+click it (Alt+right-click = fast heal, Ctrl+Alt+click = HoT). /th window shows TwizHeal's own bars.")
+            Print("works on the game's own party and raid frames: hover one and press your TwizHeal key (Options > Keybindings > AddOns > TwizHeal), or Alt+click it. Out of combat it picks Rejuvenation/Regrowth/a small heal by rules (moving, topping off); in combat it casts your fast heal, or your HoT while moving. /th window shows TwizHeal's own bars.")
         end
     end
     NS.Update()

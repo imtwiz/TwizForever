@@ -403,6 +403,10 @@ function GetXPExhaustion() return SIM.rested > 0 and SIM.rested or nil end
 function GetNumGroupMembers() return SIM.group end
 function IsResting() return SIM.resting end
 function UnitExists() return false end
+function strsplit(sep, s) local t = {} for p in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do t[#t + 1] = p end return unpack(t) end
+function UnitGUID(u) return u and ("Player-" .. u) or nil end
+function UnitIsConnected() return true end
+function UnitIsPlayer(u) return u ~= nil end
 function GetSpecialization() return 1 end
 function GetBindingKey(cmd) return SIM.bindings and SIM.bindings[cmd] end
 function GetInventoryItemDurability(slot) local d = SIM.durability and SIM.durability[slot] if d then return d[1], d[2] end end
