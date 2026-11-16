@@ -357,6 +357,8 @@ local function Build()
         NS.db.pos = { p, rp, x, y }
     end)
     S.Panel(frame)
+    -- 75% see-through background (borders and text stay solid)
+    if frame.SetBackdropColor then local c = S.C.bg; frame:SetBackdropColor(c[1], c[2], c[3], 0.25) end
     if NS.db.pos then
         frame:ClearAllPoints()
         frame:SetPoint(NS.db.pos[1], UIParent, NS.db.pos[2], NS.db.pos[3], NS.db.pos[4])
@@ -384,6 +386,7 @@ local function Build()
     local card = CreateFrame("Button", nil, frame, "BackdropTemplate")
     card:SetHeight(CARD_H)
     S.Card(card)
+    if card.SetBackdropColor then local c = S.C.card; card:SetBackdropColor(c[1], c[2], c[3], 0.25) end
     card:RegisterForClicks("AnyUp")
     card:SetScript("OnClick", function(self, button)
         -- right-click the sell/repair stop to skip it

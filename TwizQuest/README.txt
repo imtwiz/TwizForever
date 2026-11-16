@@ -1,5 +1,8 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.5
+  - The window background is 75% see-through.
+
 NEW IN 1.18.4
   - Click a step in "Up next" to make it your Next step. It stays Next
     (re-plans keep it on top) until it's done. Right-click still skips.
