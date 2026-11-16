@@ -145,3 +145,15 @@ SIM.hots.party1 = { { "Mark of the Wild", 1700 }, { "Thorns", 500 }, { "Rejuvena
 SIM.Advance(0.3)
 local names = {} for i = 1, (TwizHealBar2.myBuffs or 0) do names[#names + 1] = tostring(TwizHealBar2.buffIcons[i].name) end
 L("tank buff icons: " .. table.concat(names, ", ") .. " | you: " .. tostring(TwizHealBar1.myBuffs))
+-- 1.10.1: nothing overlaps; text and icons scale with the bar
+TwizHeal.db.barH = 16; TwizHeal.Layout(); SIM.Advance(0.3)
+L(("short bars: twoLine=%s icon=%d nameW=%s"):format(tostring(TwizHealBar2.twoLine), TwizHealBar2.iconSize, tostring(TwizHealBar2.name.__width or TwizHealBar2.name:GetWidth())))
+TwizHeal.db.barH = 30; TwizHeal.Layout(); SIM.Advance(0.3)
+L(("tall bars: twoLine=%s icon=%d nameW=%s"):format(tostring(TwizHealBar2.twoLine), TwizHealBar2.iconSize, tostring(TwizHealBar2.name.__width or TwizHealBar2.name:GetWidth())))
+-- the mock doesn't size anchored frames: give the bars their real width, then lay out again
+for i = 1, 3 do local b = _G["TwizHealBar" .. i]; b.bar:SetWidth(b:GetWidth() - 2); TwizHeal.Arrange(b) end
+local b = TwizHealBar2
+L(("tall, 288 wide: name %dpx | pct '%s' | icons %d at %s"):format(b.name:GetWidth(), tostring(b.pct:GetText()), b.myBuffs, tostring(b.buffIcons[1].__points and b.buffIcons[1].__points[1] and b.buffIcons[1].__points[1][1])))
+TwizHeal.db.barH = 16; TwizHeal.db.width = 200; TwizHeal.Layout(); SIM.Advance(0.3)
+for i = 1, 3 do local b = _G["TwizHealBar" .. i]; b.bar:SetWidth(b:GetWidth() - 2); TwizHeal.Arrange(b) end
+L(("short, 200 wide: name %dpx, one line, icons in line"):format(b.name:GetWidth()))

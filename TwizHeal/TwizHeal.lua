@@ -494,8 +494,12 @@ local function Build()
             fs:SetTextColor(1, 1, 1)
             local font, size = fs:GetFont()
             if font then fs:SetFont(font, size or 10, "OUTLINE") end
+            fs.baseFont = font
             fs:SetShadowColor(0, 0, 0, 1); fs:SetShadowOffset(1, -1)
+            if fs.SetWordWrap then fs:SetWordWrap(false) end
+            if fs.SetMaxLines then fs:SetMaxLines(1) end
         end
+        b.name:SetJustifyH("LEFT")
         -- mana (always, even in cat/bear form) and energy/rage under the health bar
         for _, k in ipairs({ "mana", "power" }) do
             local pb = CreateFrame("StatusBar", nil, b)
@@ -555,7 +559,15 @@ function NS.Layout(live)
         if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2); b.absBar:SetWidth(math.max(60, w - 12) - 2) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
-        b.iconSize = math.max(8, math.min(18, math.floor(h * 0.5)))
+        -- tall bars: buff icons on top, numbers underneath; short bars: everything on one line
+        b.twoLine = h >= 22
+        local fsz = b.twoLine and math.floor(h * 0.4) or math.floor(h * 0.62)
+        fsz = math.max(7, math.min(14, fsz))
+        b.iconSize = b.twoLine and math.max(8, math.min(16, math.floor(h * 0.42))) or math.max(7, math.min(16, h - 4))
+        for _, fs in ipairs({ b.name, b.pct, b.inc, b.abs }) do
+            if fs.baseFont then pcall(fs.SetFont, fs, fs.baseFont, fsz, "OUTLINE") end
+        end
+        b.role:SetSize(math.max(8, fsz + 2), math.max(8, fsz + 2))
     end
     if not live then frame:SetHeight(2 * TOP + n * (RowH(h) + 2) - 2) end
 end
@@ -690,11 +702,13 @@ end
 
 -- health as exact numbers and percent: "1234 / 2000  62%"
 function NS.DrawHPText(b, unit)
+    b.hpShort = nil
     if UnitIsDeadOrGhost(unit) then b.pct:SetText(""); return end
     local cur, mx = UnitHealth(unit), UnitHealthMax(unit)
     local c, m = safe(cur), safe(mx)
     if c and m and m > 0 then
         b.pct:SetText(("%d / %d  %d%%"):format(c, m, c / m * 100 + 0.5))
+        b.hpShort = ("%d%%"):format(c / m * 100 + 0.5)
     else
         -- hidden by the game: let the game print the numbers (fontstrings may show hidden values)
         local ok = pcall(b.pct.SetFormattedText, b.pct, "%d / %d", cur, mx)
@@ -755,8 +769,6 @@ function NS.DrawMyBuffs(b, unit)
                 b.buffIcons[n] = ic
             end
             ic:SetSize(size, size)
-            ic:ClearAllPoints()
-            ic:SetPoint("TOPRIGHT", b.over, "TOPRIGHT", -1 - (n - 1) * (size + 1), -1)
             pcall(ic.tex.SetTexture, ic.tex, a.icon)
             local dur, exp = safe(a.duration), safe(a.expirationTime)
             if dur and exp and dur > 0 then pcall(ic.cd.SetCooldown, ic.cd, exp - dur, dur); ic.cd:Show() else ic.cd:Hide() end
@@ -766,6 +778,63 @@ function NS.DrawMyBuffs(b, unit)
     end
     for k = n + 1, #b.buffIcons do b.buffIcons[k]:Hide() end
     b.myBuffs = n
+end
+
+-- lay out a bar's texts and icons so nothing overlaps: right side (from the edge) health
+-- numbers, incoming, shield; buff icons on top (tall bars) or in line (short bars); the
+-- name gets whatever room is left and is cut short rather than drawn over anything
+local function TextW(fs)
+    if not fs:IsShown() then return 0 end
+    local ok, w = pcall(fs.GetStringWidth, fs)
+    w = ok and safe(w) or 0
+    return type(w) == "number" and w or 0
+end
+local function ArrangeOnce(b)
+    local W = safe(b.bar:GetWidth())
+    if not W or W <= 0 then W = (safe(b:GetWidth()) or 200) - 2 end
+    local two = b.twoLine
+    local size = b.iconSize or 10
+    local nIcons = b.myBuffs or 0
+    local textY = two and "BOTTOMRIGHT" or "RIGHT"
+    local yOff = two and 1 or 0
+    local x = 3
+    local function place(region, w)
+        region:ClearAllPoints()
+        region:SetPoint(textY, b.over, textY, -x, yOff)
+        x = x + w + 4
+    end
+    place(b.pct, TextW(b.pct))
+    if b.inc:IsShown() then place(b.inc, TextW(b.inc)) end
+    if b.abs:IsShown() then place(b.abs, TextW(b.abs)) end
+    if b.absIcon:IsShown() then
+        b.absIcon:SetSize(size, size); place(b.absIcon, size)
+    end
+    local textEdge = x
+    -- buff icons
+    if nIcons > 0 then
+        local ix = two and 1 or x
+        for i = 1, nIcons do
+            local ic = b.buffIcons[i]
+            ic:ClearAllPoints()
+            if two then ic:SetPoint("TOPRIGHT", b.over, "TOPRIGHT", -ix, -1)
+            else ic:SetPoint("RIGHT", b.over, "RIGHT", -ix, 0) end
+            ix = ix + size + 1
+        end
+        if not two then x = ix + 3 end
+        if two then textEdge = math.max(textEdge, ix + 3) end
+    end
+    -- the name fills what's left on the left
+    local left = 3 + (b.role:IsShown() and (b.role:GetWidth() + 3) or 0)
+    local room = W - left - math.max(x, textEdge)
+    b.name:SetWidth(math.max(10, room))
+    return room
+end
+function NS.Arrange(b)
+    -- too tight for the name: show just the percent instead of "800 / 2000  40%"
+    if ArrangeOnce(b) < 45 and b.hpShort then
+        b.pct:SetText(b.hpShort)
+        ArrangeOnce(b)
+    end
 end
 
 local function HealthColor(pct)
@@ -811,6 +880,7 @@ Update = function()
             pcall(NS.SetRoleIcon, b.role, Role(unit))
             pcall(NS.DrawStatus, b, unit)
             pcall(NS.DrawMyBuffs, b, unit)
+            pcall(NS.Arrange, b)
             pcall(NS.DrawHPText, b, unit)
             pcall(NS.DrawAbsorb, b, unit)
             local picked = pick and pick.unit == unit
