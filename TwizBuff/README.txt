@@ -1,4 +1,4 @@
-TwizBuff 1.3.0 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.3.1 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.

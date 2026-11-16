@@ -2,7 +2,7 @@
 ## Title: TwizHeal
 ## Notes: One hotkey heals whoever needs it most - tanks first, then healers, then damage - with the right-sized rank of your heal. Party health bars show who TwizHeal picks; in combat, hover a bar and press the hotkey (or click the bar).
 ## Author: Alan Sherbourne
-## Version: 1.1.1
+## Version: 1.1.2
 ## SavedVariables: TwizHealDB
 ## IconTexture: Interface\Icons\Spell_Holy_Heal
 

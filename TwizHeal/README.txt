@@ -1,4 +1,4 @@
-TwizHeal 1.1.1 - one hotkey heals whoever needs it most
+TwizHeal 1.1.2 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 

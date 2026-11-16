@@ -101,6 +101,7 @@ end
 
 function NS.ReadRanks()
     wipe(ranks)
+    NS.needReread = false
     local _, class = UnitClass("player")
     local set = SPELLS[class]
     if not set then return end
@@ -113,11 +114,17 @@ function NS.ReadRanks()
         if kind then
             local r = tonumber((it.sub or ""):match("(%d+)")) or 1
             local avg, hot, dur = HealAmount(it.id)
-            if avg then
-                ranks[#ranks + 1] = { name = it.name, rank = r, avg = avg, hot = hot, dur = dur, cost = Cost(it.id),
-                    kind = kind, fast = kind == "fast", total = avg + hot,
-                    label = (it.sub and it.sub ~= "") and ("%s(%s)"):format(it.name, it.sub) or it.name }
+            local est = false
+            if not avg then
+                -- the game hasn't loaded this spell's text yet: ask for it, and guess from the rank meanwhile
+                if C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, it.id) end
+                est = true
+                if kind == "hot" then avg, hot, dur = 0, 60 * r, 12 else avg, hot, dur = 100 * r, 0, 0 end
+                NS.needReread = true
             end
+            ranks[#ranks + 1] = { name = it.name, rank = r, avg = avg, hot = hot, dur = dur, cost = Cost(it.id),
+                kind = kind, fast = kind == "fast", total = avg + hot, est = est,
+                label = (it.sub and it.sub ~= "") and ("%s(%s)"):format(it.name, it.sub) or it.name }
         end
     end
     table.sort(ranks, function(a, b) return a.total < b.total end)
@@ -327,7 +334,7 @@ local function Build()
         local b = CreateFrame("Button", "TwizHealBar" .. i, frame, "SecureUnitButtonTemplate,BackdropTemplate")
         b:SetSize(200, 20)
         b:SetPoint("TOPLEFT", 10, -30 - (i - 1) * 22)
-        b:RegisterForClicks("AnyDown")
+        b:RegisterForClicks("AnyUp", "AnyDown")
         b:SetAttribute("type", "macro")
         b:SetAttribute("unit", i == 1 and "player" or ("party" .. (i - 1)))
         if b.SetBackdrop then
@@ -346,7 +353,7 @@ local function Build()
 
     btn = CreateFrame("Button", "TwizHealButton", frame, "SecureActionButtonTemplate")
     btn:SetSize(1, 1); btn:SetPoint("BOTTOMLEFT"); btn:SetAlpha(0)
-    btn:RegisterForClicks("AnyDown")
+    btn:RegisterForClicks("AnyUp", "AnyDown") -- acts once, on press or release per the "cast on key down" option
     btn:SetAttribute("type", "macro")
     frame:Hide() -- shown by the first successful update
 end
@@ -453,6 +460,7 @@ end
 ------------------------------------------------------------------------
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
+    "SPELL_DATA_LOAD_RESULT",
     "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -482,6 +490,9 @@ tick:SetScript("OnUpdate", function(_, e)
     acc = acc + e
     if acc < 0.2 then return end
     acc = 0
+    if db and NS.needReread and not InCombatLockdown() and GetTime() - (NS.lastReread or 0) > 3 then
+        NS.lastReread = GetTime(); pcall(NS.ReadRanks)
+    end
     if db and #ranks > 0 then NS.Update() end
 end)
 

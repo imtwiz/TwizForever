@@ -257,7 +257,7 @@ local function Build()
     btn = CreateFrame("Button", "TwizBuffButton", frame, "SecureActionButtonTemplate,BackdropTemplate")
     btn:SetHeight(26)
     btn:SetPoint("BOTTOMLEFT", 8, 8); btn:SetPoint("BOTTOMRIGHT", -8, 8)
-    btn:RegisterForClicks("AnyDown")
+    btn:RegisterForClicks("AnyUp", "AnyDown") -- acts once, on press or release per the "cast on key down" option
     btn:SetAttribute("type", "spell")
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     btn.label:SetPoint("CENTER")
@@ -313,9 +313,12 @@ function NS.Update()
     local heal = TwizHealButton and TwizHeal and TwizHeal.pick
     if not inCombat then
         local lines = {}
-        if TwizHealButton then lines[#lines + 1] = "/click [combat] TwizHealButton" end
+        -- /click must match the "cast on key down" option, or the heal button ignores it
+        local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+        local target = "TwizHealButton" .. (keyDown and " LeftButton 1" or "")
+        if TwizHealButton then lines[#lines + 1] = "/click [combat] " .. target end
         if heal then
-            lines[#lines + 1] = "/click [nocombat] TwizHealButton"
+            lines[#lines + 1] = "/click [nocombat] " .. target
             btn.label:SetText("Heal " .. (heal.unit == "player" and "you" or (heal.name or heal.unit)))
             btn:SetAlpha(1)
         elseif nextCast then
