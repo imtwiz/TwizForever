@@ -42,8 +42,15 @@ local desc, cost = {}, {}
 for _, b in ipairs(book) do desc[b[3]] = b[4]; cost[b[3]] = b[5] end
 C_Spell.GetSpellDescription = function(id) return desc[id] end
 C_Spell.GetSpellPowerCost = function(id) return { { cost = cost[id] } } end
+-- a spell whose text never loads, and a load request that fires its event right away
+book[#book + 1] = { "Greater Heal", "Rank 1", 2060, "", 300 }
+desc[2060], cost[2060] = "", 300
+SIM.loadReq = 0
+C_Spell.RequestLoadSpellData = function(id) SIM.loadReq = SIM.loadReq + 1; SIM.Fire("SPELL_DATA_LOAD_RESULT", id, true); SIM.Fire("SPELLS_CHANGED") end
 local NS = SIM.LoadAddon(REPO .. "/TwizHeal", "TwizHeal")
 SIM.Fire("ADDON_LOADED", "TwizHeal"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(0.5)
+SIM.Advance(30)
+L("load requests after 30s: " .. SIM.loadReq)
 local o = {} for _, r in ipairs(NS.ranks) do o[#o + 1] = r.label .. "=" .. r.avg .. (r.fast and "F" or "") end
 L("ranks: " .. table.concat(o, ", "))
 local function now()

@@ -48,6 +48,7 @@ NS.safe = safe
 -- Your heal ranks: { name, rank, label = "Heal(Rank 3)", avg, cost, fast }
 ------------------------------------------------------------------------
 local ranks = {}
+local requested
 
 local function SpellBookItems()
     local out = {}
@@ -117,7 +118,12 @@ function NS.ReadRanks()
             local est = false
             if not avg then
                 -- the game hasn't loaded this spell's text yet: ask for it, and guess from the rank meanwhile
-                if C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, it.id) end
+                -- ask once per spell; never in a loop
+                requested = requested or {}
+                if not requested[it.id] and C_Spell and C_Spell.RequestLoadSpellData then
+                    requested[it.id] = true
+                    pcall(C_Spell.RequestLoadSpellData, it.id)
+                end
                 est = true
                 if kind == "hot" then avg, hot, dur = 0, 60 * r, 12 else avg, hot, dur = 100 * r, 0, 0 end
                 NS.needReread = true
@@ -460,7 +466,6 @@ end
 ------------------------------------------------------------------------
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
-    "SPELL_DATA_LOAD_RESULT",
     "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -490,8 +495,10 @@ tick:SetScript("OnUpdate", function(_, e)
     acc = acc + e
     if acc < 0.2 then return end
     acc = 0
-    if db and NS.needReread and not InCombatLockdown() and GetTime() - (NS.lastReread or 0) > 3 then
-        NS.lastReread = GetTime(); pcall(NS.ReadRanks)
+    -- spell text that wasn't loaded yet: look again a few times, then settle for the estimate
+    if db and NS.needReread and not InCombatLockdown() and (NS.rereads or 0) < 5 and GetTime() - (NS.lastReread or 0) > 3 then
+        NS.lastReread, NS.rereads = GetTime(), (NS.rereads or 0) + 1
+        pcall(NS.ReadRanks)
     end
     if db and #ranks > 0 then NS.Update() end
 end)
