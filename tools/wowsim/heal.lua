@@ -1,0 +1,57 @@
+-- TwizHeal: pick (danger first, then tank > healer > dps by lowest %), right-sized rank, button macro
+local L = function(s) SIM.log[#SIM.log + 1] = s end
+SIM.class = "PRIEST"
+local units = {
+  player = { name = "Kitty", class = "PRIEST", hp = 900, max = 1000 },
+  party1 = { name = "Tank", class = "WARRIOR", hp = 1400, max = 2000 },
+  party2 = { name = "Rogue", class = "ROGUE", hp = 520, max = 1300 },
+  party3 = { name = "Mage", class = "MAGE", hp = 1000, max = 1000 },
+}
+UnitExists = function(u) return units[u] ~= nil end
+UnitName = function(u) return units[u] and units[u].name end
+UnitClass = function(u) local x = units[u or "player"] return x.class:lower(), x.class end
+UnitHealth = function(u) return units[u].hp end
+UnitHealthMax = function(u) return units[u].max end
+UnitIsConnected = function() return true end
+UnitIsDeadOrGhost = function() return false end
+UnitIsUnit = function(a, b) return a == b end
+UnitInRange = function() return true, true end
+UnitGroupRolesAssigned = function() return "NONE" end
+UnitThreatSituation = function() return 0 end
+UnitPower = function() return SIM.mana or 2000 end
+IsInRaid = function() return false end
+-- spellbook: Lesser Heal 1-3, Heal 1-2, Flash Heal 1
+local book = {
+  { "Lesser Heal", "Rank 1", 2050, "Heal your target for 46 to 56." , 30 },
+  { "Lesser Heal", "Rank 3", 2053, "Heal your target for 135 to 158.", 75 },
+  { "Heal", "Rank 1", 2054, "Heal your target for 295 to 341.", 155 },
+  { "Heal", "Rank 2", 2055, "Heal your target for 429 to 491.", 205 },
+  { "Flash Heal", "Rank 1", 2061, "Heals a friendly target for 193 to 237.", 125 },
+  { "Renew", "Rank 1", 139, "Heals the target of 45 damage over 15 sec.", 30 },
+}
+C_SpellBook = nil
+GetNumSpellTabs = function() return 1 end
+GetSpellTabInfo = function() return "General", 0, 0, #book end
+GetSpellBookItemName = function(i) return book[i][1], book[i][2] end
+GetSpellBookItemInfo = function(i) return "SPELL", book[i][3] end
+C_Spell = C_Spell or {}
+local desc, cost = {}, {}
+for _, b in ipairs(book) do desc[b[3]] = b[4]; cost[b[3]] = b[5] end
+C_Spell.GetSpellDescription = function(id) return desc[id] end
+C_Spell.GetSpellPowerCost = function(id) return { { cost = cost[id] } } end
+local NS = SIM.LoadAddon(REPO .. "/TwizHeal", "TwizHeal")
+SIM.Fire("ADDON_LOADED", "TwizHeal"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(0.5)
+local o = {} for _, r in ipairs(NS.ranks) do o[#o + 1] = r.label .. "=" .. r.avg .. (r.fast and "F" or "") end
+L("ranks: " .. table.concat(o, ", "))
+local function now()
+  local p, em = NS.Pick()
+  return (p and (p.name .. " " .. math.floor(p.pct * 100) .. "% " .. p.role) or "nobody") .. (em and " DANGER" or "")
+    .. " | " .. tostring(TwizHealFrame.next:GetText()):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+SIM.Advance(0.3); L("1: " .. now())
+L("macro: " .. tostring(TwizHealButton:GetAttribute("macrotext")))
+units.party2.hp = 300; SIM.Advance(0.3); L("2 (rogue in danger): " .. now())
+units.party2.hp = 1300; units.party1.hp = 1950; SIM.Advance(0.3); L("3 (tank nearly full, healer 90%): " .. now())
+units.player.hp = 1000; units.party1.hp = 2000; SIM.Advance(0.3); L("4 (all full): " .. now())
+units.party1.hp = 1500; SIM.mana = 100; SIM.Advance(0.3); L("5 (tank -500, low mana): " .. now())
+L("bar 2 macro: " .. tostring(TwizHealBar2:GetAttribute("macrotext")))

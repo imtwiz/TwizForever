@@ -9,6 +9,7 @@ Custom addons for World of Warcraft: Forever (interface 16001), written by Alan 
 | **TwizCraft** | Cheapest path to level each profession: recipe per skill range, how many, shopping list, cheapest shopping route, buy from vendors/AH, craft straight from the window, and tracks AH purchases waiting in your mailbox. Learns your real skill-up odds. | 1.13.1 |
 | **TwizChef** | Remembers your cooking recipes and, at a vendor, buys the missing ingredients for the best recipes your bag ingredients can make (highest level, buff suited to your class/spec); one-key eat/drink and cook, drink restock, Well Fed reminder. | 2.0.1 |
 | **TwizBuff** | Shows which friendly players - you, your party or raid, and your friendly target - are missing the buffs your class can give (Mark of the Wild, Fortitude, Arcane Intellect, Blessings, Battle Shout...) and casts the next one with one click, key or mouse-wheel notch; group versions when 3+ need it; nearby strangers too. | 1.2.0 |
+| **TwizHeal** | One hotkey heals whoever needs it most - anyone in danger first, then tanks, healers, damage dealers - with the smallest rank of your heal that covers the damage (fast heal in emergencies); party bars show the pick, and in combat you hover the gold bar and press the key. | 1.0.0 |
 | **TwizOpen** | Opens chests, boxes, gifts, clams and other containers in your bags automatically - never in combat, while looting, or at a vendor/bank/mail/trade/AH. | 1.0.0 |
 
 ## Install

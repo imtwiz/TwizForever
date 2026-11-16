@@ -1,0 +1,4 @@
+<Bindings>
+    <Binding name="CLICK TwizHealButton:LeftButton" header="TWIZHEAL" category="ADDONS"/>
+    <Binding name="CLICK TwizHealButton:RightButton" category="ADDONS"/>
+</Bindings>
