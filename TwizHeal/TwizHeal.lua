@@ -485,6 +485,13 @@ local function Build()
         b.over = CreateFrame("Frame", nil, b.bar); b.over:SetAllPoints(b.bar); b.over:SetFrameLevel(b.absBar:GetFrameLevel() + 3)
         b.glow:SetFrameLevel(b.absBar:GetFrameLevel() + 2)
         for _, r in ipairs({ b.role, b.name, b.pct, b.inc, b.abs, b.absIcon }) do r:SetParent(b.over) end
+        -- all text white with a dark outline, readable on any bar color
+        for _, fs in ipairs({ b.name, b.pct, b.inc, b.abs }) do
+            fs:SetTextColor(1, 1, 1)
+            local font, size = fs:GetFont()
+            if font then fs:SetFont(font, size or 10, "OUTLINE") end
+            fs:SetShadowColor(0, 0, 0, 1); fs:SetShadowOffset(1, -1)
+        end
         -- mana (always, even in cat/bear form) and energy/rage under the health bar
         for _, k in ipairs({ "mana", "power" }) do
             local pb = CreateFrame("StatusBar", nil, b)
@@ -758,7 +765,7 @@ Update = function()
             b.bar:SetStatusBarColor(HealthColor(pct))
             pcall(DrawPower, b, unit)
             local dead = UnitIsDeadOrGhost(unit)
-            b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " |cff9aa1abdead|r" or ""))
+            b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " dead" or ""))
             pcall(NS.SetRoleIcon, b.role, Role(unit))
             pcall(NS.DrawStatus, b, unit)
             pcall(NS.DrawHPText, b, unit)
