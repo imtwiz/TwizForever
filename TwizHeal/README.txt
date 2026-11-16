@@ -1,4 +1,4 @@
-TwizHeal 1.2.0 - one hotkey heals whoever needs it most
+TwizHeal 1.3.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -30,6 +30,20 @@ WHICH HEAL
   heal (Flash Heal, Regrowth, Flash of Light, Lesser Healing Wave).
   /th ranks lists your heals with how much each one heals and costs.
 
+ON THE GAME'S PARTY AND RAID FRAMES (new in 1.3.0)
+  TwizHeal works on the normal party and raid frames - its own window is
+  off (/th window shows it again).
+    - Hover a party/raid frame and press your TwizHeal key (or the TwizBuff
+      key): plain = strong direct heal, Shift = fast heal, Ctrl = HoT.
+    - Or click-cast on the frames:
+        Alt + left-click     strong direct heal
+        Alt + right-click    fast heal (Regrowth, Flash Heal...)
+        Ctrl + Alt + click   HoT (Rejuvenation, Renew)
+      Plain clicks still target and open the menu as before.
+    - /th clicks turns the Alt-click healing off or on.
+  Works on the player, target, focus, party and raid frames, including raid
+  frames the game creates later.
+
 USE
   Bind a key: Options > Keybindings > AddOns > TwizHeal.
   Out of combat: press it - it heals TwizHeal's pick with the right rank.
@@ -58,7 +72,8 @@ WHEN THE GAME HIDES HEALTH (WoW: Forever does)
   cast in those forms.
 
 COMMANDS (/th or /twizheal)
-  /th               show / hide the window (out of combat)
+  /th window        show / hide TwizHeal's own bars (off by default)
+  /th clicks        Alt-click healing on the game's party/raid frames
   /th danger 30     heal anyone at 30% or less first, whatever their role
   /th threshold 90  people below 90% are worth a heal
   /th ranks         list your heals

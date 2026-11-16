@@ -80,3 +80,13 @@ SIM.Advance(0.3); L("10 (all hidden): " .. now())
 SlashCmdList.TWIZHEAL("debug")
 L("hidden-mode key: " .. tostring(TwizHealButton:GetAttribute("macrotext")))
 L("hidden-mode bar: " .. tostring(TwizHealBar2:GetAttribute("macrotext")))
+-- the game's party/raid frames get Alt-click heals
+local pf = CreateFrame("Button", "CompactPartyFrameMember2")
+local rf = CreateFrame("Button", "CompactRaidFrame7")
+TwizHeal.ApplyClickCast()
+L("party frame alt-click: " .. tostring(pf:GetAttribute("alt-type1")) .. " / " .. tostring(pf:GetAttribute("alt-macrotext1")))
+L("raid frame alt-right: " .. tostring(rf:GetAttribute("alt-macrotext2")) .. " | ctrl-alt: " .. tostring(rf:GetAttribute("alt-ctrl-macrotext1")))
+local late = CreateFrame("Button", "LateFrame")
+ClickCastFrames[late] = true
+L("frame registered later: " .. tostring(late:GetAttribute("alt-macrotext1")))
+L("own window shown: " .. tostring(TwizHealFrame.__shown))

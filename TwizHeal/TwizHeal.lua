@@ -19,7 +19,7 @@
 local ADDON, NS = ...
 TwizHeal = NS
 
-local DEFAULTS = { shown = true, danger = 0.30, threshold = 0.90, overheal = 1.10 }
+local DEFAULTS = { shown = false, danger = 0.30, threshold = 0.90, overheal = 1.10, clickCast = true }
 local SPELLS = {
     PRIEST  = { direct = { "Lesser Heal", "Heal", "Greater Heal" }, fast = "Flash Heal", hot = "Renew" },
     DRUID   = { direct = { "Healing Touch" }, fast = "Regrowth", hot = "Rejuvenation" },
@@ -496,10 +496,78 @@ Update = function()
 end
 
 ------------------------------------------------------------------------
+-- The game's own party and raid frames
+--   Hover a frame and press your TwizHeal key (or the TwizBuff key) - that works on any
+--   unit frame. And click-casting right on the frames:
+--     Alt + left-click   strong direct heal
+--     Alt + right-click  fast heal (Regrowth, Flash Heal...)
+--     Ctrl + Alt + click HoT (Rejuvenation, Renew)
+--   Plain clicks still target / open the menu as before.
+------------------------------------------------------------------------
+local applied, pending = setmetatable({}, { __mode = "k" }), {}
+local STATIC = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }
+for i = 1, 4 do STATIC[#STATIC + 1] = "PartyMemberFrame" .. i end
+for i = 1, 5 do STATIC[#STATIC + 1] = "CompactPartyFrameMember" .. i end
+for i = 1, 40 do STATIC[#STATIC + 1] = "CompactRaidFrame" .. i end
+for g = 1, 8 do for m = 1, 5 do STATIC[#STATIC + 1] = ("CompactRaidGroup%dMember%d"):format(g, m) end end
+
+local function Spells()
+    local main = Best("direct", 1) or Best("direct") or ranks[#ranks]
+    local fast, hot = Best("fast"), Best("hot")
+    return main, fast or main, hot or main
+end
+
+local function ApplyFrame(f)
+    if not f or type(f) ~= "table" or not f.SetAttribute or not db or not db.clickCast then return end
+    if InCombatLockdown() then pending[f] = true; return end
+    local main, fast, hot = Spells()
+    if not main then return end
+    local _, class = UnitClass("player")
+    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    local function set(prefix, btnN, spell)
+        pcall(f.SetAttribute, f, prefix .. "type" .. btnN, "macro")
+        pcall(f.SetAttribute, f, prefix .. "macrotext" .. btnN, pre .. "/cast [@mouseover,help,nodead] " .. spell.label)
+    end
+    set("alt-", 1, main)
+    set("alt-", 2, fast)
+    set("alt-ctrl-", 1, hot)
+    set("alt-ctrl-", 2, hot)
+    applied[f] = true
+end
+
+function NS.ApplyClickCast()
+    if not db or not db.clickCast or InCombatLockdown() then return end
+    for _, name in ipairs(STATIC) do ApplyFrame(_G[name]) end
+    if PartyFrame and PartyFrame.MemberFrame1 then
+        for i = 1, 4 do ApplyFrame(PartyFrame["MemberFrame" .. i]) end
+    end
+    for f in pairs(ClickCastFrames or {}) do ApplyFrame(f) end
+    for f in pairs(pending) do ApplyFrame(f); pending[f] = nil end
+end
+
+-- the game registers its unit frames in ClickCastFrames for click-cast addons: catch new ones
+do
+    local existing = ClickCastFrames or {}
+    if not getmetatable(existing) then
+        ClickCastFrames = setmetatable({}, {
+            __newindex = function(t, frame, v)
+                rawset(t, frame, v)
+                if v then ApplyFrame(frame) end
+            end,
+        })
+        for f, v in pairs(existing) do ClickCastFrames[f] = v end
+    end
+end
+if hooksecurefunc and CompactUnitFrame_SetUpFrame then
+    hooksecurefunc("CompactUnitFrame_SetUpFrame", function(frame) ApplyFrame(frame) end)
+end
+
+------------------------------------------------------------------------
 -- Events, slash
 ------------------------------------------------------------------------
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
+    "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE",
     "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -509,6 +577,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         TwizHealDB = TwizHealDB or {}
         db = TwizHealDB
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+        if (db.version or 0) < 3 then db.shown, db.clickCast, db.version = false, true, 3 end
         NS.db = db
         return
     end
@@ -518,10 +587,11 @@ ev:SetScript("OnEvent", function(_, event, a1)
         if not ok then Print("couldn't read your spellbook: " .. tostring(err)) end
         if event == "PLAYER_ENTERING_WORLD" and #ranks > 0 and not db.told then
             db.told = true
-            Print("bind a key in Options > Keybindings > AddOns > TwizHeal. Out of combat it heals whoever needs it most with the smartest spell; in combat hover a TwizHeal bar (the gold one is the pick) and press it - plain = main heal, Shift = fast heal, Ctrl = HoT. The window shows which one to use.")
+            Print("works on the game's own party and raid frames: hover one and press your TwizHeal key (Options > Keybindings > AddOns > TwizHeal; Shift = fast heal, Ctrl = HoT), or Alt+click it (Alt+right-click = fast heal, Ctrl+Alt+click = HoT). /th window shows TwizHeal's own bars.")
         end
     end
     NS.Update()
+    if event ~= "ADDON_LOADED" then NS.ApplyClickCast() end
 end)
 local acc = 0
 local tick = CreateFrame("Frame")
@@ -546,9 +616,19 @@ SLASH_TWIZHEAL2 = "/twizheal"
 SlashCmdList.TWIZHEAL = function(msg)
     local cmd, rest = (msg or ""):lower():match("^(%S*)%s*(.-)$")
     local n = tonumber(rest)
-    if cmd == "" then
+    if cmd == "window" or cmd == "" then
         if InCombatLockdown() then Print("can't show or hide it in combat."); return end
         db.shown = not db.shown; NS.Update()
+        Print("TwizHeal's own bars: " .. (db.shown and "shown" or "hidden (heal from the game's party/raid frames)"))
+    elseif cmd == "clicks" then
+        if InCombatLockdown() then Print("not in combat."); return end
+        db.clickCast = not db.clickCast
+        if db.clickCast then NS.ApplyClickCast() else
+            for f in pairs(applied) do
+                for _, k in ipairs({ "alt-type1", "alt-type2", "alt-ctrl-type1", "alt-ctrl-type2" }) do pcall(f.SetAttribute, f, k, nil) end
+            end
+        end
+        Print("Alt+click healing on the game's party/raid frames: " .. (db.clickCast and "on" or "off"))
     elseif cmd == "danger" and n then
         db.danger = math.max(0.05, math.min(n / 100, 0.9)); Print(("anyone at %d%% or less is healed first, whatever their role"):format(db.danger * 100))
     elseif cmd == "threshold" and n then
@@ -568,6 +648,6 @@ SlashCmdList.TWIZHEAL = function(msg)
                 r.avg > 0 and ("~%d"):format(r.avg) or "", r.hot > 0 and (" + %d over %ds"):format(r.hot, r.dur) or "", r.cost))
         end
     else
-        Print("/th - show/hide;  /th danger 30 - heal anyone at 30% or less first;  /th threshold 90 - who's worth a heal;  /th ranks - your heals")
+        Print("/th window - show/hide TwizHeal's own bars;  /th clicks - Alt+click healing on party/raid frames;  /th danger 30 - heal anyone at 30% or less first;  /th threshold 90 - who's worth a heal;  /th ranks - your heals")
     end
 end
