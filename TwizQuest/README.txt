@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.4
+  - Click a step in "Up next" to make it your Next step. It stays Next
+    (re-plans keep it on top) until it's done. Right-click still skips.
+
 NEW IN 1.18.3
   - Distance to a kill or loot step is now to the NEAREST place those mobs
     spawn, not the middle of the area the plan picked - and it says "here"

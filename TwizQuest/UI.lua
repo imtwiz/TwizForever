@@ -93,8 +93,8 @@ local function StepTooltip(owner, s)
     GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
     if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
     if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-    GameTooltip:AddLine(s.kind == "service" and "Click: waypoint.  Right-click: skip selling for 20 minutes."
-        or "Click: waypoint.  Right-click: skip this quest.", 0.5, 0.8, 1)
+    GameTooltip:AddLine(s.kind == "service" and "Click: do this next.  Right-click: skip selling for 20 minutes."
+        or "Click: do this next.  Right-click: skip this quest.", 0.5, 0.8, 1)
     GameTooltip:Show()
 end
 
@@ -431,7 +431,8 @@ local function Build()
                 NS.SkipQuest(self.step.q.id, "manual")
                 return
             end
-            SetWaypoint(self.step)
+            -- left-click: do this one next
+            NS.Promote(self.step)
         end)
         row:SetScript("OnEnter", function(self)
             StepTooltip(self, self.step)
@@ -597,11 +598,40 @@ local function StaleStep(st)
     if st.role == 1 and C_QuestLog.IsOnQuest and NS.safe(C_QuestLog.IsOnQuest(id)) then return true end
     return false
 end
+-- a step you clicked stays "Next" until it's done, even when the plan is rebuilt
+local pinned
+local function SameStep(a, p)
+    return a.q and a.q.id == p.id and a.role == p.role and a.kind == p.kind and a.key == p.key
+end
+local function ApplyPin(route)
+    if not pinned or not route then return end
+    for i, st in ipairs(route) do
+        if SameStep(st, pinned) then
+            if i > 1 then table.remove(route, i); table.insert(route, 1, st) end
+            return
+        end
+    end
+    pinned = nil -- done or gone
+end
+function NS.Promote(step)
+    if not plan or not step then return end
+    for i, st in ipairs(plan.route) do
+        if st == step then
+            table.remove(plan.route, i); table.insert(plan.route, 1, st)
+            break
+        end
+    end
+    pinned = step.q and { id = step.q.id, role = step.role, kind = step.kind, key = step.key } or nil
+    SetWaypoint(step, true)
+    NS.UpdateTargetButton()
+    Refresh()
+end
 function NS.OnPlan(result, why)
     if result then
         for i = #result.route, 1, -1 do
             if StaleStep(result.route[i]) then table.remove(result.route, i) end
         end
+        ApplyPin(result.route)
         plan = result
         NS.UpdateTargetButton()
         if NS.db.autoWay and result.route[1] then SetWaypoint(result.route[1], true) end
