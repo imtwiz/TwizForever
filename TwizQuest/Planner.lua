@@ -109,7 +109,7 @@ end
 -- Returns a stop (without quest fields) or nil if we can't place it.
 local function EstimateObjective(obj, inst, rx, ry)
     local points = {}
-    local stop = { role = 2, kind = obj.type, need = obj.need, text = obj.text }
+    local stop = { role = 2, kind = obj.type, need = obj.need, text = obj.text, key = obj._k }
 
     if obj.type == "monster" or obj.type == "killcredit" then
         for _, npc in ipairs(obj.ids) do AddSpawns(NS.N(npc, "spawns"), inst, points) end
@@ -267,6 +267,33 @@ local function LogObjectives(id)
         end
     end
     return out, unknown, unknownTexts
+end
+
+-- "0/12 Perfect Razormaw Egg" or "Perfect Razormaw Egg: 0/12" -> "Perfect Razormaw Egg"
+function NS.ObjBase(t)
+    if type(t) ~= "string" then return nil end
+    t = t:gsub("^%s*%d+%s*/%s*%d+%s*", ""):gsub("%s*:?%s*%d+%s*/%s*%d+%s*$", "")
+    return t
+end
+
+-- The quest log's objectives keyed the same way LogObjectives keys them ("m1", "i2"...), for
+-- updating counts on the card live, between plans. Returns keyed, list (all objectives, in order).
+function NS.LogKeys(id)
+    local ok, log = pcall(C_QuestLog.GetQuestObjectives, id)
+    if not ok or type(log) ~= "table" then return nil end
+    local db = DBObjectives(id)
+    local queues = { monster = 1, item = 1, object = 1, event = 1 }
+    local keyed = {}
+    for _, lo in ipairs(log) do
+        local t = lo.type
+        if t == "reputation" or t == "player" or t == "progressbar" then t = nil end
+        if t == "log" then t = "event" end
+        if t and db[t] then
+            if db[t][queues[t]] then keyed[t:sub(1, 1) .. queues[t]] = lo end
+            queues[t] = queues[t] + 1
+        end
+    end
+    return keyed, log
 end
 
 ------------------------------------------------------------------------
@@ -431,8 +458,11 @@ local function BuildQuest(id, inst, px, py, active)
     if active and not active.complete and #todo > 0 then
         local names = {}
         for _, t in ipairs(todo) do if t and t ~= "" then names[#names + 1] = t end end
+        local bases = {}
+        for _, t in ipairs(names) do bases[#bases + 1] = NS.ObjBase(t) end
         q.stops[#q.stops + 1] = { role = 2, kind = "todo", x = rx, y = ry, work = 300 * #todo, kxp = 0,
-            text = "Finish: " .. (#names > 0 and table.concat(names, ", ") or "the remaining objectives"), noWay = true }
+            text = "Finish: " .. (#names > 0 and table.concat(names, ", ") or "the remaining objectives"), noWay = true,
+            todoBases = bases }
     end
 
     local p = Nearest(Finishers(id, inst), rx, ry)

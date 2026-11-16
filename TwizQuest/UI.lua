@@ -647,6 +647,57 @@ local function Done(questID, role)
 end
 
 ------------------------------------------------------------------------
+-- Live progress: counts on the card follow the quest log right away (even mid-fight), without
+-- waiting for the next full plan; finished objectives drop off.
+------------------------------------------------------------------------
+local function ObjNeed(lo)
+    if NS.safe(lo.finished) then return 0 end
+    return (tonumber(NS.safe(lo.numRequired)) or 1) - (tonumber(NS.safe(lo.numFulfilled)) or 0)
+end
+function NS.LiveProgress()
+    if not plan or not plan.route or not NS.LogKeys then return end
+    local changed, logs = false, {}
+    for i = #plan.route, 1, -1 do
+        local s = plan.route[i]
+        local id = s.q and s.q.id
+        if s.role == 2 and id and (s.key or s.kind == "todo") and not s.help then
+            logs[id] = logs[id] or { NS.LogKeys(id) }
+            local keyed, list = logs[id][1], logs[id][2]
+            local complete = C_QuestLog.IsComplete and NS.safe(C_QuestLog.IsComplete(id))
+            local drop = false
+            if complete then
+                drop = true
+            elseif s.kind == "todo" and list and s.todoBases then
+                local left = {}
+                for _, lo in ipairs(list) do
+                    local txt = NS.safe(lo.text)
+                    if txt and ObjNeed(lo) > 0 then
+                        local base = NS.ObjBase(txt)
+                        for _, b in ipairs(s.todoBases) do if b == base then left[#left + 1] = txt; break end end
+                    end
+                end
+                if #left == 0 then drop = true else
+                    local t = "Finish: " .. table.concat(left, ", ")
+                    if t ~= s.text then s.text, changed = t, true end
+                end
+            elseif s.key and keyed and keyed[s.key] then
+                local need = ObjNeed(keyed[s.key])
+                if need <= 0 then drop = true
+                elseif need ~= s.need then s.need, changed = need, true end
+            end
+            if drop then table.remove(plan.route, i); changed = true end
+        end
+    end
+    if changed then
+        if not InCombatLockdown() then
+            if NS.db.autoWay and plan.route[1] then SetWaypoint(plan.route[1], true) end
+            NS.UpdateTargetButton()
+        end
+        Refresh()
+    end
+end
+
+------------------------------------------------------------------------
 -- Live distance: the next step's yards update every time you move 1 yard
 ------------------------------------------------------------------------
 local live = CreateFrame("Frame")
@@ -671,11 +722,12 @@ live:SetScript("OnUpdate", function(_, e)
     end
 end)
 
+local liveQueued
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",
     "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED", "PLAYER_LEVEL_UP", "ZONE_CHANGED_NEW_AREA",
     "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "MERCHANT_CLOSED", "GROUP_ROSTER_UPDATE",
-    "UPDATE_INVENTORY_DURABILITY", "PLAYER_UPDATE_RESTING", "BAG_UPDATE_DELAYED" }) do
+    "UPDATE_INVENTORY_DURABILITY", "PLAYER_UPDATE_RESTING", "BAG_UPDATE_DELAYED", "QUEST_WATCH_UPDATE" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
@@ -700,6 +752,14 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         if (need ~= nil) == (plan and plan.service ~= nil) and event ~= "PLAYER_UPDATE_RESTING" then return end
     end
     dirty = true
+    if event == "QUEST_LOG_UPDATE" or event == "UNIT_QUEST_LOG_CHANGED" or event == "QUEST_WATCH_UPDATE" then
+        -- the log can lag the event a moment: look now and again shortly after
+        pcall(NS.LiveProgress)
+        if not liveQueued then
+            liveQueued = true
+            C_Timer.After(0.5, function() liveQueued = nil; pcall(NS.LiveProgress) end)
+        end
+    end
     if event == "QUEST_ACCEPTED" then
         Done(a2 or a1, 1)          -- older clients pass (logIndex, questID)
     elseif event == "QUEST_TURNED_IN" then

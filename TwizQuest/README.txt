@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.0
+  - Progress updates right away: kill and loot counts on the card ("Kill 3
+    Kobold Vermin", "Finish: 3/12 Perfect Razormaw Egg") follow your quest
+    log the moment it changes - even mid-fight, when the full plan waits.
+    Finished objectives drop off at once.
+
 NEW IN 1.17.0
   - The party line ("synced 0/2", "Bob · 2 same") no longer sits on top of
     the party XP bars when the Solo/Group switch is hidden.
