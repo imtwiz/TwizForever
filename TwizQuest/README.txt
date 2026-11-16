@@ -1,5 +1,15 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.13.0
+  - Quests a giver won't actually give you are dropped from the plan.
+    Questie's data sometimes thinks a quest is available when the game
+    disagrees (another quest needed first, a class/race/faction rule, a
+    one-of-two choice) - e.g. "A Friend of the Family". When you talk to the
+    quest giver the plan sent you to and the quest isn't on offer, TwizQuest
+    says so and skips it until you level up.
+  - Right-click any step in Up next to skip its quest yourself.
+  - /tq unskip brings every skipped quest back.
+
 NEW IN 1.12.0
   - Up next shows your top 3 quests (the one on the card counts as the first)
     at full brightness; steps for any quest after that are faded. Hover the

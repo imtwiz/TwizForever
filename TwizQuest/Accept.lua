@@ -52,3 +52,117 @@ ev:SetScript("OnEvent", function(_, event)
         if (GetNumAvailableQuests and GetNumAvailableQuests() or 0) > 0 then SelectAvailableQuest(1) end
     end
 end)
+
+------------------------------------------------------------------------
+-- Quests the giver doesn't actually offer you.
+-- Questie's data can think a quest is available when the game disagrees
+-- (another quest needed first, a faction/class/race rule, a one-of-two
+-- choice). When you talk to a quest giver the plan sent you to and the quest
+-- isn't on offer, TwizQuest remembers that and stops suggesting it - until you
+-- level up (or /tq unskip). Right-click a step to skip its quest by hand.
+------------------------------------------------------------------------
+local function CharKey() return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?") end
+local function Skips()
+    NS.db.notOffered = NS.db.notOffered or {}
+    local k = CharKey()
+    NS.db.notOffered[k] = NS.db.notOffered[k] or {}
+    return NS.db.notOffered[k]
+end
+
+function NS.IsSkipped(id)
+    local s = NS.db and NS.db.notOffered and NS.db.notOffered[CharKey()]
+    local e = s and s[id]
+    if not e then return false end
+    if e.level and e.level ~= UnitLevel("player") then s[id] = nil; return false end -- level up: look again
+    return true
+end
+
+function NS.SkipQuest(id, why)
+    if not id then return end
+    Skips()[id] = { level = (why == "manual") and nil or UnitLevel("player"), t = time(), why = why }
+    if NS.MarkDirty then NS.MarkDirty() end
+    if NS.Replan then NS.Replan(true) end
+end
+
+function NS.UnskipAll()
+    if NS.db and NS.db.notOffered then NS.db.notOffered[CharKey()] = nil end
+    if NS.MarkDirty then NS.MarkDirty() end
+    if NS.Replan then NS.Replan(true) end
+end
+
+local function NpcID(unit)
+    local guid = UnitGUID and UnitGUID(unit or "npc")
+    if not guid then return nil end
+    local kind, _, _, _, _, id = strsplit("-", guid)
+    if kind == "Creature" or kind == "Vehicle" then return tonumber(id) end
+end
+
+-- plan pick-ups this NPC should give you
+local function PlannedFrom(npc)
+    local out, plan = {}, NS._plan and NS._plan()
+    for _, s in ipairs(plan and plan.route or {}) do
+        if s.role == 1 and s.q and s.q.id and (s.kind == "pickup" or s.kind == nil) then
+            local by = NS.Q and NS.Q(s.q.id, "startedBy")
+            for _, n in ipairs(type(by) == "table" and by[1] or {}) do
+                if n == npc then out[s.q.id] = s.q.name end
+            end
+        end
+    end
+    return out
+end
+
+local function InLog(id)
+    if C_QuestLog.GetLogIndexForQuestID then return C_QuestLog.GetLogIndexForQuestID(id) ~= nil end
+    return false
+end
+
+local function CheckOffered(offeredIDs, offeredNames)
+    local npc = NpcID("npc")
+    if not npc then return end
+    local who = UnitName("npc") or "That quest giver"
+    local planned = PlannedFrom(npc)
+    if not next(planned) then return end
+    -- give auto-accept a moment, then see what's missing
+    C_Timer.After(1, function()
+        for id, name in pairs(planned) do
+            if not offeredIDs[id] and not (name and offeredNames[name]) and not InLog(id)
+                and not (C_QuestLog.IsQuestFlaggedCompleted and C_QuestLog.IsQuestFlaggedCompleted(id)) then
+                NS.Print(("%s doesn't offer %s to you right now (it may need another quest first) - skipping it until you level up. /tq unskip brings it back."):format(who, name or ("quest " .. id)))
+                NS.SkipQuest(id, "not offered")
+            end
+        end
+    end)
+end
+
+local skipEv = CreateFrame("Frame")
+for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL" }) do skipEv:RegisterEvent(e) end
+skipEv:SetScript("OnEvent", function(_, event)
+    if not NS.db then return end
+    local ids, names = {}, {}
+    if event == "GOSSIP_SHOW" then
+        if not (C_GossipInfo and C_GossipInfo.GetAvailableQuests) then return end
+        for _, q in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do
+            if q.questID then ids[q.questID] = true end
+            if q.title then names[q.title] = true end
+        end
+        for _, q in ipairs(C_GossipInfo.GetActiveQuests and C_GossipInfo.GetActiveQuests() or {}) do
+            if q.questID then ids[q.questID] = true end
+        end
+    elseif event == "QUEST_GREETING" then
+        for i = 1, (GetNumAvailableQuests and GetNumAvailableQuests() or 0) do
+            local t = GetAvailableTitle and GetAvailableTitle(i)
+            if t then names[t] = true end
+        end
+        for i = 1, (GetNumActiveQuests and GetNumActiveQuests() or 0) do
+            local t = GetActiveTitle and GetActiveTitle(i)
+            if t then names[t] = true end
+        end
+    elseif event == "QUEST_DETAIL" then
+        local id = GetQuestID and GetQuestID()
+        if not id or id == 0 then return end -- from an item or a party share, not an NPC
+        ids[id] = true
+        local t = GetTitleText and GetTitleText()
+        if t then names[t] = true end
+    end
+    CheckOffered(ids, names)
+end)

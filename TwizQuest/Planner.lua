@@ -498,7 +498,8 @@ local function Candidates(inst, px, py)
             local rl = NS.Q(id, "requiredLevel") or 0
             local ql = NS.Q(id, "questLevel") or rl
             if ql == -1 then ql = me end
-            if rl <= me and ql <= me + NS.db.maxAbove and ql > gray and not Excluded(DB, id) then
+            if rl <= me and ql <= me + NS.db.maxAbove and ql > gray and not Excluded(DB, id)
+                and not (NS.IsSkipped and NS.IsSkipped(id)) then
                 local ok, doable = pcall(DB.IsDoable, id)
                 if ok and doable then
                     local q = Try(id, nil)

@@ -93,7 +93,7 @@ local function StepTooltip(owner, s)
     GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
     if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
     if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-    GameTooltip:AddLine("Click: waypoint", 0.5, 0.8, 1)
+    GameTooltip:AddLine("Click: waypoint.  Right-click: skip this quest.", 0.5, 0.8, 1)
     GameTooltip:Show()
 end
 
@@ -416,7 +416,15 @@ local function Build()
         local line = row:CreateTexture(nil, "ARTWORK"); line:SetColorTexture(unpack(S.C.line)); line:SetHeight(1)
         line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT")
         local hl = row:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
-        row:SetScript("OnClick", function(self) SetWaypoint(self.step) end)
+        row:SetScript("OnClick", function(self, button)
+            -- right-click: skip that quest (e.g. the game won't give it to you)
+            if button == "RightButton" and self.step and self.step.q and self.step.q.id and self.step.kind ~= "service" then
+                NS.Print(("skipping %s - /tq unskip brings it back."):format(self.step.q.name or "that quest"))
+                NS.SkipQuest(self.step.q.id, "manual")
+                return
+            end
+            SetWaypoint(self.step)
+        end)
         row:SetScript("OnEnter", function(self)
             StepTooltip(self, self.step)
             frame.listHover = true
@@ -785,6 +793,7 @@ local function Help()
     NS.Print("commands:")
     print("  /tq              - show or hide the route window")
     print("  /tq plan         - re-plan now (it also updates by itself)")
+    print("  /tq unskip       - bring back quests skipped (right-click a step, or ones a giver didn't offer)")
     print("  /tq auto         - automatic updates (now " .. (NS.db.auto and "on" or "off") .. ")")
     print("  /tq next         - waypoint to the first step")
     print("  /tq time 60      - minutes of play to plan (now " .. NS.db.horizon .. ")")
@@ -924,6 +933,7 @@ SlashCmdList.QUESTROUTE = function(msg)
     if cmd == "" then
         if frame:IsShown() then frame:Hide(); NS.db.shown = false
         else frame:Show(); NS.db.shown = true; Refresh() end
+    elseif cmd == "unskip" then NS.UnskipAll(); NS.Print("skipped quests are back in the plan.")
     elseif cmd == "plan" then NS.Replan()
     elseif cmd == "size" or cmd == "scale" then NS.resetSize(); NS.Print("window size reset")
     elseif cmd == "next" then
