@@ -1,4 +1,4 @@
-TwizHeal 1.0.0 - one hotkey heals whoever needs it most
+TwizHeal 1.1.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -9,6 +9,19 @@ WHO GETS HEALED
   Anyone in danger (30% or less) is healed first, whatever their role.
   Tanks are whoever has the tank role, whoever enemies are attacking, or
   warriors; healers are those with the healer role, or priests.
+
+SMART HEALING WITH HOTS (new in 1.1.0)
+  Your HoTs count: healing still to come from your Rejuvenation / Renew /
+  Regrowth on someone is taken off what they're missing, so nobody gets a
+  big heal their HoT was about to cover.
+    - small damage and none of your HoTs on them -> Rejuvenation / Renew
+      (the cheapest healing you have)
+    - druids, medium damage and no Regrowth on them -> Regrowth (direct
+      heal plus its own HoT)
+    - a tank with no HoT of yours -> a HoT to keep them ticking, but only
+      when nobody else needs healing
+    - danger -> fast heal; big damage -> the direct heal sized to what's left
+  The bars show your HoTs and seconds left (e.g. "Rejuv 9").
 
 WHICH HEAL
   The smallest rank of your direct heal that covers what they're missing
@@ -26,8 +39,10 @@ USE
       it heals the person under your mouse;
     - or have a friendly player targeted - it heals your target;
     - or click a bar to heal that person.
-  Hold Shift for your fast heal. Every heal needs a key press or click -
-  no addon can cast on its own.
+  In combat: plain = your direct heal, Shift = fast heal (Regrowth, Flash
+  Heal...), Ctrl = HoT (Rejuvenation, Renew). The window tells you which one
+  TwizHeal would use, e.g. "Rejuvenation(Rank 4) (ctrl) -> Bob". Every heal
+  needs a key press or click - no addon can cast on its own.
 
 COMMANDS (/th or /twizheal)
   /th               show / hide the window (out of combat)

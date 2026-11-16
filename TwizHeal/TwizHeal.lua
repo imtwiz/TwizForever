@@ -21,8 +21,8 @@ TwizHeal = NS
 
 local DEFAULTS = { shown = true, danger = 0.30, threshold = 0.90, overheal = 1.10 }
 local SPELLS = {
-    PRIEST  = { direct = { "Lesser Heal", "Heal", "Greater Heal" }, fast = "Flash Heal" },
-    DRUID   = { direct = { "Healing Touch" }, fast = "Regrowth" },
+    PRIEST  = { direct = { "Lesser Heal", "Heal", "Greater Heal" }, fast = "Flash Heal", hot = "Renew" },
+    DRUID   = { direct = { "Healing Touch" }, fast = "Regrowth", hot = "Rejuvenation" },
     PALADIN = { direct = { "Holy Light" }, fast = "Flash of Light" },
     SHAMAN  = { direct = { "Healing Wave" }, fast = "Lesser Healing Wave" },
 }
@@ -63,14 +63,21 @@ local function SpellBookItems()
     return out
 end
 
+local function Num(x) return x and tonumber((x:gsub(",", ""))) end
+-- direct average, HoT total and HoT seconds from the spell's description:
+--   "Heal your target for 295 to 341."                       -> 318
+--   "Heals the target of 45 damage over 15 sec."              -> 0, 45, 15
+--   "Heals a friendly target for 93 to 107 and another 98 damage over 21 sec." -> 100, 98, 21
 local function HealAmount(id)
     local text = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(id))
         or (GetSpellDescription and GetSpellDescription(id)) or ""
+    local avg = 0
     local lo, hi = text:match("(%d[%d,]*) to (%d[%d,]*)")
-    if lo then
-        lo, hi = tonumber((lo:gsub(",", ""))), tonumber((hi:gsub(",", "")))
-        return (lo + hi) / 2
-    end
+    if lo then avg = (Num(lo) + Num(hi)) / 2 end
+    local hot, dur = text:match("(%d[%d,]*) damage over (%d+) sec")
+    hot, dur = Num(hot) or 0, tonumber(dur) or 0
+    if avg == 0 and hot == 0 then return nil end
+    return avg, hot, dur
 end
 
 local function Cost(id)
@@ -85,37 +92,42 @@ function NS.ReadRanks()
     local _, class = UnitClass("player")
     local set = SPELLS[class]
     if not set then return end
-    local want = {}
-    for _, n in ipairs(set.direct) do want[n] = false end
-    want[set.fast] = true
+    local kindOf = {}
+    for _, n in ipairs(set.direct) do kindOf[n] = "direct" end
+    kindOf[set.fast] = "fast"
+    if set.hot then kindOf[set.hot] = "hot" end
     for _, it in ipairs(SpellBookItems()) do
-        local isFast = want[it.name]
-        if isFast ~= nil then
+        local kind = kindOf[it.name]
+        if kind then
             local r = tonumber((it.sub or ""):match("(%d+)")) or 1
-            local avg = HealAmount(it.id)
+            local avg, hot, dur = HealAmount(it.id)
             if avg then
-                ranks[#ranks + 1] = { name = it.name, rank = r, avg = avg, cost = Cost(it.id), fast = isFast,
+                ranks[#ranks + 1] = { name = it.name, rank = r, avg = avg, hot = hot, dur = dur, cost = Cost(it.id),
+                    kind = kind, fast = kind == "fast", total = avg + hot,
                     label = (it.sub and it.sub ~= "") and ("%s(%s)"):format(it.name, it.sub) or it.name }
             end
         end
     end
-    table.sort(ranks, function(a, b) return a.avg < b.avg end)
+    table.sort(ranks, function(a, b) return a.total < b.total end)
 end
 NS.ranks = ranks
 
--- smallest heal that covers the deficit (within the overheal allowance) and that you can afford
-local function PickRank(deficit, fast)
+-- smallest heal of a kind ("direct", "fast", "hot"; true = fast for older callers) that
+-- covers the deficit within the overheal allowance and that you can afford
+local function PickRank(deficit, kind)
+    if kind == true then kind = "fast" elseif not kind then kind = "direct" end
     local mana = UnitPower("player", 0) or 0
     local best
     for _, r in ipairs(ranks) do
-        if r.fast == (fast and true or false) and r.cost <= mana then
+        if r.kind == kind and r.cost <= mana then
             best = r
-            if r.avg * (db.overheal or 1.1) >= deficit then return r end
+            if r.total * (db.overheal or 1.1) >= deficit then return r end
         end
     end
     if best then return best end
-    if fast then return PickRank(deficit, false) end
+    if kind == "fast" or kind == "hot" then return PickRank(deficit, "direct") end
 end
+local function Has(kind) for _, r in ipairs(ranks) do if r.kind == kind then return true end end return false end
 NS.PickRank = PickRank
 
 ------------------------------------------------------------------------
@@ -158,6 +170,29 @@ local function InRange(unit, spell)
     return UnitIsVisible and UnitIsVisible(unit) or true
 end
 
+-- your HoTs on a unit: { [spellName] = seconds left }, and the healing they still have to do
+local function MyHoTs(unit)
+    local out, incoming = {}, 0
+    local _, class = UnitClass("player")
+    local set = SPELLS[class] or {}
+    local watch = { [set.hot or "-"] = true, [set.fast or "-"] = true }
+    for i = 1, 40 do
+        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        if not a then break end
+        if watch[a.name] and (a.sourceUnit == "player" or a.isFromPlayerOrPlayerPet) then
+            local left = a.expirationTime and a.expirationTime > 0 and (a.expirationTime - GetTime()) or 0
+            out[a.name] = math.max(0, left)
+            -- the strongest rank you know of it, scaled by the time left
+            for j = #ranks, 1, -1 do
+                local r = ranks[j]
+                if r.name == a.name and r.hot > 0 and r.dur > 0 then incoming = incoming + r.hot * math.min(1, left / r.dur); break end
+            end
+        end
+    end
+    return out, incoming
+end
+NS.MyHoTs = MyHoTs
+
 -- everyone, with health and role: { unit, name, hp, max, pct, deficit, role, inRange }
 function NS.Scan()
     local out = {}
@@ -165,7 +200,11 @@ function NS.Scan()
         if UnitIsConnected(u) and not UnitIsDeadOrGhost(u) then
             local hp, max = UnitHealth(u) or 0, UnitHealthMax(u) or 1
             if max > 0 then
-                out[#out + 1] = { unit = u, name = UnitName(u), hp = hp, max = max, pct = hp / max, deficit = max - hp,
+                local hots, incoming = MyHoTs(u)
+                -- what's still missing once your HoTs finish ticking
+                local deficit = max - hp
+                out[#out + 1] = { unit = u, name = UnitName(u), hp = hp, max = max, pct = hp / max, deficit = deficit,
+                    need = math.max(0, deficit - incoming), hots = hots, incoming = incoming,
                     role = Role(u), inRange = InRange(u, ranks[1] and ranks[1].name) }
             end
         end
@@ -177,12 +216,21 @@ end
 -- among those missing enough to be worth a heal - lowest health first inside each group
 function NS.Pick(list)
     list = list or NS.Scan()
-    local smallest = ranks[1] and ranks[1].avg or 1
-    local danger, need = {}, {}
+    local smallest
+    for _, r in ipairs(ranks) do if r.kind == "direct" and (not smallest or r.total < smallest) then smallest = r.total end end
+    smallest = smallest or (ranks[1] and ranks[1].total) or 1
+    local danger, need, upkeep = {}, {}, {}
     for _, m in ipairs(list) do
         if m.inRange and m.deficit > 0 then
             if m.pct <= (db.danger or 0.3) then danger[#danger + 1] = m
-            elseif m.pct <= (db.threshold or 0.9) or m.deficit >= smallest then need[#need + 1] = m end
+            -- HoTs already on them count: only people still short after those ticks
+            elseif m.need > 0 and ((m.pct <= (db.threshold or 0.9) and m.need >= smallest * 0.5) or m.need >= smallest) then
+                need[#need + 1] = m
+            -- a tank taking damage with none of your HoTs on them: put one up
+            -- (only when nobody else needs healing)
+            elseif m.role == "TANK" and Has("hot") and not next(m.hots) and m.deficit > 0 and m.pct < 0.99 then
+                upkeep[#upkeep + 1] = m
+            end
         end
     end
     table.sort(danger, function(a, b) return a.pct < b.pct end)
@@ -192,8 +240,36 @@ function NS.Pick(list)
         if ra ~= rb then return ra < rb end
         return a.pct < b.pct
     end)
-    return need[1], false
+    if need[1] then return need[1], false end
+    table.sort(upkeep, function(a, b) return a.pct < b.pct end)
+    return upkeep[1], false
 end
+
+-- What to cast on them: { rank, kind, mod } (mod = the modifier that casts it in combat)
+--   danger                         -> fast heal (Regrowth / Flash Heal ...), HoT on top next time
+--   small need, no HoT of yours    -> HoT (Rejuvenation / Renew): cheapest healing
+--   tank with no HoT               -> HoT, so they're always ticking
+--   druid, mid need, no Regrowth   -> Regrowth (a direct heal plus its own HoT)
+--   anything else                  -> the direct heal that covers what's left
+function NS.Choose(m, emergency)
+    local hasHot = m.hots and next(m.hots) ~= nil
+    local _, class = UnitClass("player")
+    local set = SPELLS[class] or {}
+    if emergency then
+        local r = PickRank(m.need, "fast"); return r, "fast"
+    end
+    local hotRank = Has("hot") and PickRank(m.need, "hot")
+    if hotRank and not (m.hots and m.hots[set.hot]) then
+        if m.role == "TANK" and m.pct >= 0.8 then return hotRank, "hot" end   -- keep the tank ticking
+        if hotRank.total * (db.overheal or 1.1) >= m.need then return hotRank, "hot" end
+    end
+    if class == "DRUID" and Has("fast") and not (m.hots and m.hots[set.fast]) and m.pct > 0.4 then
+        local r = PickRank(m.need, "fast")
+        if r and r.total * (db.overheal or 1.1) >= m.need * 0.8 then return r, "fast" end
+    end
+    return PickRank(m.need, "direct"), "direct"
+end
+local MOD_TEXT = { hot = "ctrl", fast = "shift", direct = "" }
 
 ------------------------------------------------------------------------
 -- The hotkey button and party bars
@@ -201,12 +277,15 @@ end
 local frame, btn, bars = nil, nil, {}
 local MAXBARS = 5
 
-local function MacroFor(unit, spellLabel, fastLabel)
-    -- in combat: mouseover (a party bar), else a friendly target, else the last pick
-    local s = spellLabel
+-- plain = the smart choice (out of combat) / main heal (in combat); shift = fast heal; ctrl = HoT.
+-- In combat: your mouseover (a party bar), else a friendly target, else the last pick.
+local function MacroFor(unit, spellLabel, fastLabel, hotLabel)
     local f = fastLabel or spellLabel
-    return ("/cast [mod:shift,@mouseover,help,nodead][mod:shift,combat,@target,help,nodead][mod:shift,@%s] %s; [@mouseover,help,nodead,combat][combat,@target,help,nodead][@%s] %s")
-        :format(unit, f, unit, s)
+    local h = hotLabel or spellLabel
+    local function part(mod, label)
+        return ("[%s@mouseover,help,nodead,combat][%scombat,@target,help,nodead][%s@%s] %s"):format(mod, mod, mod, unit, label)
+    end
+    return "/cast " .. part("mod:ctrl,", h) .. "; " .. part("mod:shift,", f) .. "; " .. part("", spellLabel)
 end
 
 local function Build()
@@ -291,21 +370,35 @@ function NS.Update()
         end
     end
     -- what the hotkey will do
+    -- HoT timers on the bars
+    for _, b in ipairs(bars) do
+        local m = byUnit[b:GetAttribute("unit")]
+        local tags = {}
+        for name, left in pairs(m and m.hots or {}) do tags[#tags + 1] = ("%s %d"):format(name:sub(1, 5), left) end
+        if #tags > 0 then b.pct:SetText(("|cff8fe08f%s|r  %s"):format(table.concat(tags, " "), b.pct:GetText() or "")) end
+    end
     if pick then
-        local r = PickRank(pick.deficit, emergency)
-        local big = PickRank(pick.deficit, false)
-        frame.next:SetText(r and ("%s%s|r -> %s"):format(emergency and "|cffff8060" or "|cfff0c45c", r.label, pick.unit == "player" and "you" or pick.name) or "no heal known")
+        local r, kind = NS.Choose(pick, emergency)
+        local mod = MOD_TEXT[kind or "direct"]
+        frame.next:SetText(r and ("%s%s|r%s -> %s"):format(emergency and "|cffff8060" or "|cfff0c45c", r.label,
+            mod ~= "" and (" |cff9aa1ab(" .. mod .. ")|r") or "", pick.unit == "player" and "you" or pick.name) or "no heal known")
         if not inCombat and r then
-            local fast = PickRank(pick.deficit, true)
-            btn:SetAttribute("macrotext", MacroFor(pick.unit, r.label, fast and fast.label))
+            local fast = PickRank(pick.need, "fast")
+            local hot = Has("hot") and PickRank(pick.need, "hot")
+            btn:SetAttribute("macrotext", MacroFor(pick.unit, r.label, fast and fast.label, hot and hot.label))
             -- clicking a bar heals that person: the rank for a typical deficit (40% of their health)
             for _, b in ipairs(bars) do
                 local unit = b:GetAttribute("unit")
                 local m = byUnit[unit]
-                local rr = m and PickRank(math.max(m.deficit, m.max * 0.4), false) or big
-                local ff = m and PickRank(m.max * 0.4, true)
-                if rr then
-                    b:SetAttribute("macrotext", ("/cast [mod:shift,@%s] %s; [@%s] %s"):format(unit, (ff or rr).label, unit, rr.label))
+                if m then
+                    local typical = math.max(m.need, m.max * 0.4)
+                    local rr = PickRank(typical, "direct")
+                    local ff = PickRank(m.max * 0.4, "fast")
+                    local hh = Has("hot") and PickRank(m.max * 0.2, "hot")
+                    if rr then
+                        b:SetAttribute("macrotext", ("/cast [mod:ctrl,@%s] %s; [mod:shift,@%s] %s; [@%s] %s"):format(
+                            unit, (hh or rr).label, unit, (ff or rr).label, unit, rr.label))
+                    end
                 end
             end
         end
@@ -346,7 +439,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         NS.ReadRanks()
         if event == "PLAYER_ENTERING_WORLD" and #ranks > 0 and not db.told then
             db.told = true
-            Print("bind a key in Options > Keybindings > AddOns > TwizHeal. Out of combat it heals whoever needs it most; in combat hover a TwizHeal bar (the gold one is the pick) and press it. Shift = fast heal.")
+            Print("bind a key in Options > Keybindings > AddOns > TwizHeal. Out of combat it heals whoever needs it most with the smartest spell; in combat hover a TwizHeal bar (the gold one is the pick) and press it - plain = main heal, Shift = fast heal, Ctrl = HoT. The window shows which one to use.")
         end
     end
     NS.Update()
@@ -379,7 +472,10 @@ SlashCmdList.TWIZHEAL = function(msg)
     elseif cmd == "ranks" then
         NS.ReadRanks()
         if #ranks == 0 then Print("no direct heals found in your spellbook.") end
-        for _, r in ipairs(ranks) do print(("  %s%s: heals ~%d for %d mana"):format(r.label, r.fast and " (fast)" or "", r.avg, r.cost)) end
+        for _, r in ipairs(ranks) do
+            print(("  %s [%s]: %s%s for %d mana"):format(r.label, r.kind,
+                r.avg > 0 and ("~%d"):format(r.avg) or "", r.hot > 0 and (" + %d over %ds"):format(r.hot, r.dur) or "", r.cost))
+        end
     else
         Print("/th - show/hide;  /th danger 30 - heal anyone at 30% or less first;  /th threshold 90 - who's worth a heal;  /th ranks - your heals")
     end

@@ -19,6 +19,9 @@ UnitInRange = function() return true, true end
 UnitGroupRolesAssigned = function() return "NONE" end
 UnitThreatSituation = function() return 0 end
 UnitPower = function() return SIM.mana or 2000 end
+SIM.hots = {}
+GetTime = GetTime
+C_UnitAuras = { GetAuraDataByIndex = function(u, i) local h = SIM.hots[u] and SIM.hots[u][i] if h then return { name = h[1], sourceUnit = "player", expirationTime = GetTime() + h[2] } end end }
 IsInRaid = function() return false end
 -- spellbook: Lesser Heal 1-3, Heal 1-2, Flash Heal 1
 local book = {
@@ -55,3 +58,9 @@ units.party2.hp = 1300; units.party1.hp = 1950; SIM.Advance(0.3); L("3 (tank nea
 units.player.hp = 1000; units.party1.hp = 2000; SIM.Advance(0.3); L("4 (all full): " .. now())
 units.party1.hp = 1500; SIM.mana = 100; SIM.Advance(0.3); L("5 (tank -500, low mana): " .. now())
 L("bar 2 macro: " .. tostring(TwizHealBar2:GetAttribute("macrotext")))
+SIM.mana = 2000
+-- tank at 90% with your Renew ticking (covers the gap): no heal needed; without it: Renew
+units.party1.hp = 1960; SIM.hots.party1 = { { "Renew", 14 } }; SIM.Advance(0.3); L("6 (tank -40, Renew up): " .. now())
+SIM.hots.party1 = nil; SIM.Advance(0.3); L("7 (tank -40, no Renew): " .. now())
+-- rogue at 60%: big need -> direct heal sized to what Renew won't cover
+units.party2.hp = 780; SIM.Advance(0.3); L("8 (rogue 60%): " .. now())

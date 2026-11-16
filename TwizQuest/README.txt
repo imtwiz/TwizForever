@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.17.0
+  - The party line ("synced 0/2", "Bob · 2 same") no longer sits on top of
+    the party XP bars when the Solo/Group switch is hidden.
+
 NEW IN 1.16.0
   - Party XP bars show every party member, not only fully synced ones:
     their XP when TwizQuest has sent it, "waiting for XP..." while it's on

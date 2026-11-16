@@ -225,7 +225,7 @@ local function Refresh()
     frame.partyLine.text:SetText(ptext or S.Color("faint", IsInGroup() and "party not synced" or "solo"))
     frame.partyLine:ClearAllPoints()
     if canGroup then frame.partyLine:SetPoint("LEFT", frame.groupToggle, "RIGHT", 10, 0)
-    else frame.partyLine:SetPoint("LEFT", frame.foot, "LEFT", PAD, 0) end
+    else frame.partyLine:SetPoint("LEFT", frame.controls, "LEFT", PAD, 0) end -- the bottom row, never over the XP bars
     frame.partyLine:SetPoint("RIGHT", frame.share, "LEFT", -8, 0)
     local missing = st and #st.missing or 0
     frame.share:SetText("Share " .. missing)
@@ -466,6 +466,7 @@ local function Build()
     end
     local controls = CreateFrame("Frame", nil, foot)
     controls:SetPoint("BOTTOMLEFT"); controls:SetPoint("BOTTOMRIGHT"); controls:SetHeight(FOOT_H)
+    frame.controls = controls
 
     -- Solo / Group (frame.groupBtn toggles; the segmented control shows the state)
     frame.groupBtn = CreateFrame("Button", nil, controls)
