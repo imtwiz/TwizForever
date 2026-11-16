@@ -130,22 +130,12 @@ function NS.ReadRanks()
             end
             ranks[#ranks + 1] = { name = it.name, rank = r, avg = avg, hot = hot, dur = dur, cost = Cost(it.id),
                 kind = kind, fast = kind == "fast", total = avg + hot, est = est,
-                label = (it.sub and it.sub ~= "") and ("%s(%s)"):format(it.name, it.sub) or it.name }
+                -- cast by plain name: this client silently ignores "/cast Spell(Rank 3)" (nothing happens),
+                -- and a plain name casts your best rank
+                label = it.name, rankText = it.sub }
         end
     end
     table.sort(ranks, function(a, b) return a.total < b.total end)
-    -- some clients don't understand "Spell(Rank 3)" in /cast: then cast by name (your best rank)
-    local GSI = (C_Spell and C_Spell.GetSpellInfo) or GetSpellInfo
-    NS.noRankSyntax = false
-    if GSI then
-        for _, r in ipairs(ranks) do
-            if r.label ~= r.name then
-                local ok, info = pcall(GSI, r.label)
-                local okN, infoN = pcall(GSI, r.name)
-                if not (ok and info) and okN and infoN then r.label = r.name; NS.noRankSyntax = true end
-            end
-        end
-    end
 end
 NS.ranks = ranks
 
@@ -503,7 +493,7 @@ Update = function()
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
     local who = friend("mouseover") and "mouseover" or friend("target") and "target" or fallback
     local ooc, why
-    if pick or NS.hidden or who ~= fallback then ooc, why = OocRule(who) end
+    ooc, why = OocRule(who)
     if inCombat then
         local fast, hot = Best("fast") or Best("direct", 1), Best("hot")
         frame.next:SetText(fast and ("|cfff0c45c%s|r%s"):format(fast.name, hot and (" |cff9aa1ab(moving: " .. hot.name .. ")|r") or "") or "no heal known")
@@ -712,7 +702,6 @@ SlashCmdList.TWIZHEAL = function(msg)
         local m = TwizHealButton and TwizHealButton:GetAttribute("macrotext") or "(none)"
         Print("the key runs:")
         for line in tostring(m):gmatch("[^\n]+") do Print("  " .. line) end
-        if NS.noRankSyntax then Print("this client doesn't take \"Spell(Rank N)\" - casting by name (your best rank)") end
         Print(("it heals: %s; moving: %s"):format(Who(), tostring(Moving())))
     elseif cmd == "debug" then
         pcall(NS.ReadRanks)
@@ -725,7 +714,7 @@ SlashCmdList.TWIZHEAL = function(msg)
         NS.ReadRanks()
         if #ranks == 0 then Print("no direct heals found in your spellbook.") end
         for _, r in ipairs(ranks) do
-            print(("  %s [%s]: %s%s for %d mana"):format(r.label, r.kind,
+            print(("  %s [%s]: %s%s for %d mana"):format(r.label .. (r.rankText and r.rankText ~= "" and (" (" .. r.rankText .. ")") or ""), r.kind,
                 r.avg > 0 and ("~%d"):format(r.avg) or "", r.hot > 0 and (" + %d over %ds"):format(r.hot, r.dur) or "", r.cost))
         end
     else

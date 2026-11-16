@@ -1,4 +1,4 @@
-TwizHeal 1.4.1 - one hotkey heals whoever needs it most
+TwizHeal 1.4.2 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -82,8 +82,9 @@ WHEN A PRESS DOESN'T HEAL (new in 1.4.1)
   range." Faded party/raid frames mean that person is out of range.
   /th test shows exactly what the key will cast and on whom.
   /th quiet turns these messages off or on.
-  If the client doesn't understand "Healing Touch(Rank 3)" in a cast,
-  TwizHeal casts by the plain name instead (your best rank).
+  Casts use the plain spell name (your best rank): this client silently
+  ignores "/cast Healing Touch(Rank 3)". The rules still choose which
+  spell - HoT, fast heal or direct heal.
 
 COMMANDS (/th or /twizheal)
   /th window        show / hide TwizHeal's own bars (off by default)
