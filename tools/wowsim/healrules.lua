@@ -118,3 +118,10 @@ L(("tank: role %s, border %s | rogue: role %s, border %s | you: border %s"):form
 SIM.debuffs.party1 = { { "Curse of Weakness", "Curse" }, { "Spider Venom", "Poison" } }; SIM.debuffs.party2 = { { "Rend" } }
 SIM.Advance(0.3)
 L(("tank border %s | rogue border %s | tank name: %s"):format(tostring(TwizHealBar2.statusKind), tostring(TwizHealBar3.statusKind), tostring(TwizHealBar2.name:GetText())))
+-- 1.8.0: incoming heals
+SIM.incoming = { party1 = 450 }
+UnitGetIncomingHeals = function(u) return SIM.incoming[u] end
+SIM.hots.party2 = { { "Rejuvenation", 6 } }
+SIM.Advance(0.3)
+L(("tank incoming: text=%s bar=%s | rogue (your Rejuv): text=%s | you: shown=%s"):format(
+  tostring(TwizHealBar2.inc:GetText()), tostring(TwizHealBar2.incBar.__value), tostring(TwizHealBar3.inc:GetText()), tostring(TwizHealBar1.inc.__shown)))

@@ -453,6 +453,21 @@ local function Build()
         if b.status.SetBackdrop then b.status:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 }) end
         b.status:Hide()
         b.pct = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.pct:SetPoint("RIGHT", -4, 0)
+        -- incoming heals (yours and others'): a light green bar from the end of their health,
+        -- scaled to their max health, so it shows how far the heals will fill them
+        b.bar:SetClipsChildren(true)
+        b.incBar = CreateFrame("StatusBar", nil, b.bar)
+        b.incBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        b.incBar:SetStatusBarColor(0.55, 1, 0.55, 0.55)
+        b.incBar:SetMinMaxValues(0, 1); b.incBar:SetValue(0)
+        local fill = b.bar:GetStatusBarTexture()
+        b.incBar:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0); b.incBar:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT", 0, 0)
+        b.incBar:SetWidth(198)
+        b.inc = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.inc:SetPoint("RIGHT", b.pct, "LEFT", -4, 0)
+        b.inc:SetTextColor(0.55, 1, 0.55)
+        -- text and icon above the incoming bar
+        b.over = CreateFrame("Frame", nil, b.bar); b.over:SetAllPoints(b.bar); b.over:SetFrameLevel(b.incBar:GetFrameLevel() + 2)
+        for _, r in ipairs({ b.role, b.name, b.pct, b.inc }) do r:SetParent(b.over) end
         -- mana (always, even in cat/bear form) and energy/rage under the health bar
         for _, k in ipairs({ "mana", "power" }) do
             local pb = CreateFrame("StatusBar", nil, b)
@@ -509,6 +524,7 @@ function NS.Layout(live)
         b:SetSize(math.max(60, w - 12), RowH(h))
         b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, -TOP - (i - 1) * (RowH(h) + 2))
         b.bar:ClearAllPoints(); b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, ph + 1)
+        if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
     end
@@ -624,6 +640,25 @@ function NS.DrawStatus(b, unit)
     b.statusKind = kind
 end
 
+-- incoming heals on someone: everyone's casts (the game's heal prediction), else your own HoTs
+function NS.DrawIncoming(b, unit)
+    local inc = UnitGetIncomingHeals and UnitGetIncomingHeals(unit)
+    local n = safe(inc)
+    if inc == nil or (n and n == 0) then
+        local _, hot = MyHoTs(unit)
+        if hot and hot > 0 then inc, n = math.floor(hot), math.floor(hot) end
+    end
+    pcall(b.incBar.SetMinMaxValues, b.incBar, 0, UnitHealthMax(unit) or 1)
+    pcall(b.incBar.SetValue, b.incBar, inc or 0)
+    if n and n > 0 then
+        b.inc:SetText(("+%d"):format(n)); b.inc:Show()
+    else
+        -- none, or hidden by the game (the bar still shows hidden amounts; the number can't be read)
+        b.inc:Hide()
+    end
+    b.incoming = n
+end
+
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
     return 0.56, 0.88, 0.56
@@ -659,6 +694,7 @@ Update = function()
             -- the bar takes the game's numbers directly, so it fills even when they're hidden from addons
             pcall(b.bar.SetMinMaxValues, b.bar, 0, UnitHealthMax(unit) or 1)
             pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
+            pcall(NS.DrawIncoming, b, unit)
             b.bar:SetStatusBarColor(HealthColor(pct))
             pcall(DrawPower, b, unit)
             local dead = UnitIsDeadOrGhost(unit)

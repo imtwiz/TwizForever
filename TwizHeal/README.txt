@@ -1,4 +1,4 @@
-TwizHeal 1.7.0 - one hotkey heals whoever needs it most
+TwizHeal 1.8.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -63,6 +63,12 @@ THE PARTY WINDOW (back in 1.5.0, shown by default)
   Curses and poisons win when several are on someone (druids can remove
   those). Stuns and fears are only known for you; for others a root is
   recognized by its name (Entangling Roots, Frost Nova, nets, webs...).
+  Incoming heals: a light green extension past the end of someone's
+  health shows how far the heals on the way will fill them - your casts
+  and everyone else's (the game's heal prediction). "+450" beside the
+  percent is the amount. When the game sends no prediction, the rest of
+  your own HoTs on them is shown instead. If the game hides the amount,
+  the bar still shows it but the number is left out.
   Move: drag a bar. Resize: drag the grip in the bottom-right
   corner - width sets the bar width, height sets the bar height. Both are
   saved, and only work out of combat. /th window hides or shows it.
