@@ -458,13 +458,13 @@ local function Build()
         b.bar:SetClipsChildren(true)
         b.incBar = CreateFrame("StatusBar", nil, b.bar)
         b.incBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-        b.incBar:SetStatusBarColor(0.55, 1, 0.55, 0.55)
+        b.incBar:SetStatusBarColor(0.50, 1, 0.62, 0.45)
         b.incBar:SetMinMaxValues(0, 1); b.incBar:SetValue(0)
         local fill = b.bar:GetStatusBarTexture()
         b.incBar:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0); b.incBar:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT", 0, 0)
         b.incBar:SetWidth(198)
         b.inc = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.inc:SetPoint("RIGHT", b.pct, "LEFT", -4, 0)
-        b.inc:SetTextColor(0.55, 1, 0.55)
+        b.inc:SetTextColor(0.45, 0.95, 0.58)
         -- shields (Power Word: Shield...): a pale blue bar after the incoming heals, the shield's
         -- icon and amount, and a soft blue glow inside the bar
         b.absBar = CreateFrame("StatusBar", nil, b.bar)
@@ -721,7 +721,7 @@ end
 
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
-    return 0.56, 0.88, 0.56
+    return 0.16, 0.78, 0.30
 end
 
 local Update
