@@ -105,3 +105,16 @@ L(("you (cat): mana shown=%s val=%s | energy shown=%s val=%s"):format(tostring(b
 L(("tank (warrior): mana shown=%s | rage shown=%s"):format(tostring(b2.mana.__shown), tostring(b2.power.__shown)))
 TwizHeal.db.barH = 24; TwizHeal.Layout()
 L(("layout: window h=%d, row h=%d, health ends %s above bottom"):format(TwizHealFrame:GetHeight(), b1:GetHeight(), tostring(b1.powerH + 1)))
+-- 1.7.0: role icons + status borders
+SIM.debuffs = { party1 = { { "Corrupted Blood", "Disease" }, { "Spider Venom", "Poison" } }, party2 = { { "Entangling Roots" } } }
+C_UnitAuras.GetAuraDataByIndex = function(u, i, filter)
+  local list = filter == "HARMFUL" and SIM.debuffs[u] or SIM.hots[u]
+  local h = list and list[i]
+  if h then return { name = h[1], dispelName = filter == "HARMFUL" and h[2] or nil, sourceUnit = "player", expirationTime = GetTime() + 10 } end
+end
+SIM.Advance(0.3)
+L(("tank: role %s, border %s | rogue: role %s, border %s | you: border %s"):format(
+  tostring(TwizHealBar2.role.role), tostring(TwizHealBar2.statusKind), tostring(TwizHealBar3.role.role), tostring(TwizHealBar3.statusKind), tostring(TwizHealBar1.statusKind)))
+SIM.debuffs.party1 = { { "Curse of Weakness", "Curse" }, { "Spider Venom", "Poison" } }; SIM.debuffs.party2 = { { "Rend" } }
+SIM.Advance(0.3)
+L(("tank border %s | rogue border %s | tank name: %s"):format(tostring(TwizHealBar2.statusKind), tostring(TwizHealBar3.statusKind), tostring(TwizHealBar2.name:GetText())))

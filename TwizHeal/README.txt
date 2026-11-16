@@ -1,4 +1,4 @@
-TwizHeal 1.6.0 - one hotkey heals whoever needs it most
+TwizHeal 1.7.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -55,6 +55,14 @@ THE PARTY WINDOW (back in 1.5.0, shown by default)
   of combat. Clicking a bar heals them too.
   No title bar - just the bars. Each bar has a thin row under it: mana
   (blue, shown even in cat/bear form) and energy/rage beside it.
+  Each bar shows a role icon (tank / healer / dps) and a colored border
+  when something bad is on them:
+    purple  curse          green   poison        brown  disease
+    blue    magic          white   rooted        yellow stunned/feared
+    red     any other harmful effect
+  Curses and poisons win when several are on someone (druids can remove
+  those). Stuns and fears are only known for you; for others a root is
+  recognized by its name (Entangling Roots, Frost Nova, nets, webs...).
   Move: drag a bar. Resize: drag the grip in the bottom-right
   corner - width sets the bar width, height sets the bar height. Both are
   saved, and only work out of combat. /th window hides or shows it.

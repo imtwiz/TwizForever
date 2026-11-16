@@ -443,7 +443,15 @@ local function Build()
         b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, 1)
         b.bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
         b.bar:SetMinMaxValues(0, 1)
-        b.name = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.name:SetPoint("LEFT", 4, 0)
+        -- role icon, then the name
+        b.role = b.bar:CreateTexture(nil, "OVERLAY"); b.role:SetSize(12, 12); b.role:SetPoint("LEFT", 3, 0)
+        b.name = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.name:SetPoint("LEFT", b.role, "RIGHT", 3, 0)
+        -- status border (disease, poison, curse, magic, rooted...) drawn over the bar
+        b.status = CreateFrame("Frame", nil, b, "BackdropTemplate")
+        b.status:SetPoint("TOPLEFT", -1, 1); b.status:SetPoint("BOTTOMRIGHT", 1, -1)
+        b.status:SetFrameLevel(b:GetFrameLevel() + 5)
+        if b.status.SetBackdrop then b.status:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 }) end
+        b.status:Hide()
         b.pct = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.pct:SetPoint("RIGHT", -4, 0)
         -- mana (always, even in cat/bear form) and energy/rage under the health bar
         for _, k in ipairs({ "mana", "power" }) do
@@ -542,6 +550,80 @@ local function DrawPower(b, unit)
 end
 NS.DrawPower = DrawPower
 
+------------------------------------------------------------------------
+-- Role icons and status borders
+------------------------------------------------------------------------
+local ROLE_ATLAS = { TANK = "roleicon-tiny-tank", HEALER = "roleicon-tiny-healer", DAMAGER = "roleicon-tiny-dps" }
+local ROLE_COORDS = { TANK = { 0, 19 / 64, 22 / 64, 41 / 64 }, HEALER = { 20 / 64, 39 / 64, 1 / 64, 20 / 64 }, DAMAGER = { 20 / 64, 39 / 64, 22 / 64, 41 / 64 } }
+function NS.SetRoleIcon(tex, role)
+    role = role == "DPS" and "DAMAGER" or role
+    if not ROLE_COORDS[role] then tex:Hide(); return end
+    if tex.role == role then tex:Show(); return end
+    tex.role = role
+    local ok = tex.SetAtlas and pcall(tex.SetAtlas, tex, ROLE_ATLAS[role])
+    if not ok then
+        tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTROLES")
+        tex:SetTexCoord(unpack(ROLE_COORDS[role]))
+    end
+    tex:Show()
+end
+
+-- border colors, most important first (curses and poisons first: druids can remove those)
+NS.STATUS_COLORS = {
+    Curse   = { 0.64, 0.19, 0.79 }, -- purple
+    Poison  = { 0.00, 0.80, 0.20 }, -- green
+    Disease = { 0.76, 0.52, 0.20 }, -- brown
+    Magic   = { 0.20, 0.60, 1.00 }, -- blue
+    Rooted  = { 1.00, 1.00, 1.00 }, -- white
+    Stunned = { 1.00, 0.85, 0.10 }, -- yellow (stun, fear, sheep, silence...)
+    Other   = { 0.90, 0.30, 0.20 }, -- red (any other harmful effect)
+}
+local STATUS_ORDER = { "Curse", "Poison", "Disease", "Magic", "Rooted", "Stunned", "Other" }
+local CONTROL = { ROOT = "Rooted", STUN = "Stunned", STUN_MECHANIC = "Stunned", FEAR = "Stunned", FEAR_MECHANIC = "Stunned",
+    CHARM = "Stunned", CONFUSE = "Stunned", POSSESS = "Stunned", SILENCE = "Stunned", PACIFY = "Stunned", PACIFYSILENCE = "Stunned", DISARM = "Stunned" }
+local ROOT_WORDS = { "root", "frost nova", "entangl", "net", "snare", "web", "freez", "frozen" }
+
+-- what's on them: the most important kind wins
+function NS.StatusOf(unit)
+    local found = {}
+    for i = 1, 40 do
+        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+        if not a then break end
+        local kind = safe(a.dispelName)
+        if kind and NS.STATUS_COLORS[kind] and kind ~= "Rooted" and kind ~= "Stunned" and kind ~= "Other" then
+            found[kind] = true
+        else
+            local name = safe(a.name)
+            local lname = type(name) == "string" and name:lower() or ""
+            local rooted = false
+            for _, w in ipairs(ROOT_WORDS) do if lname:find(w, 1, true) then rooted = true; break end end
+            found[rooted and "Rooted" or "Other"] = true
+        end
+    end
+    -- your own crowd control, from the loss-of-control list (stun, fear, root...)
+    if UnitIsUnit and UnitIsUnit(unit, "player") and C_LossOfControl and C_LossOfControl.GetActiveLossOfControlDataCount then
+        local n = safe(C_LossOfControl.GetActiveLossOfControlDataCount()) or 0
+        for i = 1, n do
+            local d = C_LossOfControl.GetActiveLossOfControlData(i)
+            local t = d and safe(d.locType)
+            if t and CONTROL[t] then found[CONTROL[t]] = true end
+        end
+    end
+    for _, k in ipairs(STATUS_ORDER) do if found[k] then return k end end
+end
+
+function NS.DrawStatus(b, unit)
+    local kind = NS.StatusOf(unit)
+    if kind then
+        local c = NS.STATUS_COLORS[kind]
+        b.status:SetBackdropBorderColor(c[1], c[2], c[3], 1)
+        b.status:Show()
+    else
+        b.status:Hide()
+    end
+    b.statusKind = kind
+end
+
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
     return 0.56, 0.88, 0.56
@@ -580,7 +662,9 @@ Update = function()
             b.bar:SetStatusBarColor(HealthColor(pct))
             pcall(DrawPower, b, unit)
             local dead = UnitIsDeadOrGhost(unit)
-            b.name:SetText(("%s |cff9aa1ab%s|r"):format(safe(UnitName(unit)) or unit, m and ROLE_TEXT[m.role] or (dead and "dead" or "")))
+            b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " |cff9aa1abdead|r" or ""))
+            pcall(NS.SetRoleIcon, b.role, Role(unit))
+            pcall(NS.DrawStatus, b, unit)
             b.pct:SetText(m and ("%d%%"):format(pct * 100 + 0.5) or "")
             local picked = pick and pick.unit == unit
             if b.SetBackdropBorderColor then
