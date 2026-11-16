@@ -643,6 +643,31 @@ local function Done(questID, role)
     Refresh()
 end
 
+------------------------------------------------------------------------
+-- Live distance: the next step's yards update every time you move 1 yard
+------------------------------------------------------------------------
+local live = CreateFrame("Frame")
+local liveAcc, lastYd = 0, nil
+live:SetScript("OnUpdate", function(_, e)
+    liveAcc = liveAcc + e
+    if liveAcc < 0.05 then return end
+    liveAcc = 0
+    if not (frame and frame:IsShown() and plan and NS.Bridge and NS.Bridge()) then return end
+    local first = plan.route and plan.route[1]
+    if not first or not first.x or first.kind == "todo" then return end
+    local ok, px, py, inst = pcall(NS.PlayerPos)
+    if not ok or not px then return end
+    if plan.inst and inst and plan.inst ~= inst then return end
+    local yd = math.floor(NS.Dist(px, py, first.x, first.y) + 0.5)
+    if yd == lastYd and first.dist == yd then return end
+    lastYd = yd
+    first.dist = yd
+    if frame.card.step == first then
+        local _, _, _, sub = StepParts(first)
+        frame.card.sub:SetText(S.Color("muted", sub))
+    end
+end)
+
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",
     "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED", "PLAYER_LEVEL_UP", "ZONE_CHANGED_NEW_AREA",

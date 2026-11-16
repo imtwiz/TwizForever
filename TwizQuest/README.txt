@@ -1,5 +1,8 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.15.0
+  - The distance on the next-step card updates live: every yard you move.
+
 NEW IN 1.14.0
   - No more "Turn in" for quests you haven't finished:
     - an objective TwizQuest can't put on the map (reputation, a scripted
