@@ -38,6 +38,17 @@ local BUFFS = {
         { key = "shout", spell = "Battle Shout", selfOnly = true },
     },
 }
+-- what each class can remove, best spell first (Abolish keeps cleansing over time)
+local DISPELS = {
+    DRUID   = { Curse = { "Remove Curse" }, Poison = { "Abolish Poison", "Cure Poison" } },
+    PRIEST  = { Magic = { "Dispel Magic" }, Disease = { "Abolish Disease", "Cure Disease" } },
+    MAGE    = { Curse = { "Remove Lesser Curse", "Remove Curse" } },
+    PALADIN = { Magic = { "Cleanse" }, Poison = { "Cleanse", "Purify" }, Disease = { "Cleanse", "Purify" } },
+    SHAMAN  = { Poison = { "Cure Poison" }, Disease = { "Cure Disease" } },
+}
+local ABOLISH = { Poison = "Abolish Poison", Disease = "Abolish Disease" }
+local DISPEL_ORDER = { Curse = 1, Poison = 2, Disease = 3, Magic = 4 }
+local DISPEL_HEX = { Curse = "a330c9", Poison = "00cc33", Disease = "c2853b", Magic = "3399ff" }
 local BLESSINGS = { "Blessing of Kings", "Blessing of Wisdom", "Blessing of Might", "Blessing of Salvation", "Blessing of Light", "Blessing of Sanctuary" }
 
 local db
@@ -150,6 +161,47 @@ local function Units()
 end
 
 local function GroupUnit(u) return u == "player" or u:match("^party%d") or u:match("^raid%d") end
+
+local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
+
+-- debuffs you can remove: { { unit, name, spell, kind, debuff, inRange }, ... }, most urgent first
+function NS.Debuffed()
+    local _, class = UnitClass("player")
+    local can = DISPELS[class]
+    local out = {}
+    if not can or (db and db.dispel == false) then return out end
+    local spellFor = {}
+    for kind, list in pairs(can) do
+        for _, sp in ipairs(list) do if Known(sp) then spellFor[kind] = sp; break end end
+    end
+    if not next(spellFor) then return out end
+    for _, u in ipairs(Units()) do
+        if UnitIsConnected(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) then
+            local have = Auras(u)
+            local seen = {}
+            for i = 1, 40 do
+                local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(u, i, "HARMFUL")
+                if not a then break end
+                local kind = plain(a.dispelName)
+                local sp = kind and spellFor[kind]
+                -- Abolish Poison/Disease already on them is clearing it
+                if sp and not seen[kind] and not (ABOLISH[kind] and have[ABOLISH[kind]] and sp == ABOLISH[kind]) then
+                    seen[kind] = true
+                    out[#out + 1] = { unit = u, name = UnitName(u), spell = sp, kind = kind, debuff = plain(a.name) or kind,
+                        inRange = InRange(sp, u), classFile = select(2, UnitClass(u)) }
+                end
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.inRange ~= b.inRange then return a.inRange end
+        local function rank(u) return u == "player" and 1 or (GroupUnit(u) and 2) or 3 end
+        local pa, pb = rank(a.unit), rank(b.unit)
+        if pa ~= pb then return pa < pb end
+        return DISPEL_ORDER[a.kind] < DISPEL_ORDER[b.kind]
+    end)
+    return out
+end
 
 -- { { unit, name, spell, buff, inRange }, ... } in casting order
 function NS.Missing()
@@ -295,8 +347,20 @@ function NS.Update()
     local list = NS.Missing()
     local nextCast = NS.NextCast(list)
     local inCombat = InCombatLockdown()
-    for i = 1, ROWS do
-        local m = list[i]
+    -- debuffs come first: in the list and on the key
+    local debuffs = NS.Debuffed()
+    local cleanse
+    for _, d in ipairs(debuffs) do if d.inRange and Usable(d.spell) then cleanse = d; break end end
+    local nd = math.min(#debuffs, ROWS)
+    for i = 1, nd do
+        local d = debuffs[i]
+        local who = d.unit == "player" and "you" or ClassColor(d.classFile, d.name or d.unit)
+        rows[i]:SetText(("|cff%s%s|r  |cff9aa1ab->|r %s |cff9aa1ab(%s)|r%s"):format(DISPEL_HEX[d.kind] or "ffffff", d.spell, who,
+            tostring(d.debuff), d.inRange and "" or "  |cff7c838d(out of range)|r"))
+        rows[i]:Show()
+    end
+    for i = nd + 1, ROWS do
+        local m = list[i - nd]
         if m then
             local who = m.unit == "player" and "you" or ClassColor(m.classFile, m.name or m.unit)
             rows[i]:SetText(("%s%s  |cff9aa1ab->|r %s%s"):format(m.inRange and "" or "|cff7c838d", m.spell, who,
@@ -306,7 +370,7 @@ function NS.Update()
             rows[i]:Hide()
         end
     end
-    frame.count:SetText(#list > 0 and ("%d missing"):format(#list) or "all buffed")
+    frame.count:SetText((#debuffs > 0 and ("|cffff8060%d to cleanse|r  "):format(#debuffs) or "") .. (#list > 0 and ("%d missing"):format(#list) or "all buffed"))
     -- One key for buffing and healing: with TwizHeal loaded, the same key heals whoever
     -- needs it most - in combat always, and out of combat when someone is hurt; otherwise it
     -- casts the next missing buff (out of combat only).
@@ -317,7 +381,12 @@ function NS.Update()
         local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
         local target = "TwizHealButton" .. (keyDown and " LeftButton 1" or "")
         if TwizHealButton then lines[#lines + 1] = "/click [combat] " .. target end
-        if heal then
+        if cleanse then
+            -- a debuff you can remove beats a heal or a buff
+            lines[#lines + 1] = ("/cast [nocombat,@%s] %s"):format(cleanse.unit, cleanse.spell)
+            btn.label:SetText(("%s %s"):format(cleanse.spell, cleanse.unit == "player" and "you" or (cleanse.name or cleanse.unit)))
+            btn:SetAlpha(1)
+        elseif heal then
             lines[#lines + 1] = "/click [nocombat] " .. target
             btn.label:SetText("Heal " .. (heal.unit == "player" and "you" or (heal.name or heal.unit)))
             btn:SetAlpha(1)
@@ -331,15 +400,15 @@ function NS.Update()
         end
         btn:SetAttribute("type", "macro")
         btn:SetAttribute("macrotext", table.concat(lines, "\n"))
-        local shown = math.min(#list, ROWS)
+        local shown = math.min(#list + #debuffs, ROWS)
         frame:SetHeight(28 + shown * 15 + 42)
-        local want = db.shown and (#list > 0 or not db.hideWhenDone)
+        local want = db.shown and (#list > 0 or #debuffs > 0 or not db.hideWhenDone)
         frame:SetShown(want and true or false)
-        SetWheel(db.wheel and (nextCast ~= nil or heal ~= nil))
+        SetWheel(db.wheel and (nextCast ~= nil or heal ~= nil or cleanse ~= nil))
     else
         btn.label:SetText(TwizHealButton and "In combat: heals" or "In combat")
     end
-    NS.next = nextCast
+    NS.next, NS.cleanse = nextCast, cleanse
 end
 
 ------------------------------------------------------------------------
@@ -408,6 +477,10 @@ SlashCmdList.TWIZBUFF = function(msg)
         db[k] = not db[k]
         Print((cmd == "shadow" and "Shadow Protection" or "Thorns") .. ": " .. (db[k] and "included" or "left out"))
         NS.Update()
+    elseif cmd == "cleanse" then
+        db.dispel = db.dispel == false
+        Print("remove curses / poisons / diseases / magic with the same key: " .. (db.dispel and "on" or "off"))
+        NS.Update()
     elseif cmd == "strangers" then
         db.strangers = rest == "on" or (rest == "" and not db.strangers)
         if not InCombatLockdown() and SetCVar then
@@ -427,6 +500,6 @@ SlashCmdList.TWIZBUFF = function(msg)
         db.minGroup = math.max(2, math.min(tonumber(rest), 40))
         Print(("group buff when %d or more need it"):format(db.minGroup))
     else
-        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb pvp - skip PvP-flagged strangers;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb group N - group version at N people")
+        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb pvp - skip PvP-flagged strangers;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb cleanse - remove debuffs with the key on/off;  /tb group N - group version at N people")
     end
 end

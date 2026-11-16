@@ -1,7 +1,19 @@
-TwizBuff 1.3.1 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.4.0 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.
+
+DEBUFFS (new in 1.4.0)
+  The same key removes debuffs you can cure, before any heal or buff:
+    Druid    Remove Curse, Abolish / Cure Poison
+    Priest   Dispel Magic, Abolish / Cure Disease
+    Mage     Remove Lesser Curse
+    Paladin  Cleanse / Purify     Shaman  Cure Poison, Cure Disease
+  They're listed at the top of the window in their color (purple curse,
+  green poison, brown disease, blue magic) with the debuff's name. Someone
+  with your Abolish Poison/Disease already on them is left alone while it
+  works. Out of combat only - in combat the key heals (with TwizHeal).
+  /tb cleanse turns this off or on.
 
 WHO
   You, your party (or raid), and random friendly players near you: your

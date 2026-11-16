@@ -1,0 +1,56 @@
+-- TwizBuff: who is missing your class buffs, and what the cast button is set to
+local L = function(s) SIM.log[#SIM.log + 1] = s end
+-- a druid in a party of 3 + a friendly target outside the group
+SIM.class = "DRUID"
+local units = {
+  player = { name = "Kitty", class = "DRUID", power = 0, auras = {} },
+  party1 = { name = "Bob", class = "WARRIOR", power = 1, auras = { "Mark of the Wild" } },
+  party2 = { name = "Sue", class = "MAGE", power = 0, auras = {} },
+  party3 = { name = "Far", class = "PRIEST", power = 0, auras = {}, far = true },
+  target = { name = "Stranger", class = "ROGUE", power = 3, auras = {} },
+  nameplate1 = { name = "Passerby", class = "PALADIN", power = 0, auras = {} },
+  nameplate2 = { name = "Flagged", class = "MAGE", power = 0, auras = {}, pvp = true },
+  nameplate3 = { name = "Sue", class = "MAGE", power = 0, auras = {}, same = "party2" },
+}
+UnitIsUnit = function(a, b) return a == b end
+UnitIsPVP = function(u) return units[u] and units[u].pvp or false end
+SIM.cvars = { nameplateShowFriends = "0" }
+GetCVar = function(k) return SIM.cvars[k] end
+SetCVar = function(k, v) SIM.cvars[k] = tostring(v) end
+UnitExists = function(u) return units[u] ~= nil end
+UnitGUID = function(u) local x = units[u] if not x then return nil end return "GUID-" .. (x.same and units[x.same].name or x.name) end
+UnitName = function(u) return units[u] and units[u].name end
+UnitClass = function(u) local x = units[u or "player"] return x.class:lower(), x.class end
+UnitPowerType = function(u) return units[u].power end
+UnitIsConnected = function() return true end
+UnitIsDeadOrGhost = function() return false end
+UnitIsPlayer = function(u) return units[u] ~= nil end
+UnitIsFriend = function() return true end
+UnitIsVisible = function() return true end
+IsInRaid = function() return false end
+C_UnitAuras = { GetAuraDataByIndex = function(u, i) local n = units[u] and units[u].auras[i] return n and { name = n } end }
+SIM.known = { ["Mark of the Wild"] = 1126, ["Thorns"] = 467 }
+C_Spell = C_Spell or {}
+C_Spell.GetSpellInfo = function(name) local id = SIM.known[name] return id and { spellID = id, name = name } end
+IsPlayerSpell = function(id) for _, v in pairs(SIM.known) do if v == id then return true end end return false end
+C_Spell.IsSpellUsable = function(name) return SIM.known[name] ~= nil and (name ~= "Gift of the Wild" or SIM.haveBerries) end
+C_Spell.IsSpellInRange = function(name, u) return not units[u].far end
+RAID_CLASS_COLORS = {}
+SIM.known["Remove Curse"] = 2782; SIM.known["Cure Poison"] = 8946
+SIM.debuffs = { party1 = { { "Curse of Weakness", "Curse" } }, party2 = { { "Spider Venom", "Poison" }, { "Hamstring" } } }
+C_UnitAuras = { GetAuraDataByIndex = function(u, i, f)
+  if f == "HARMFUL" then local d = SIM.debuffs[u] and SIM.debuffs[u][i] return d and { name = d[1], dispelName = d[2] } end
+  local n = units[u] and units[u].auras[i] return n and { name = n } end }
+local NS = SIM.LoadAddon(REPO .. "/TwizBuff", "TwizBuff")
+SIM.Fire("ADDON_LOADED", "TwizBuff"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(1.5)
+local L = function(s) SIM.log[#SIM.log + 1] = s end
+local function key() return (tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ")) end
+local d = {} for _, x in ipairs(NS.Debuffed()) do d[#d + 1] = x.spell .. "->" .. x.unit .. "(" .. x.debuff .. ")" end
+L("debuffs: " .. table.concat(d, ", "))
+L("key: " .. key() .. " | label: " .. tostring(TwizBuffButton.label:GetText()))
+SIM.debuffs.party1 = nil; SIM.Fire("UNIT_AURA", "party1"); SIM.Advance(1)
+L("after curse removed: " .. key())
+SIM.debuffs.party2 = { { "Hamstring" } }; SIM.Fire("UNIT_AURA", "party2"); SIM.Advance(1)
+L("only undispellable left: " .. key())
+SlashCmdList.TWIZBUFF("cleanse"); SIM.debuffs.party1 = { { "Curse of Weakness", "Curse" } }; SIM.Advance(1)
+L("cleanse off: " .. key())
