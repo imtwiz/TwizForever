@@ -14,14 +14,14 @@
 local ADDON, NS = ...
 TwizBuff = NS
 
-local DEFAULTS = { shown = true, wheel = false, shadowProt = false, thorns = false, hideWhenDone = true, minGroup = 3, strangers = true }
+local DEFAULTS = { shown = true, wheel = true, shadowProt = false, thorns = true, hideWhenDone = true, minGroup = 3, strangers = true, skipPvP = false }
 
 -- names: what to cast; also = auras that already count (group versions, greater blessings)
 -- mana = only for people who use mana; group = group version (needs a reagent)
 local BUFFS = {
     DRUID = {
         { key = "motw", spell = "Mark of the Wild", group = "Gift of the Wild", also = { "Gift of the Wild" } },
-        { key = "thorns", spell = "Thorns", opt = "thorns" },
+        { key = "thorns", spell = "Thorns", opt = "thorns" },   -- on by default (/tb thorns to leave it out)
     },
     PRIEST = {
         { key = "fort", spell = "Power Word: Fortitude", group = "Prayer of Fortitude", also = { "Prayer of Fortitude" } },
@@ -137,8 +137,8 @@ local function Units()
     local function stranger(u)
         if not UnitExists(u) or not UnitIsPlayer(u) or not UnitIsFriend("player", u) then return end
         if UnitIsUnit and UnitIsUnit(u, "player") then return end
-        -- buffing someone flagged for PvP flags you too: skip them unless you already are
-        if UnitIsPVP and UnitIsPVP(u) and not UnitIsPVP("player") then return end
+        -- buffing someone flagged for PvP flags you too: /tb pvp skips them unless you already are
+        if db.skipPvP and UnitIsPVP and UnitIsPVP(u) and not UnitIsPVP("player") then return end
         add(u)
     end
     stranger("target")
@@ -159,7 +159,7 @@ function NS.Missing()
     for _, u in ipairs(Units()) do
         if UnitIsConnected(u) and not UnitIsDeadOrGhost(u) then
             local have = Auras(u)
-            for _, b in ipairs(defs) do
+            for bi, b in ipairs(defs) do
                 if not b.opt or db[b.opt] then
                     local spell, missing
                     if b.blessing then
@@ -175,7 +175,7 @@ function NS.Missing()
                         if missing and b.mana and not UsesMana(u) then missing = false end
                     end
                     if missing then
-                        out[#out + 1] = { unit = u, name = UnitName(u), spell = spell, buff = b, inRange = InRange(spell, u),
+                        out[#out + 1] = { unit = u, name = UnitName(u), spell = spell, buff = b, order = bi, inRange = InRange(spell, u),
                             classFile = select(2, UnitClass(u)) }
                     end
                 end
@@ -188,7 +188,8 @@ function NS.Missing()
         local function rank(u) return u == "target" and 0 or (u == "player" and 1) or (GroupUnit(u) and 2) or 3 end
         local pa, pb = rank(a.unit), rank(b.unit)
         if pa ~= pb then return pa < pb end
-        return a.unit < b.unit
+        if a.unit ~= b.unit then return a.unit < b.unit end
+        return a.order < b.order
     end)
     return out
 end
@@ -344,6 +345,8 @@ ev:SetScript("OnEvent", function(_, event, a1)
         TwizBuffDB = TwizBuffDB or {}
         db = TwizBuffDB
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+        -- 1.2: Thorns and the mouse wheel are on by default now
+        if (db.version or 0) < 2 then db.thorns, db.wheel, db.version = true, true, 2 end
         NS.db = db
         return
     end
@@ -354,6 +357,10 @@ ev:SetScript("OnEvent", function(_, event, a1)
             Print("turned on friendly nameplates so I can see nearby players who need buffs. /tb strangers off puts them back.")
         end
         db.platesSet = true
+    end
+    if event == "PLAYER_ENTERING_WORLD" and not db.toldWheel then
+        db.toldWheel = true
+        Print("spin your mouse wheel (out of combat) to buff whoever is missing your buffs - each notch casts one. The game needs a notch, click or key press per cast; /tb wheel off gives the wheel back to the camera.")
     end
     if not db then return end
     if event == "PLAYER_REGEN_DISABLED" then SetWheel(false) end
@@ -399,10 +406,14 @@ SlashCmdList.TWIZBUFF = function(msg)
         end
         Print("buff nearby strangers (friendly players with nameplates or under your mouse): " .. (db.strangers and "on" or "off"))
         NS.Update()
+    elseif cmd == "pvp" then
+        db.skipPvP = not db.skipPvP
+        Print("PvP-flagged strangers: " .. (db.skipPvP and "skipped unless you're flagged (buffing them would flag you)" or "buffed like anyone else"))
+        NS.Update()
     elseif cmd == "group" and tonumber(rest) then
         db.minGroup = math.max(2, math.min(tonumber(rest), 40))
         Print(("group buff when %d or more need it"):format(db.minGroup))
     else
-        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb group N - group version at N people")
+        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb pvp - skip PvP-flagged strangers;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb group N - group version at N people")
     end
 end
