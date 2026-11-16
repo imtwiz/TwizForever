@@ -584,8 +584,24 @@ local function MakeTargetButton()
     end
 end
 
+-- steps finished since a plan started: a plan that was already running when you accepted /
+-- turned in a quest mustn't bring the finished step back
+local recentDone = {}
+local function StaleStep(st)
+    local id = st.q and st.q.id
+    if not id then return false end
+    local t = recentDone[id .. ":" .. tostring(st.role)]
+    if t and GetTime() - t < 30 then return true end
+    -- objective steps of a quest that's now complete, pickups of a quest now in the log
+    if st.role == 2 and C_QuestLog.IsComplete and NS.safe(C_QuestLog.IsComplete(id)) then return true end
+    if st.role == 1 and C_QuestLog.IsOnQuest and NS.safe(C_QuestLog.IsOnQuest(id)) then return true end
+    return false
+end
 function NS.OnPlan(result, why)
     if result then
+        for i = #result.route, 1, -1 do
+            if StaleStep(result.route[i]) then table.remove(result.route, i) end
+        end
         plan = result
         NS.UpdateTargetButton()
         if NS.db.autoWay and result.route[1] then SetWaypoint(result.route[1], true) end
@@ -625,7 +641,7 @@ local function Tick()
     if not NS.db.auto then Refresh(); return end
     if InCombatLockdown() then return end            -- catch up right after the fight
     local t = GetTime()
-    if (dirty and t - lastFull >= 6) or t - lastFull >= 120 or Moved(400) then
+    if (dirty and t - lastFull >= 3) or t - lastFull >= 120 or Moved(400) then
         dirty, lastFull = false, t
         NS.Plan(true)
     elseif not dirty and Moved(60) then
@@ -633,6 +649,9 @@ local function Tick()
     end
     Refresh()
 end
+
+-- plan again on the next tick (even mid-fight: planning is spread over frames)
+function NS.RequestPlan() wantFull = true end
 
 -- Kept for the Plan button and slash commands: re-plan as soon as possible.
 function NS.Replan()
@@ -642,7 +661,11 @@ end
 
 -- Drop a finished step right away, before the next plan comes in.
 local function Done(questID, role)
-    if not plan or not questID then return end
+    if not questID then return end
+    recentDone[questID .. ":" .. role] = GetTime()
+    -- new quests may open up (follow-ups at the same NPC): plan again right away
+    wantFull = true
+    if not plan then return end
     for i = #plan.route, 1, -1 do
         local s = plan.route[i]
         if s.q.id == questID and s.role == role then table.remove(plan.route, i) end
@@ -704,7 +727,7 @@ function NS.LiveProgress()
                 if need <= 0 then drop = true
                 elseif need ~= s.need then s.need, changed = need, true end
             end
-            if drop then table.remove(plan.route, i); changed = true end
+            if drop then table.remove(plan.route, i); changed = true; if complete then NS.RequestPlan() end end
         end
     end
     if changed then
@@ -753,7 +776,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
     if event == "PLAYER_LOGIN" then
         Build()
         MakeTargetButton()
-        C_Timer.NewTicker(3, Tick)
+        C_Timer.NewTicker(1, Tick)
         return
     end
     if event == "PLAYER_REGEN_ENABLED" then
@@ -787,6 +810,8 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         Done(a2 or a1, 1)          -- older clients pass (logIndex, questID)
     elseif event == "QUEST_TURNED_IN" then
         Done(a1, 3)
+    elseif event == "QUEST_REMOVED" then
+        wantFull = true
     end
 end)
 

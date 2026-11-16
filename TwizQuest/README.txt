@@ -1,5 +1,12 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.2
+  - Moves to the next quest right away: accepting, completing or turning in
+    a quest re-plans within a second - even mid-fight - so follow-up
+    quests and the turn-in show up at once. The card checks for changes
+    every second (was every 3), and a plan that was already running can't
+    bring back a step you just finished.
+
 NEW IN 1.18.1
   - "Sell junk" no longer gets stuck at the top: after you visit a vendor
     it leaves you alone for 20 minutes (if your bags are still full, it's
