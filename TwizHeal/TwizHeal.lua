@@ -19,7 +19,7 @@
 local ADDON, NS = ...
 TwizHeal = NS
 
-local DEFAULTS = { shown = false, danger = 0.30, threshold = 0.90, overheal = 1.10, clickCast = true }
+local DEFAULTS = { shown = true, danger = 0.30, threshold = 0.90, overheal = 1.10, clickCast = true }
 local SPELLS = {
     PRIEST  = { direct = { "Lesser Heal", "Heal", "Greater Heal" }, fast = "Flash Heal", hot = "Renew" },
     DRUID   = { direct = { "Healing Touch" }, fast = "Regrowth", hot = "Rejuvenation" },
@@ -396,12 +396,13 @@ local function Build()
     local close = Skin.IconButton(frame, "x", "Hide (/th to show)", function() if not InCombatLockdown() then db.shown = false; frame:Hide() end end)
     close:SetPoint("TOPRIGHT", -6, -5)
 
-    -- party bars: secure unit buttons, so hovering one is your "mouseover" and clicking it heals
+    -- party bars: hover one and press your TwizHeal key to heal that person (works in combat too:
+    -- a secure hover handler swaps the key to that bar's heal); clicking a bar heals as well
     for i = 1, MAXBARS do
-        local b = CreateFrame("Button", "TwizHealBar" .. i, frame, "SecureUnitButtonTemplate,BackdropTemplate")
+        local b = CreateFrame("Button", "TwizHealBar" .. i, frame, "SecureUnitButtonTemplate,SecureHandlerEnterLeaveTemplate,BackdropTemplate")
         b:SetSize(200, 20)
         b:SetPoint("TOPLEFT", 10, -30 - (i - 1) * 22)
-        b:RegisterForClicks("AnyUp", "AnyDown")
+        b:RegisterForClicks("AnyUp")
         b:SetAttribute("type", "macro")
         b:SetAttribute("unit", i == 1 and "player" or ("party" .. (i - 1)))
         if b.SetBackdrop then
@@ -424,6 +425,20 @@ local function Build()
     btn:SetAttribute("type", "macro")
     -- tell you when a press didn't heal (out of range, can't cast while moving...)
     btn:HookScript("PostClick", function() if NS.OnPress then NS.OnPress() end end)
+    for _, b in ipairs(bars) do
+        if b.SetFrameRef then b:SetFrameRef("key", btn) end
+        b:SetAttribute("_onenter", [[
+            local key = self:GetFrameRef("key")
+            local m = self:GetAttribute("healmacro")
+            if key and m then key:SetAttribute("macrotext", m) end
+        ]])
+        b:SetAttribute("_onleave", [[
+            local key = self:GetFrameRef("key")
+            if key then key:SetAttribute("macrotext", key:GetAttribute("basemacro")) end
+        ]])
+        b:HookScript("OnEnter", function(self) NS.hoverUnit = self:GetAttribute("unit") end)
+        b:HookScript("OnLeave", function() NS.hoverUnit = nil end)
+    end
     frame:Hide() -- shown by the first successful update
 end
 
@@ -491,7 +506,7 @@ Update = function()
         if NS.hidden then for _, u in ipairs(Units()) do if u ~= "player" and Role(u) == "TANK" then fallback = u; break end end end
     end
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
-    local who = friend("mouseover") and "mouseover" or friend("target") and "target" or fallback
+    local who = (NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit) or friend("mouseover") and "mouseover" or friend("target") and "target" or fallback
     local ooc, why
     ooc, why = OocRule(who)
     if inCombat then
@@ -506,12 +521,21 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        SetMacro(btn, SmartMacro(fallback, ooc))
-        -- clicking a bar heals that person by the same rules
+        local base = SmartMacro(fallback, ooc)
+        btn:SetAttribute("basemacro", base)
+        local hovered
+        -- each bar keeps its own heal: clicking it, or hovering it and pressing the key, uses that
         for _, b in ipairs(bars) do
             local unit = b:GetAttribute("unit")
-            if UnitExists(unit) then SetMacro(b, SmartMacro(unit, (OocRule(unit)), true)) end
+            if UnitExists(unit) then
+                local r, w = OocRule(unit)
+                local m = SmartMacro(unit, r, true)
+                SetMacro(b, m)
+                if b:GetAttribute("healmacro") ~= m then b:SetAttribute("healmacro", m) end
+                if NS.hoverUnit == unit then hovered = m end
+            end
         end
+        SetMacro(btn, hovered or base)
     end
     if not inCombat then
         frame:SetHeight(36 + math.max(1, shown) * 22)
@@ -579,7 +603,7 @@ end
 local press = { at = 0 }
 local function Who()
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
-    local u = friend("mouseover") and "mouseover" or friend("target") and "target" or NS.fallback or "player"
+    local u = NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit or friend("mouseover") and "mouseover" or friend("target") and "target" or NS.fallback or "player"
     if UnitIsUnit and UnitIsUnit(u, "player") then return "you" end
     return safe(UnitName(u)) or u
 end
@@ -635,6 +659,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         db = TwizHealDB
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
         if (db.version or 0) < 3 then db.shown, db.clickCast, db.version = false, true, 3 end
+        if db.version < 4 then db.shown, db.version = true, 4 end -- the party window is back: hover a bar + key
         NS.db = db
         return
     end

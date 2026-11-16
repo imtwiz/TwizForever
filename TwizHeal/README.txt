@@ -1,4 +1,4 @@
-TwizHeal 1.4.2 - one hotkey heals whoever needs it most
+TwizHeal 1.5.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -51,9 +51,13 @@ WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
   When the game hides health or buffs, the rules that need them are skipped
   (no endless re-casting of a HoT it can't see).
 
+THE PARTY WINDOW (back in 1.5.0, shown by default)
+  Hover a bar and press your TwizHeal key: it heals that person, in or out
+  of combat. Clicking a bar heals them too. Drag the window to move it;
+  /th window hides or shows it.
+
 ON THE GAME'S PARTY AND RAID FRAMES
-  TwizHeal works on the normal party and raid frames - its own window is
-  off (/th window shows it again).
+  TwizHeal also works on the normal party and raid frames:
     - Hover a party/raid frame and press your TwizHeal key (or the TwizBuff
       key).
     - Or Alt+click a frame: same rules, on that person. Plain clicks still
@@ -87,7 +91,7 @@ WHEN A PRESS DOESN'T HEAL (new in 1.4.1)
   spell - HoT, fast heal or direct heal.
 
 COMMANDS (/th or /twizheal)
-  /th window        show / hide TwizHeal's own bars (off by default)
+  /th window        show / hide TwizHeal's party window
   /th clicks        Alt-click healing on the game's party/raid frames
   /th danger 30     heal anyone at 30% or less first, whatever their role
   /th threshold 90  people below 90% are worth a heal

@@ -81,3 +81,13 @@ C_Spell.GetSpellInfo = function(n) if n:find("%(") then return nil end return { 
 pcall(NS.ReadRanks); InCombatLockdown = function() return false end; SIM.Advance(0.3)
 L("no-rank client key: " .. key())
 print = oldprint
+-- 1.5.0: party window back, hover a bar + key heals that bar's person (secure enter/leave swap)
+L("window shown by default: " .. tostring(TwizHeal.db.shown))
+local b2 = TwizHealBar2
+L("bar2 heal macro: " .. tostring(b2:GetAttribute("healmacro")):gsub("\n", " || "))
+L("bar2 clicks: " .. tostring(b2:GetAttribute("type")) .. " | onenter set: " .. tostring(b2:GetAttribute("_onenter") ~= nil))
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+L("hovering bar2, key: " .. key())
+L("window: " .. txt())
+TwizHeal.hoverUnit = nil; SIM.Advance(0.3)
+L("left bar, key back to: " .. key())
