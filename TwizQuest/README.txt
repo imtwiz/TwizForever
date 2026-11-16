@@ -1,5 +1,13 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.14.0
+  - No more "Turn in" for quests you haven't finished:
+    - an objective TwizQuest can't put on the map (reputation, a scripted
+      event, data Questie doesn't have) now shows as a "Finish: ..." step
+      with the objective's text, before the turn-in;
+    - a quest only counts as complete when the game says so AND none of its
+      objectives is still unfinished.
+
 NEW IN 1.13.0
   - Quests a giver won't actually give you are dropped from the plan.
     Questie's data sometimes thinks a quest is available when the game

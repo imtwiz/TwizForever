@@ -234,6 +234,7 @@ end
 local function LogObjectives(id)
     local db = DBObjectives(id)
     local out, unknown = {}, 0
+    local unknownTexts = {}
     local ok, log = pcall(C_QuestLog.GetQuestObjectives, id)
     if not ok or type(log) ~= "table" or #log == 0 then
         for _, t in pairs(db) do for _, o in ipairs(t) do
@@ -261,10 +262,11 @@ local function LogObjectives(id)
                 out[#out + 1] = entry
             elseif need > 0 then
                 unknown = unknown + 1
+                unknownTexts[#unknownTexts + 1] = NS.safe(lo.text)
             end
         end
     end
-    return out, unknown
+    return out, unknown, unknownTexts
 end
 
 ------------------------------------------------------------------------
@@ -375,12 +377,14 @@ local function BuildQuest(id, inst, px, py, active)
         q.party = n
         q.pw = 1 + 0.25 * math.min(2, n)   -- doing a quest together beats doing it alone
     end
+    local todo = {}   -- objectives still to do that we can't put on the map
     if not (active and active.complete) or pneed then
-        local objs, unknown
+        local objs, unknown, unknownTexts
         if active and active.complete then
             objs, unknown = {}, 0
         elseif active then
-            objs, unknown = LogObjectives(id)
+            objs, unknown, unknownTexts = LogObjectives(id)
+            for _, t in ipairs(unknownTexts or {}) do todo[#todo + 1] = t end
         else
             objs, unknown = {}, 0
             for _, t in pairs(DBObjectives(id)) do
@@ -417,12 +421,18 @@ local function BuildQuest(id, inst, px, py, active)
                 q.stops[#q.stops + 1] = s
                 rx, ry = s.x, s.y
             elseif active then
-                extra = extra + 300     -- can't place it: assume 5 minutes somewhere
+                todo[#todo + 1] = o.text or "an objective"   -- can't place it: still has to be done first
             else
                 return nil              -- can't estimate a new quest reliably
             end
         end
-        extra = extra + unknown * 300
+    end
+    -- never send you to turn in a quest that isn't done: list what's left first
+    if active and not active.complete and #todo > 0 then
+        local names = {}
+        for _, t in ipairs(todo) do if t and t ~= "" then names[#names + 1] = t end end
+        q.stops[#q.stops + 1] = { role = 2, kind = "todo", x = rx, y = ry, work = 300 * #todo, kxp = 0,
+            text = "Finish: " .. (#names > 0 and table.concat(names, ", ") or "the remaining objectives"), noWay = true }
     end
 
     local p = Nearest(Finishers(id, inst), rx, ry)
@@ -447,7 +457,17 @@ local function QuestLog()
             inLog[id] = true
             local failed = C_QuestLog.IsFailed and C_QuestLog.IsFailed(id)
             if not failed then
-                active[#active + 1] = { id = id, complete = C_QuestLog.IsComplete(id) and true or false }
+                -- complete only if the game says so AND no objective is still unfinished
+                local complete = C_QuestLog.IsComplete(id) and true or false
+                if complete then
+                    local ok, objs = pcall(C_QuestLog.GetQuestObjectives, id)
+                    for _, o in ipairs(ok and type(objs) == "table" and objs or {}) do
+                        if not NS.safe(o.finished) and (tonumber(NS.safe(o.numFulfilled)) or 0) < (tonumber(NS.safe(o.numRequired)) or 1) then
+                            complete = false
+                        end
+                    end
+                end
+                active[#active + 1] = { id = id, complete = complete }
             end
         end
     end
