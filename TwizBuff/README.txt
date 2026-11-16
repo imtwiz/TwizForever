@@ -1,4 +1,4 @@
-TwizBuff 1.2.0 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.3.0 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.
@@ -35,6 +35,15 @@ USE
   be re-aimed out of combat.
 
   Bind a key: Options > Keybindings > AddOns > TwizBuff.
+
+ONE KEY FOR BUFFS AND HEALS (with TwizHeal)
+  If TwizHeal is installed, the TwizBuff key (and the mouse wheel) also
+  heals:
+    - in combat: it heals whoever needs it most (TwizHeal's pick - hover a
+      TwizHeal bar to choose, Shift = fast heal, Ctrl = HoT);
+    - out of combat: it heals first if someone is hurt, otherwise it casts
+      the next missing buff.
+  Buffs are only cast out of combat.
 
 COMMANDS (/tb or /twizbuff)
   /tb               show / hide the window

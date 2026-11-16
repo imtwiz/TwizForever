@@ -307,24 +307,34 @@ function NS.Update()
         end
     end
     frame.count:SetText(#list > 0 and ("%d missing"):format(#list) or "all buffed")
+    -- One key for buffing and healing: with TwizHeal loaded, the same key heals whoever
+    -- needs it most - in combat always, and out of combat when someone is hurt; otherwise it
+    -- casts the next missing buff (out of combat only).
+    local heal = TwizHealButton and TwizHeal and TwizHeal.pick
     if not inCombat then
-        if nextCast then
-            btn:SetAttribute("spell", nextCast.spell)
-            btn:SetAttribute("unit", nextCast.unit)
+        local lines = {}
+        if TwizHealButton then lines[#lines + 1] = "/click [combat] TwizHealButton" end
+        if heal then
+            lines[#lines + 1] = "/click [nocombat] TwizHealButton"
+            btn.label:SetText("Heal " .. (heal.unit == "player" and "you" or (heal.name or heal.unit)))
+            btn:SetAlpha(1)
+        elseif nextCast then
+            lines[#lines + 1] = ("/cast [nocombat,@%s] %s"):format(nextCast.unit, nextCast.spell)
             btn.label:SetText("Cast " .. nextCast.label)
-            btn:SetAlpha(1); btn:EnableMouse(true)
+            btn:SetAlpha(1)
         else
-            btn:SetAttribute("spell", nil)
             btn.label:SetText(#list > 0 and "Nobody in range" or "Everyone has your buffs")
             btn:SetAlpha(0.5)
         end
+        btn:SetAttribute("type", "macro")
+        btn:SetAttribute("macrotext", table.concat(lines, "\n"))
         local shown = math.min(#list, ROWS)
         frame:SetHeight(28 + shown * 15 + 42)
         local want = db.shown and (#list > 0 or not db.hideWhenDone)
         frame:SetShown(want and true or false)
-        SetWheel(db.wheel and nextCast ~= nil)
+        SetWheel(db.wheel and (nextCast ~= nil or heal ~= nil))
     else
-        btn.label:SetText("In combat")
+        btn.label:SetText(TwizHealButton and "In combat: heals" or "In combat")
     end
     NS.next = nextCast
 end
@@ -372,7 +382,7 @@ end)
 C_Timer.NewTicker(1, function() if db and frame and (frame:IsShown() or db.shown) then NS.Update() end end)
 
 _G["BINDING_HEADER_TWIZBUFF"] = "TwizBuff"
-_G["BINDING_NAME_CLICK TwizBuffButton:LeftButton"] = "Cast the next missing buff"
+_G["BINDING_NAME_CLICK TwizBuffButton:LeftButton"] = "Buff / heal: next missing buff out of combat; with TwizHeal, heals whoever needs it most"
 
 SLASH_TWIZBUFF1 = "/tb"
 SLASH_TWIZBUFF2 = "/twizbuff"

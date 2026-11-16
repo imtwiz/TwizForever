@@ -68,3 +68,11 @@ SlashCmdList.TWIZBUFF("strangers off"); SIM.Advance(1.5)
 L("strangers off: " .. show() .. " | plates " .. SIM.cvars.nameplateShowFriends)
 SlashCmdList.TWIZBUFF("wheel on"); SIM.Advance(1.5)
 L("wheel: " .. tostring(SIM.overrides["MOUSEWHEELDOWN"]))
+-- shared key with TwizHeal
+TwizHealButton = CreateFrame("Button", "TwizHealButton")
+TwizHeal = { pick = nil }
+SIM.Advance(1.5)
+L("with TwizHeal, nobody hurt: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())
+TwizHeal.pick = { unit = "party2", name = "Sue" }
+SIM.Advance(1.5)
+L("someone hurt: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())

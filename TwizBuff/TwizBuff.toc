@@ -2,7 +2,7 @@
 ## Title: TwizBuff
 ## Notes: Shows which friendly players (you, your party or raid, and your friendly target) are missing the buffs your class can give - Mark of the Wild, Power Word: Fortitude, Arcane Intellect, Blessings and more - and casts the next one with one click, key or mouse-wheel notch.
 ## Author: Alan Sherbourne
-## Version: 1.2.0
+## Version: 1.3.0
 ## SavedVariables: TwizBuffDB
 ## IconTexture: Interface\Icons\Spell_Nature_Regeneration
 
