@@ -125,3 +125,11 @@ SIM.hots.party2 = { { "Rejuvenation", 6 } }
 SIM.Advance(0.3)
 L(("tank incoming: text=%s bar=%s | rogue (your Rejuv): text=%s | you: shown=%s"):format(
   tostring(TwizHealBar2.inc:GetText()), tostring(TwizHealBar2.incBar.__value), tostring(TwizHealBar3.inc:GetText()), tostring(TwizHealBar1.inc.__shown)))
+-- 1.9.0: shields + exact hp
+UnitGetTotalAbsorbs = function(u) return u == "party1" and 620 or 0 end
+SIM.hots.party1 = { { "Power Word: Shield", 25 } }
+units.party1.hp = 1500
+SIM.Advance(0.3)
+L(("tank: hp text '%s' | shield %s (%s) bar=%s glow=%s icon=%s"):format(tostring(TwizHealBar2.pct:GetText()), tostring(TwizHealBar2.absorb),
+  tostring(TwizHealBar2.shieldAura), tostring(TwizHealBar2.absBar.__value), tostring(TwizHealBar2.glow.__shown), tostring(TwizHealBar2.absIcon.__shown)))
+L(("rogue: hp text '%s' glow=%s"):format(tostring(TwizHealBar3.pct:GetText()), tostring(TwizHealBar3.glow.__shown)))

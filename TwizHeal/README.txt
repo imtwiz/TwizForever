@@ -1,4 +1,4 @@
-TwizHeal 1.8.0 - one hotkey heals whoever needs it most
+TwizHeal 1.9.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -69,6 +69,11 @@ THE PARTY WINDOW (back in 1.5.0, shown by default)
   percent is the amount. When the game sends no prediction, the rest of
   your own HoTs on them is shown instead. If the game hides the amount,
   the bar still shows it but the number is left out.
+  Health is shown as exact numbers and percent: "1500 / 2000  75%".
+  Shields (Power Word: Shield, Ice Barrier, Mana Shield...): a pale blue
+  section after the incoming heals shows how much damage the shield will
+  soak, the shield's icon and amount appear beside the health text, and the
+  bar gets a soft blue glow while it's up.
   Move: drag a bar. Resize: drag the grip in the bottom-right
   corner - width sets the bar width, height sets the bar height. Both are
   saved, and only work out of combat. /th window hides or shows it.

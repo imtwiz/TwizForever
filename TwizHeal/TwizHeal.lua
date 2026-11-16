@@ -465,9 +465,26 @@ local function Build()
         b.incBar:SetWidth(198)
         b.inc = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.inc:SetPoint("RIGHT", b.pct, "LEFT", -4, 0)
         b.inc:SetTextColor(0.55, 1, 0.55)
+        -- shields (Power Word: Shield...): a pale blue bar after the incoming heals, the shield's
+        -- icon and amount, and a soft blue glow inside the bar
+        b.absBar = CreateFrame("StatusBar", nil, b.bar)
+        b.absBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        b.absBar:SetStatusBarColor(0.75, 0.9, 1, 0.75)
+        b.absBar:SetMinMaxValues(0, 1); b.absBar:SetValue(0)
+        local incFill = b.incBar:GetStatusBarTexture()
+        b.absBar:SetPoint("TOPLEFT", incFill, "TOPRIGHT", 0, 0); b.absBar:SetPoint("BOTTOMLEFT", incFill, "BOTTOMRIGHT", 0, 0)
+        b.absBar:SetWidth(198)
+        b.glow = CreateFrame("Frame", nil, b.bar, "BackdropTemplate"); b.glow:SetAllPoints(b.bar)
+        if b.glow.SetBackdrop then b.glow:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }); b.glow:SetBackdropBorderColor(0.6, 0.85, 1, 0.9) end
+        b.glow:Hide()
+        b.absIcon = b.bar:CreateTexture(nil, "OVERLAY"); b.absIcon:SetSize(11, 11); b.absIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92); b.absIcon:Hide()
+        b.abs = b.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.abs:SetTextColor(0.7, 0.88, 1)
+        b.abs:SetPoint("RIGHT", b.inc, "LEFT", -4, 0)
+        b.absIcon:SetPoint("RIGHT", b.abs, "LEFT", -2, 0)
         -- text and icon above the incoming bar
-        b.over = CreateFrame("Frame", nil, b.bar); b.over:SetAllPoints(b.bar); b.over:SetFrameLevel(b.incBar:GetFrameLevel() + 2)
-        for _, r in ipairs({ b.role, b.name, b.pct, b.inc }) do r:SetParent(b.over) end
+        b.over = CreateFrame("Frame", nil, b.bar); b.over:SetAllPoints(b.bar); b.over:SetFrameLevel(b.absBar:GetFrameLevel() + 3)
+        b.glow:SetFrameLevel(b.absBar:GetFrameLevel() + 2)
+        for _, r in ipairs({ b.role, b.name, b.pct, b.inc, b.abs, b.absIcon }) do r:SetParent(b.over) end
         -- mana (always, even in cat/bear form) and energy/rage under the health bar
         for _, k in ipairs({ "mana", "power" }) do
             local pb = CreateFrame("StatusBar", nil, b)
@@ -524,7 +541,7 @@ function NS.Layout(live)
         b:SetSize(math.max(60, w - 12), RowH(h))
         b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, -TOP - (i - 1) * (RowH(h) + 2))
         b.bar:ClearAllPoints(); b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, ph + 1)
-        if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2) end
+        if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2); b.absBar:SetWidth(math.max(60, w - 12) - 2) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
     end
@@ -659,6 +676,49 @@ function NS.DrawIncoming(b, unit)
     b.incoming = n
 end
 
+-- health as exact numbers and percent: "1234 / 2000  62%"
+function NS.DrawHPText(b, unit)
+    if UnitIsDeadOrGhost(unit) then b.pct:SetText(""); return end
+    local cur, mx = UnitHealth(unit), UnitHealthMax(unit)
+    local c, m = safe(cur), safe(mx)
+    if c and m and m > 0 then
+        b.pct:SetText(("%d / %d  %d%%"):format(c, m, c / m * 100 + 0.5))
+    else
+        -- hidden by the game: let the game print the numbers (fontstrings may show hidden values)
+        local ok = pcall(b.pct.SetFormattedText, b.pct, "%d / %d", cur, mx)
+        if ok and UnitHealthPercent then
+            local okP, p = pcall(UnitHealthPercent, unit, true, CurveConstants and CurveConstants.ScaleTo100)
+            if okP and p then ok = pcall(b.pct.SetFormattedText, b.pct, "%d / %d  %d%%", cur, mx, p) end
+        end
+        if not ok then b.pct:SetText("") end
+    end
+end
+
+-- shields on someone: the game's absorb total, plus the shield aura's icon
+local SHIELDS = { ["Power Word: Shield"] = true, ["Ice Barrier"] = true, ["Mana Shield"] = true, ["Sacrifice"] = true,
+    ["Fire Ward"] = true, ["Frost Ward"] = true, ["Shadow Ward"] = true, ["Divine Aegis"] = true, ["Earth Shield"] = false,
+    ["Greater Fire Protection Potion"] = false }
+function NS.DrawAbsorb(b, unit)
+    local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit)
+    local n = safe(abs)
+    local icon, auraName
+    for i = 1, 40 do
+        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        if not a then break end
+        local name = safe(a.name)
+        if name and SHIELDS[name] then icon, auraName = safe(a.icon) or 135940, name; break end
+    end
+    pcall(b.absBar.SetMinMaxValues, b.absBar, 0, UnitHealthMax(unit) or 1)
+    pcall(b.absBar.SetValue, b.absBar, abs or 0)
+    local shielded = (n and n > 0) or icon ~= nil
+    b.glow:SetShown(shielded)
+    if icon then b.absIcon:SetTexture(icon); b.absIcon:Show() else b.absIcon:Hide() end
+    if n and n > 0 then b.abs:SetText(("%d"):format(n)); b.abs:Show()
+    elseif icon then b.abs:SetText(""); b.abs:Show()
+    else b.abs:Hide() end
+    b.absorb, b.shieldAura = n, auraName
+end
+
 local function HealthColor(pct)
     if pct < 0.35 then return 1, 0.4, 0.4 elseif pct < 0.7 then return 1, 0.69, 0.4 end
     return 0.56, 0.88, 0.56
@@ -701,7 +761,8 @@ Update = function()
             b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " |cff9aa1abdead|r" or ""))
             pcall(NS.SetRoleIcon, b.role, Role(unit))
             pcall(NS.DrawStatus, b, unit)
-            b.pct:SetText(m and ("%d%%"):format(pct * 100 + 0.5) or "")
+            pcall(NS.DrawHPText, b, unit)
+            pcall(NS.DrawAbsorb, b, unit)
             local picked = pick and pick.unit == unit
             if b.SetBackdropBorderColor then
                 if picked then b:SetBackdropBorderColor(0.941, 0.769, 0.361, 1) else b:SetBackdropBorderColor(0.173, 0.192, 0.227, 1) end
@@ -713,13 +774,6 @@ Update = function()
         end
     end
     -- what the hotkey will do
-    -- HoT timers on the bars
-    for _, b in ipairs(bars) do
-        local m = byUnit[b:GetAttribute("unit")]
-        local tags = {}
-        for name, left in pairs(m and m.hots or {}) do tags[#tags + 1] = ("%s %d"):format(name:sub(1, 5), left) end
-        if #tags > 0 then b.pct:SetText(("|cff8fe08f%s|r  %s"):format(table.concat(tags, " "), b.pct:GetText() or "")) end
-    end
     -- who the key heals: your mouseover, else a friendly target, else the pick (or the tank when health is hidden)
     local fallback = pick and pick.unit
     if not fallback then
