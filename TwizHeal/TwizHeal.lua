@@ -326,7 +326,9 @@ end
 --     standing -> fast heal (Regrowth / Flash Heal); moving -> the fast heal can't start, so the
 --     next line casts your HoT instead.
 ------------------------------------------------------------------------
+-- moving: the game's start/stop-moving events (reliable even when it hides your speed), or your speed
 local function Moving()
+    if NS.moving then return true end
     local s = GetUnitSpeed and safe(GetUnitSpeed("player"))
     return (s and s > 0) or (IsFalling and IsFalling() and true) or false
 end
@@ -369,7 +371,9 @@ local function SmartMacro(unit, ooc, only)
     if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
     if ooc then lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label end
     if combat then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label end
-    if hot and combat and combat ~= hot then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. hot.label end
+    -- moving fallback, in and out of combat: if the cast above can't start because you're moving
+    -- (Regrowth, Healing Touch), this line casts your instant HoT instead
+    if hot then lines[#lines + 1] = "/cast " .. Chain("", unit, only) .. " " .. hot.label end
     return table.concat(lines, "\n")
 end
 NS.SmartMacro = SmartMacro
@@ -947,6 +951,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
     end
     if not db then return end
     -- moving / hovering / targeting: just re-run the rules so the key is right when you press it
+    if event == "PLAYER_STARTED_MOVING" then NS.moving = true elseif event == "PLAYER_STOPPED_MOVING" then NS.moving = false end
     if event == "PLAYER_STARTED_MOVING" or event == "PLAYER_STOPPED_MOVING" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_TARGET_CHANGED" then
         if #ranks > 0 then NS.Update() end
         return

@@ -133,3 +133,10 @@ SIM.Advance(0.3)
 L(("tank: hp text '%s' | shield %s (%s) bar=%s glow=%s icon=%s"):format(tostring(TwizHealBar2.pct:GetText()), tostring(TwizHealBar2.absorb),
   tostring(TwizHealBar2.shieldAura), tostring(TwizHealBar2.absBar.__value), tostring(TwizHealBar2.glow.__shown), tostring(TwizHealBar2.absIcon.__shown)))
 L(("rogue: hp text '%s' glow=%s"):format(tostring(TwizHealBar3.pct:GetText()), tostring(TwizHealBar3.glow.__shown)))
+-- 1.9.3: moving detected from events even when the game hides your speed; moving fallback out of combat too
+GetUnitSpeed = function() return "SECRET" end
+units.party1.hp = 800; SIM.hots.party1 = { { "Rejuvenation", 10 } }; SIM.Advance(0.3)
+L("standing, tank 40%: " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
+SIM.Fire("PLAYER_STARTED_MOVING"); L("moving (speed hidden): " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
+L("   key: " .. key())
+SIM.Fire("PLAYER_STOPPED_MOVING"); L("stopped: " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label))
