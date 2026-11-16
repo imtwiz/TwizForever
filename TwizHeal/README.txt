@@ -1,4 +1,4 @@
-TwizHeal 1.4.0 - one hotkey heals whoever needs it most
+TwizHeal 1.4.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -76,6 +76,14 @@ WHEN THE GAME HIDES HEALTH (WoW: Forever does)
   bar" in this mode.
   Druids: the key drops cat/bear/travel form first, since heals can't be
   cast in those forms.
+
+WHEN A PRESS DOESN'T HEAL (new in 1.4.1)
+  TwizHeal says why in chat, e.g. "couldn't heal Pharama Grade: Out of
+  range." Faded party/raid frames mean that person is out of range.
+  /th test shows exactly what the key will cast and on whom.
+  /th quiet turns these messages off or on.
+  If the client doesn't understand "Healing Touch(Rank 3)" in a cast,
+  TwizHeal casts by the plain name instead (your best rank).
 
 COMMANDS (/th or /twizheal)
   /th window        show / hide TwizHeal's own bars (off by default)

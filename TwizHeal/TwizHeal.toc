@@ -2,7 +2,7 @@
 ## Title: TwizHeal
 ## Notes: Heal from the game's own party and raid frames: hover a frame and press your TwizHeal key, or Alt+click it (Alt+right-click = fast heal, Ctrl+Alt+click = HoT). Right-sized ranks, smart HoTs, tanks before healers before damage when health can be read.
 ## Author: Alan Sherbourne
-## Version: 1.4.0
+## Version: 1.4.1
 ## SavedVariables: TwizHealDB
 ## IconTexture: Interface\Icons\Spell_Holy_Heal
 

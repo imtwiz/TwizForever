@@ -134,6 +134,18 @@ function NS.ReadRanks()
         end
     end
     table.sort(ranks, function(a, b) return a.total < b.total end)
+    -- some clients don't understand "Spell(Rank 3)" in /cast: then cast by name (your best rank)
+    local GSI = (C_Spell and C_Spell.GetSpellInfo) or GetSpellInfo
+    NS.noRankSyntax = false
+    if GSI then
+        for _, r in ipairs(ranks) do
+            if r.label ~= r.name then
+                local ok, info = pcall(GSI, r.label)
+                local okN, infoN = pcall(GSI, r.name)
+                if not (ok and info) and okN and infoN then r.label = r.name; NS.noRankSyntax = true end
+            end
+        end
+    end
 end
 NS.ranks = ranks
 
@@ -420,6 +432,8 @@ local function Build()
     btn:SetSize(1, 1); btn:SetPoint("BOTTOMLEFT"); btn:SetAlpha(0)
     btn:RegisterForClicks("AnyUp", "AnyDown") -- acts once, on press or release per the "cast on key down" option
     btn:SetAttribute("type", "macro")
+    -- tell you when a press didn't heal (out of range, can't cast while moving...)
+    btn:HookScript("PostClick", function() if NS.OnPress then NS.OnPress() end end)
     frame:Hide() -- shown by the first successful update
 end
 
@@ -500,6 +514,7 @@ Update = function()
         frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden - hover the lowest bar|r" or "|cff8fe08feveryone's fine|r")
     end
     NS.ooc, NS.oocWhy = ooc, why
+    if not inCombat then NS.fallback = fallback end
     if not inCombat then
         SetMacro(btn, SmartMacro(fallback, ooc))
         -- clicking a bar heals that person by the same rules
@@ -567,6 +582,52 @@ end
 if hooksecurefunc and CompactUnitFrame_SetUpFrame then
     hooksecurefunc("CompactUnitFrame_SetUpFrame", function(frame) ApplyFrame(frame) end)
 end
+
+------------------------------------------------------------------------
+-- Feedback: after a press, say in chat if the heal didn't go out, and why
+------------------------------------------------------------------------
+local press = { at = 0 }
+local function Who()
+    local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
+    local u = friend("mouseover") and "mouseover" or friend("target") and "target" or NS.fallback or "player"
+    if UnitIsUnit and UnitIsUnit(u, "player") then return "you" end
+    return safe(UnitName(u)) or u
+end
+function NS.OnPress()
+    local now = GetTime()
+    if now - press.at < 0.15 then return end -- key down + key up = one press
+    press.at, press.who, press.done, press.said, press.err, press.failed = now, Who(), false, false, nil, false
+end
+local fb = CreateFrame("Frame")
+for _, e in ipairs({ "UI_ERROR_MESSAGE", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED" }) do
+    pcall(fb.RegisterEvent, fb, e)
+end
+-- errors are held until the press settles: a heal that went out wins over the "another action
+-- in progress" a second macro line can raise
+fb:SetScript("OnEvent", function(_, event, a1, a2)
+    if GetTime() - press.at > 0.6 or press.said then return end
+    if event == "UI_ERROR_MESSAGE" then
+        local msg = safe(type(a2) == "string" and a2 or a1)
+        if type(msg) == "string" and msg ~= "" and not press.err then press.err = msg end
+    elseif a1 == "player" then
+        if event == "UNIT_SPELLCAST_FAILED" then press.failed = true else press.done = true end
+    end
+end)
+local fbTick = CreateFrame("Frame")
+fbTick:SetScript("OnUpdate", function()
+    if press.at == 0 or press.said or GetTime() - press.at < 0.6 then return end
+    press.said = true
+    if press.done or (db and db.feedback == false) then return end
+    local who = press.who or "?"
+    if press.err then
+        Print(("couldn't heal %s: %s"):format(who, press.err))
+    elseif press.failed then
+        Print(("the heal on %s failed (range, line of sight or mana?)"):format(who))
+    else
+        Print(("key pressed but nothing was cast on %s - %s"):format(who,
+            #ranks == 0 and "no heals found (/th ranks)" or "/th test shows what the key does"))
+    end
+end)
 
 ------------------------------------------------------------------------
 -- Events, slash
@@ -644,6 +705,15 @@ SlashCmdList.TWIZHEAL = function(msg)
         db.danger = math.max(0.05, math.min(n / 100, 0.9)); Print(("anyone at %d%% or less is healed first, whatever their role"):format(db.danger * 100))
     elseif cmd == "threshold" and n then
         db.threshold = math.max(0.3, math.min(n / 100, 1)); Print(("people below %d%% are worth a heal"):format(db.threshold * 100))
+    elseif cmd == "quiet" then
+        db.feedback = db.feedback == false
+        Print("messages when a heal doesn't go out: " .. (db.feedback and "on" or "off"))
+    elseif cmd == "test" then
+        local m = TwizHealButton and TwizHealButton:GetAttribute("macrotext") or "(none)"
+        Print("the key runs:")
+        for line in tostring(m):gmatch("[^\n]+") do Print("  " .. line) end
+        if NS.noRankSyntax then Print("this client doesn't take \"Spell(Rank N)\" - casting by name (your best rank)") end
+        Print(("it heals: %s; moving: %s"):format(Who(), tostring(Moving())))
     elseif cmd == "debug" then
         pcall(NS.ReadRanks)
         local hp = UnitHealth("player")

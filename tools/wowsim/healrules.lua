@@ -67,3 +67,17 @@ InCombatLockdown = function() return false end; TwizHeal.ApplyClickCast()
 L("alt-click: " .. tostring(pf:GetAttribute("alt-macrotext1")) .. " | alt-right: " .. tostring(pf:GetAttribute("alt-type2")))
 local all = key() .. tostring(pf:GetAttribute("alt-macrotext1"))
 L("any modifier in key: " .. tostring(all:find("mod:") ~= nil))
+-- feedback after a press (1.4.1)
+SIM.log2 = {}
+local oldprint = print; print = function(m) L("CHAT " .. tostring(m)) end
+units.target = nil; SIM.hots = {}
+local function press() local f = TwizHealButton.__scripts.PostClick if f then f(TwizHealButton, "LeftButton", true) end end
+press(); SIM.Advance(0.3); SIM.Fire("UI_ERROR_MESSAGE", 51, "Out of range."); SIM.Advance(0.5)
+press(); SIM.Advance(0.1); SIM.Fire("UNIT_SPELLCAST_START", "player"); SIM.Fire("UI_ERROR_MESSAGE", 52, "Another action is in progress"); SIM.Advance(0.7)
+SIM.Advance(1); press(); SIM.Advance(0.8)
+SlashCmdList.TWIZHEAL("test")
+-- a client that doesn't accept "Spell(Rank N)": labels become plain names
+C_Spell.GetSpellInfo = function(n) if n:find("%(") then return nil end return { name = n } end
+pcall(NS.ReadRanks); InCombatLockdown = function() return false end; SIM.Advance(0.3)
+L("no-rank client key: " .. key())
+print = oldprint
