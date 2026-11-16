@@ -53,7 +53,7 @@ local function Area(points, rx, ry)
     if #points == 0 then return nil end
     if #points == 1 then
         local p = points[1]
-        return { x = p.x, y = p.y, map = p.map, mx = p.mx, my = p.my, spacing = 60, n = 1 }
+        return { x = p.x, y = p.y, map = p.map, mx = p.mx, my = p.my, spacing = 60, n = 1, points = points }
     end
     local step = math.max(1, math.floor(#points / 100))
     local bestScore, bestC
@@ -76,7 +76,7 @@ local function Area(points, rx, ry)
     local rep = Nearest(points, cx, cy)
     local spacing = math.sqrt(math.pi * R * R / math.max(sw, 1))
     spacing = math.max(15, math.min(spacing, 150))
-    return { x = cx, y = cy, map = rep.map, mx = rep.mx, my = rep.my, spacing = spacing, n = sw }
+    return { x = cx, y = cy, map = rep.map, mx = rep.mx, my = rep.my, spacing = spacing, n = sw, points = points }
 end
 
 ------------------------------------------------------------------------
@@ -119,6 +119,8 @@ local function EstimateObjective(obj, inst, rx, ry)
         stop.elite = elite
         stop.work, stop.kxp = KillWork(obj.need, lvl, elite, area.spacing)
         stop.name = NS.N(obj.ids[1], "name")
+        stop.mobNames = {}
+        for _, npc in ipairs(obj.ids) do local n = NS.N(npc, "name"); if n then stop.mobNames[n] = true end end
         for k, v in pairs(area) do stop[k] = v end
         return stop
     end
@@ -159,6 +161,8 @@ local function EstimateObjective(obj, inst, rx, ry)
                 stop.kills = kills
                 stop.work, stop.kxp = KillWork(kills, lvl, elite, area.spacing)
                 stop.dropper = NS.N(droppers[1], "name")
+                stop.mobNames = {}
+                for _, npc in ipairs(droppers) do local n = NS.N(npc, "name"); if n then stop.mobNames[n] = true end end
                 for k, v in pairs(area) do stop[k] = v end
                 return stop
             end

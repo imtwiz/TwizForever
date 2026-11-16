@@ -1,5 +1,10 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.3
+  - Distance to a kill or loot step is now to the NEAREST place those mobs
+    spawn, not the middle of the area the plan picked - and it says "here"
+    when one of the mobs is your target or shows a nameplate.
+
 NEW IN 1.18.2
   - Moves to the next quest right away: accepting, completing or turning in
     a quest re-plans within a second - even mid-fight - so follow-up

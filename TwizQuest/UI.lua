@@ -24,7 +24,7 @@ end
 -- what a step looks like: glyph, glyph color, title, subtitle, right-hand note
 local function StepParts(s)
     local q = s.q
-    local dist = s.dist and s.dist > 0 and ("%d yd"):format(s.dist) or nil
+    local dist = s.dist and (s.dist > 0 and ("%d yd"):format(s.dist) or (s.mobNames and s.role == 2 and "here")) or nil
     local function join(...)
         local t = {}
         for i = 1, select("#", ...) do local v = select(i, ...) if v and v ~= "" then t[#t + 1] = v end end
@@ -742,6 +742,47 @@ end
 ------------------------------------------------------------------------
 -- Live distance: the next step's yards update every time you move 1 yard
 ------------------------------------------------------------------------
+-- yards to the step: 0 when one of its mobs is right there (your target or a nameplate),
+-- else the nearest place they spawn - not the middle of the area the plan picked
+local function MobHere(names)
+    if not names then return false end
+    local function hit(u)
+        if not UnitExists(u) or UnitIsDead(u) then return false end
+        local n = NS.safe(UnitName(u))
+        return n ~= nil and names[n] == true
+    end
+    if hit("target") or hit("mouseover") then return true end
+    for i = 1, 40 do
+        local u = "nameplate" .. i
+        if UnitExists(u) and hit(u) then return true end
+    end
+    return false
+end
+local nearestAt = setmetatable({}, { __mode = "k" })
+function NS.LiveDistance(s, px, py)
+    if MobHere(s.mobNames) then return 0 end
+    local best = NS.Dist(px, py, s.x, s.y)
+    local pts = s.points
+    if pts and #pts > 0 then
+        -- the full scan is cheap but there's no need to do it 20 times a second
+        local now = GetTime()
+        local c = nearestAt[s]
+        if not c or now - c.t > 0.25 or NS.Dist(px, py, c.px, c.py) > 10 then
+            local step = math.max(1, math.floor(#pts / 600))
+            local d = math.huge
+            for i = 1, #pts, step do
+                local p = pts[i]
+                local dd = NS.Dist(px, py, p.x, p.y)
+                if dd < d then d = dd end
+            end
+            c = { t = now, px = px, py = py, d = d }
+            nearestAt[s] = c
+        end
+        best = math.min(best, c.d)
+    end
+    return best
+end
+
 local live = CreateFrame("Frame")
 local liveAcc, lastYd = 0, nil
 live:SetScript("OnUpdate", function(_, e)
@@ -754,7 +795,7 @@ live:SetScript("OnUpdate", function(_, e)
     local ok, px, py, inst = pcall(NS.PlayerPos)
     if not ok or not px then return end
     if plan.inst and inst and plan.inst ~= inst then return end
-    local yd = math.floor(NS.Dist(px, py, first.x, first.y) + 0.5)
+    local yd = math.floor(NS.LiveDistance(first, px, py) + 0.5)
     if yd == lastYd and first.dist == yd then return end
     lastYd = yd
     first.dist = yd
