@@ -65,6 +65,8 @@ end
 -- returns needRepair, reason text  (nil if nothing needed)
 function NS.ServiceNeed()
     if not NS.db.service then return nil end
+    -- just visited a vendor, or you dismissed the stop: leave it alone for a while
+    if NS.serviceSnooze and GetTime() < NS.serviceSnooze then return nil end
     local free = FreeSlots()
     local dur = LowestDurability()
     local needRepair = dur <= (NS.db.repairAt or 0.25)
@@ -74,6 +76,11 @@ function NS.ServiceNeed()
     if needSell then why[#why + 1] = free == 0 and "bags full" or (free .. " bag slots left") end
     if needRepair then why[#why + 1] = ("gear at %d%%"):format(dur * 100) end
     return needRepair, table.concat(why, ", ")
+end
+
+-- hide the sell/repair stop for a while (after a vendor visit, or when you dismiss it)
+function NS.SnoozeService(minutes)
+    NS.serviceSnooze = GetTime() + (minutes or 20) * 60
 end
 
 local SERVICE_Q = { id = 0, name = "Sell & repair", xp = 0 }

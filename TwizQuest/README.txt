@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.1
+  - "Sell junk" no longer gets stuck at the top: after you visit a vendor
+    it leaves you alone for 20 minutes (if your bags are still full, it's
+    not junk - like quest items or Jars of Snow). Right-click the sell step
+    (on the card or in the list) to skip it for 20 minutes yourself.
+
 NEW IN 1.18.0
   - Progress updates right away: kill and loot counts on the card ("Kill 3
     Kobold Vermin", "Finish: 3/12 Perfect Razormaw Egg") follow your quest

@@ -93,7 +93,8 @@ local function StepTooltip(owner, s)
     GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
     if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
     if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-    GameTooltip:AddLine("Click: waypoint.  Right-click: skip this quest.", 0.5, 0.8, 1)
+    GameTooltip:AddLine(s.kind == "service" and "Click: waypoint.  Right-click: skip selling for 20 minutes."
+        or "Click: waypoint.  Right-click: skip this quest.", 0.5, 0.8, 1)
     GameTooltip:Show()
 end
 
@@ -384,7 +385,11 @@ local function Build()
     card:SetHeight(CARD_H)
     S.Card(card)
     card:RegisterForClicks("AnyUp")
-    card:SetScript("OnClick", function(self) SetWaypoint(self.step) end)
+    card:SetScript("OnClick", function(self, button)
+        -- right-click the sell/repair stop to skip it
+        if button == "RightButton" and self.step and self.step.kind == "service" then NS.DismissService(); return end
+        SetWaypoint(self.step)
+    end)
     card:SetScript("OnEnter", function(self) StepTooltip(self, self.step) end)
     card:SetScript("OnLeave", function() GameTooltip:Hide() end)
     local icon = CreateFrame("Frame", nil, card, "BackdropTemplate")
@@ -419,7 +424,8 @@ local function Build()
         line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT")
         local hl = row:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.05)
         row:SetScript("OnClick", function(self, button)
-            -- right-click: skip that quest (e.g. the game won't give it to you)
+            -- right-click: skip that quest (e.g. the game won't give it to you), or the sell/repair stop
+            if button == "RightButton" and self.step and self.step.kind == "service" then NS.DismissService(); return end
             if button == "RightButton" and self.step and self.step.q and self.step.q.id and self.step.kind ~= "service" then
                 NS.Print(("skipping %s - /tq unskip brings it back."):format(self.step.q.name or "that quest"))
                 NS.SkipQuest(self.step.q.id, "manual")
@@ -646,6 +652,19 @@ local function Done(questID, role)
     Refresh()
 end
 
+-- dismiss the sell/repair stop: gone now, and not suggested again for 20 minutes
+function NS.DismissService()
+    NS.SnoozeService(20)
+    if plan and plan.route then
+        for i = #plan.route, 1, -1 do if plan.route[i].kind == "service" then table.remove(plan.route, i) end end
+        plan.service = nil
+        if NS.db.autoWay and plan.route[1] and not InCombatLockdown() then SetWaypoint(plan.route[1], true) end
+        NS.UpdateTargetButton()
+    end
+    NS.Print("sell & repair skipped for 20 minutes.")
+    Refresh()
+end
+
 ------------------------------------------------------------------------
 -- Live progress: counts on the card follow the quest log right away (even mid-fight), without
 -- waiting for the next full plan; finished objectives drop off.
@@ -740,6 +759,10 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
     if event == "PLAYER_REGEN_ENABLED" then
         if targetDirty then NS.UpdateTargetButton() end
         return
+    end
+    if event == "MERCHANT_CLOSED" then
+        -- you've been to a vendor: if your bags are still full it's not junk, so stop asking
+        NS.SnoozeService(20)
     end
     if event == "MERCHANT_CLOSED" and plan then
         -- sold and repaired: the service stop is done
