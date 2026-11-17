@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.6
+  - TomTom is no longer required: TwizQuest loads without it and uses Quest
+    Pilot's built-in TomTom (or the game's map pin) for the arrow.
+
 NEW IN 1.18.5
   - The window background is 75% see-through.
 
@@ -163,7 +167,8 @@ NEW IN 1.5.2
   colors. Chat tells you when a friend levels. /tq party xp to hide them.
 
 NEW IN 1.5.1
-- Requires TomTom (the waypoint arrow for each step).
+- Uses TomTom for the waypoint arrow if it's there (the separate TomTom addon or
+  the copy built into Quest Pilot); without it, the game's own map pin is used.
 
 NEW IN 1.5 - PARTY SYNC
 Party members who also run TwizQuest share quest logs and objective progress
@@ -195,7 +200,7 @@ NEW IN 1.4
                  XP/hour (gray ones included) are listed: /tq cleanup, and
                  /tq abandon drops them (asks first).
 
-Needs Questie and TomTom (you have both) - TomTom draws the arrow to each step.
+Needs Questie. TomTom (or Quest Pilot's built-in copy) draws the arrow to each step.
 
 What it does
   It keeps itself up to date: a full re-plan whenever your quest log,

@@ -69,12 +69,15 @@ end
 local function SetWaypoint(s, silent)
     if not s or not s.map then return end
     local title = (s.role == 1 and "Pick up: " or s.role == 3 and "Turn in: " or "") .. s.q.name
+    local placed = false
     if TomTom and TomTom.AddWaypoint then
         if wayUID and TomTom.RemoveWaypoint then pcall(TomTom.RemoveWaypoint, TomTom, wayUID) end
         local ok, uid = pcall(TomTom.AddWaypoint, TomTom, s.map, s.mx / 100, s.my / 100,
             { title = title, from = "TwizQuest", persistent = false, crazy = true })
-        if ok then wayUID = uid end
-    elseif C_Map and C_Map.SetUserWaypoint and UiMapPoint then
+        if ok and uid then wayUID, placed = uid, true end
+    end
+    -- no TomTom (or it refused): the game's own map pin
+    if not placed and C_Map and C_Map.SetUserWaypoint and UiMapPoint then
         pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(s.map, s.mx / 100, s.my / 100))
         if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then
             pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true)
@@ -1120,7 +1123,7 @@ SlashCmdList.QUESTROUTE = function(msg)
             end
             if #st.noAddon > 0 then
                 print("  not syncing: " .. table.concat(st.noAddon, ", ")
-                    .. " - they need TwizQuest 1.5+ enabled (it also needs Questie and TomTom installed, or it won't load)")
+                    .. " - they need TwizQuest 1.5+ enabled (it also needs Questie installed, or it won't load)")
             end
             local ps = NS.partyStats or {}
             print(("  messages sent %d, received %d%s"):format(ps.sent or 0, ps.recv or 0,
