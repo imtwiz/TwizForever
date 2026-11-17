@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.8
+  - Fixed an error after kills when the game hides your target's name from
+    addons (learning kill XP just skips that kill).
+
 NEW IN 1.18.7
   - "Your party is missing N of these quests" is said once per quest a
     party member is missing - not again on every re-plan.

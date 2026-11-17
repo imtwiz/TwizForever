@@ -91,8 +91,8 @@ function NS.UnskipAll()
 end
 
 local function NpcID(unit)
-    local guid = UnitGUID and UnitGUID(unit or "npc")
-    if not guid then return nil end
+    local guid = UnitGUID and NS.safe(UnitGUID(unit or "npc"))
+    if type(guid) ~= "string" then return nil end
     local kind, _, _, _, _, id = strsplit("-", guid)
     if kind == "Creature" or kind == "Vehicle" then return tonumber(id) end
 end
@@ -119,7 +119,7 @@ end
 local function CheckOffered(offeredIDs, offeredNames)
     local npc = NpcID("npc")
     if not npc then return end
-    local who = UnitName("npc") or "That quest giver"
+    local who = NS.safe(UnitName("npc")) or "That quest giver"
     local planned = PlannedFrom(npc)
     if not next(planned) then return end
     -- give auto-accept a moment, then see what's missing

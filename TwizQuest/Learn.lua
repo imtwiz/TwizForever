@@ -35,12 +35,15 @@ local function OnKill(name, total, plain)
     L.kills = L.kills + 1
     local lvl = UnitLevel("player")
     local mob
-    if UnitExists("target") and UnitIsDead("target") and UnitName("target") == name then
-        mob = UnitLevel("target")
+    -- the game can hide your target's name/level from addons ("secret"): then just skip learning
+    local tname = NS.safe(UnitName("target"))
+    if UnitExists("target") and UnitIsDead("target") and tname and tname == name then
+        mob = NS.safe(UnitLevel("target"))
     end
-    if plain and mob and mob > 0 then
+    if plain and type(mob) == "number" and mob > 0 then
         local expected = NS.FormulaKillXP(lvl, mob)
-        if UnitClassification and UnitClassification("target"):find("elite") then expected = expected * 2 end
+        local cls = UnitClassification and NS.safe(UnitClassification("target"))
+        if type(cls) == "string" and cls:find("elite") then expected = expected * 2 end
         if expected > 0 then
             local r = total / expected
             if r > 0.3 and r < 4 then L.killXPRatio = Ema(L.killXPRatio, r, 0.1) end
@@ -117,7 +120,8 @@ f:SetScript("OnEvent", function(_, event, a1, a2)
         end
         combatStart = nil
     elseif event == "CHAT_MSG_COMBAT_XP_GAIN" then
-        local msg = a1 or ""
+        local msg = NS.safe(a1)
+        if type(msg) ~= "string" then return end
         local name, xp = msg:match(KILL_PATTERN or "^$")
         if name and tonumber(xp) then
             -- only a plain message (no rested/group bonus text) is clean enough to learn XP from
