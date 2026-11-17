@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.18.7
+  - "Your party is missing N of these quests" is said once per quest a
+    party member is missing - not again on every re-plan.
+
 NEW IN 1.18.6
   - TomTom is no longer required: TwizQuest loads without it and uses Quest
     Pilot's built-in TomTom (or the game's map pin) for the arrow.

@@ -566,9 +566,16 @@ function NS.SendGroupPlan(route)
     end
     Send("G|" .. table.concat(chunk, ","))
     -- quests are only shared when you click Share; just say how many they're missing
+    -- say it once per new quest they're missing, not on every re-plan
     C_Timer.After(1, function()
         local st = NS.PartyStatus()
-        if #st.missing > 0 then
+        NS.toldMissing = NS.toldMissing or {}
+        local new = 0
+        for _, m in ipairs(st.missing) do
+            local key = type(m) == "table" and (tostring(m.id) .. ":" .. tostring(m.who)) or tostring(m)
+            if not NS.toldMissing[key] then NS.toldMissing[key] = true; new = new + 1 end
+        end
+        if new > 0 and #st.missing > 0 then
             NS.Print(("your party is missing %d of these quests - click Share to offer them."):format(#st.missing))
         end
     end)
