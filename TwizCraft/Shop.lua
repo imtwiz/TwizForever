@@ -189,12 +189,15 @@ end
 
 function NS.Waypoint(s)
     if not s or not s.map then return end
+    local placed = false
     if TomTom and TomTom.AddWaypoint then
         if NS.wayUID and TomTom.RemoveWaypoint then pcall(TomTom.RemoveWaypoint, TomTom, NS.wayUID) end
         local ok, uid = pcall(TomTom.AddWaypoint, TomTom, s.map, s.mx / 100, s.my / 100,
-            { title = s.label, from = "TwizCraft", persistent = false, crafty = true })
-        if ok then NS.wayUID = uid end
-    elseif C_Map and C_Map.SetUserWaypoint and UiMapPoint then
+            { title = s.label, from = "TwizCraft", persistent = false, crazy = true })
+        if ok and uid then NS.wayUID, placed = uid, true end
+    end
+    -- no TomTom (or it refused): the game's own map pin
+    if not placed and C_Map and C_Map.SetUserWaypoint and UiMapPoint then
         pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(s.map, s.mx / 100, s.my / 100))
         if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true) end
     end

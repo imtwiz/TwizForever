@@ -1,5 +1,9 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.13.2
+- TomTom is no longer required: TwizCraft loads without it and uses Quest
+  Pilot's built-in TomTom (or the game's map pin) for waypoints.
+
 NEW IN 1.13.1 - CRAFT ORDERS RUN BY THEMSELVES
 - After you click "Trade mats to <friend>", the rest is automatic: your
   TwizCraft accepts the trade once the materials are in, your friend's
@@ -140,7 +144,8 @@ NEW IN 1.7.0
   /tc wheel turns the mouse-wheel shortcut off.
 
 NEW IN 1.6.1
-- Requires TomTom (for the waypoint arrow on shopping and mailbox stops).
+- Uses TomTom for the waypoint arrow if it's there (the separate addon or Quest
+  Pilot's built-in copy); otherwise the game's own map pin. Not required.
 
 NEW IN 1.6.0
 - Makes intermediates when that's cheaper per skill point: e.g. Coarse
