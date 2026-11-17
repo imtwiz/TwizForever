@@ -54,3 +54,7 @@ SIM.debuffs.party2 = { { "Hamstring" } }; SIM.Fire("UNIT_AURA", "party2"); SIM.A
 L("only undispellable left: " .. key())
 SlashCmdList.TWIZBUFF("cleanse"); SIM.debuffs.party1 = { { "Curse of Weakness", "Curse" } }; SIM.Advance(1)
 L("cleanse off: " .. key())
+-- 1.4.1: the game refuses aura reads (an error, in combat) - no Lua errors, nothing wrongly cast
+C_UnitAuras.GetAuraDataByIndex = function() error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'TwizBuff'") end
+local ok, err = pcall(NS.Update)
+L("aura reads refused: update ok=" .. tostring(ok) .. " " .. tostring(err or ""))

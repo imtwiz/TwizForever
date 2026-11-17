@@ -161,3 +161,7 @@ L(("short, 200 wide: name %dpx, one line, icons in line"):format(b.name:GetWidth
 L("instant key: " .. tostring(TwizHealButton:GetAttribute("macrotext2")):gsub("\n", " || "))
 L("bar2 right-click: " .. tostring(TwizHealBar2:GetAttribute("macrotext2")):gsub("\n", " || ") .. " | hover m2: " .. tostring(TwizHealBar2:GetAttribute("healmacro2") ~= nil))
 L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:RightButton"]))
+-- 1.11.1: aura reads refused by the game
+C_UnitAuras.GetAuraDataByIndex = function() error("Auras cannot be accessed when secret") end
+SIM.Advance(0.5)
+L("aura reads refused: window still drawn, rule = " .. tostring(TwizHeal.ooc and TwizHeal.ooc.label) .. " (" .. tostring(TwizHeal.oocWhy) .. ")")

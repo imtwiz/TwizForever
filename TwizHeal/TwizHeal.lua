@@ -199,13 +199,23 @@ local function InRange(unit, spell)
 end
 
 -- your HoTs on a unit: { [spellName] = seconds left }, and the healing they still have to do
+-- aura reads: in combat this client can refuse them outright ("cannot be accessed when secret"),
+-- which is an error, not a hidden value - treat it as "can't see auras right now"
+local function AuraAt(unit, i, filter)
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, filter)
+    if ok then return a end
+    return nil, true -- blocked
+end
+
 local function MyHoTs(unit)
     local out, incoming, hidden = {}, 0, false
     local _, class = UnitClass("player")
     local set = SPELLS[class] or {}
     local watch = { [set.hot or "-"] = true, [set.fast or "-"] = true }
     for i = 1, 40 do
-        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        local a, blocked = AuraAt(unit, i, "HELPFUL")
+        if blocked then hidden = true end
         if not a then break end
         local name, exp, src = safe(a.name), safe(a.expirationTime), safe(a.sourceUnit)
         if not name then hidden = true end
@@ -659,7 +669,7 @@ local ROOT_WORDS = { "root", "frost nova", "entangl", "net", "snare", "web", "fr
 function NS.StatusOf(unit)
     local found = {}
     for i = 1, 40 do
-        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+        local a = AuraAt(unit, i, "HARMFUL")
         if not a then break end
         local kind = safe(a.dispelName)
         if kind and NS.STATUS_COLORS[kind] and kind ~= "Rooted" and kind ~= "Stunned" and kind ~= "Other" then
@@ -744,7 +754,7 @@ function NS.DrawAbsorb(b, unit)
     local n = safe(abs)
     local icon, auraName
     for i = 1, 40 do
-        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        local a = AuraAt(unit, i, "HELPFUL")
         if not a then break end
         local name = safe(a.name)
         if name and SHIELDS[name] then icon, auraName = safe(a.icon) or 135940, name; break end
@@ -768,7 +778,7 @@ function NS.DrawMyBuffs(b, unit)
     local size = b.iconSize or 10
     local n = 0
     for i = 1, 40 do
-        local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+        local a = AuraAt(unit, i, "HELPFUL|PLAYER")
         if not a or n >= MAXICONS then break end
         local src = safe(a.sourceUnit)
         if src == nil or src == "player" or src == "pet" then

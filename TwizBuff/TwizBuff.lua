@@ -90,12 +90,21 @@ local function InRange(name, unit)
     return r == true or r == 1
 end
 
+-- aura reads: in combat this client can refuse them outright ("cannot be accessed when secret"),
+-- which is an error, not a hidden value - treat it as "can't see auras right now"
+local function AuraAt(unit, i, filter)
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, filter)
+    if ok then return a end
+    return nil, true -- blocked
+end
+
 local function Auras(unit)
     local have = {}
     for i = 1, 40 do
         local name
         if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-            local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+            local a = AuraAt(unit, i, "HELPFUL")
             name = a and a.name
         elseif UnitBuff then
             name = UnitBuff(unit, i)
@@ -180,7 +189,7 @@ function NS.Debuffed()
             local have = Auras(u)
             local seen = {}
             for i = 1, 40 do
-                local a = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and C_UnitAuras.GetAuraDataByIndex(u, i, "HARMFUL")
+                local a = AuraAt(u, i, "HARMFUL")
                 if not a then break end
                 local kind = plain(a.dispelName)
                 local sp = kind and spellFor[kind]
@@ -344,6 +353,9 @@ end
 function NS.Update()
     if not db then return end
     if not frame then Build() end
+    -- in combat the key can't change and the game may refuse aura reads: wait for the fight to end
+    if InCombatLockdown() and frame.built then return end
+    frame.built = true
     local list = NS.Missing()
     local nextCast = NS.NextCast(list)
     local inCombat = InCombatLockdown()
