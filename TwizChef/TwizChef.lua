@@ -683,8 +683,9 @@ local WELL_FED = "well fed"
 local function WellFed()
     if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
         for i = 1, 40 do
-            local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-            if not a then break end
+            -- in combat the game can refuse aura reads outright (an error): treat as not known
+            local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+            if not ok or not a then break end
             local n = safe(a.name)
             if type(n) == "string" and n:lower() == WELL_FED then return true end
         end
@@ -820,7 +821,7 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
         CheckDelivery()
         UpdateEatButton()
     elseif event == "UI_ERROR_MESSAGE" then
-        local emsg = arg2 or arg1
+        local emsg = safe(arg2 or arg1)
         if type(emsg) == "string" and emsg:lower():find("cooking fire", 1, true) then
             Print("you need a fire to cook: cast Basic Campfire (or stand by any fire), then press again.")
         end

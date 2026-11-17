@@ -1,4 +1,8 @@
-TwizChef 2.0.0 - buys missing cooking ingredients for your best recipes
+TwizChef 2.0.2 - buys missing cooking ingredients for your best recipes
+
+NEW IN 2.0.2
+  Fixed an error when the game refuses addons a look at your buffs (it
+  happens in combat): the eat key just treats Well Fed as unknown.
 
 NEW IN 2.0
   Eat key   - one key eats and drinks your best: buff food when you're not

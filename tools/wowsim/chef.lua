@@ -58,3 +58,9 @@ TwizChef.CookNext(); SIM.Advance(0.5); TwizChef.CookNext()
 
 -- leaving town without Well Fed
 SIM.resting = false; SIM.Fire("PLAYER_UPDATE_RESTING"); SIM.Advance(2)
+-- 2.0.2: the game refuses aura reads (error) - no Lua error from the eat button
+C_UnitAuras = C_UnitAuras or {}
+C_UnitAuras.GetAuraDataByIndex = function() error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'TwizChef'") end
+local okW, w = pcall(TwizChef.WellFed)
+SIM.log[#SIM.log + 1] = "aura reads refused: WellFed ok=" .. tostring(okW) .. " -> " .. tostring(w)
+SIM.Fire("BAG_UPDATE_DELAYED")
