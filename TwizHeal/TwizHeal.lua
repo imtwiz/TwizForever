@@ -344,25 +344,92 @@ local function Moving()
 end
 NS.Moving = Moving
 
+-- Swiftmend: instant, eats a Rejuvenation/Regrowth on the target to heal them a lot at once
+local SAVE_PCT = 0.31
+local SAVER = { DRUID = "Swiftmend" }
+local function KnowsSpell(name)
+    if not name then return false end
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, name)
+        if ok and info then return true end
+    end
+    if GetSpellInfo then local ok, n = pcall(GetSpellInfo, name); return ok and n ~= nil end
+    return false
+end
+local function SpellReady(name)
+    if not (C_Spell and C_Spell.GetSpellCooldown) then return true end
+    local ok, cd = pcall(C_Spell.GetSpellCooldown, name)
+    if not ok or type(cd) ~= "table" then return true end
+    local start, dur = safe(cd.startTime), safe(cd.duration)
+    if not start or not dur then return true end
+    -- a cooldown no longer than the global cooldown doesn't count
+    return dur <= 1.5 or (start + dur - GetTime()) <= 0.2
+end
+local function Saver()
+    local _, class = UnitClass("player")
+    local name = SAVER[class]
+    if name and KnowsSpell(name) then return { name = name, label = name, kind = "save" } end
+end
+NS.Saver = Saver
+
+-- The rules, out of combat (where health and buffs can be read):
+--   below 31%            -> Swiftmend if your Rejuvenation/Regrowth is on them (instant save);
+--                           Rejuvenation first if Swiftmend is ready but nothing is on them yet
+--                           (the next press is the Swiftmend); otherwise Regrowth
+--   moving               -> Rejuvenation (instant)
+--   big gap              -> Regrowth (a big heal now, plus a HoT) - more missing than one
+--     (under 60%, or more   Rejuvenation would heal; Healing Touch if Regrowth is already ticking
+--      than Rejuv heals)
+--   small gap            -> Rejuvenation (cheap, heals over time) if it isn't on them; if it is,
+--                           a small Healing Touch for whatever it won't cover
 local function OocRule(unit)
     local hot, fast = Best("hot"), Best("fast")
-    if Moving() then
-        if hot then return hot, "moving" end
+    local u = unit or "player"
+    local hots, incoming, hidden = {}, 0, true
+    if UnitExists(u) then
+        local h, inc, hid = MyHoTs(u)
+        hots, incoming, hidden = h, inc or 0, hid
     end
-    local hots, hidden = {}, true
-    if unit and UnitExists(unit) then
-        local h, _, hid = MyHoTs(unit)
-        hots, hidden = h, hid
-    end
-    local cur, mx = safe(UnitHealth(unit or "player")), safe(UnitHealthMax(unit or "player"))
+    local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
-    if pct and pct < 0.5 then
-        if fast and not hidden and not hots[fast.name] then return PickRank(need, "fast") or fast, "low" end
+    local moving = Moving()
+    local hasHot = not hidden and hot and hots[hot.name]
+    local hasFast = not hidden and fast and hots[fast.name]
+
+    -- 1. save them
+    if pct and pct < SAVE_PCT then
+        local saver = Saver()
+        if saver and SpellReady(saver.name) then
+            if hasHot or hasFast then return saver, "save" end
+            if hot and not hidden then return hot, "save: Rejuvenation, then Swiftmend" end
+        end
+        if moving and hot then return hot, "moving" end
+        if fast and not hasFast then return PickRank(need, "fast") or fast, "low" end
         return PickRank(need, "direct") or Best("direct"), "low"
     end
-    if hot and not hidden and not hots[hot.name] then return (need and need > 0 and PickRank(need, "hot")) or hot, "topping off" end
-    return (need and need > 0 and PickRank(need, "direct")) or Best("direct", 2) or Best("direct") or hot, "topping off"
+    -- 2. moving: only instants work
+    if moving and hot then return hot, "moving" end
+    -- 3. how much is missing after what's already ticking on them
+    local left = need and math.max(0, need - (incoming or 0)) or nil
+    local hotTotal = hot and (hot.total or 0) or 0
+    local big = pct and (pct < 0.6 or (hotTotal > 0 and left and left > hotTotal))
+    if big then
+        if fast and not hasFast then return PickRank(left or need, "fast") or fast, "big gap" end
+        return PickRank(left or need, "direct") or Best("direct"), "big gap"
+    end
+    if hot and not hidden and not hasHot then
+        return (need and need > 0 and PickRank(need, "hot")) or hot, "topping off"
+    end
+    if left and left > 0 then
+        return PickRank(left, "direct") or Best("direct", 2) or Best("direct") or hot, "topping off"
+    end
+    -- health hidden or nothing missing
+    if pct == nil then
+        if hot and not hidden and not hasHot then return hot, "topping off" end
+        return Best("direct", 2) or Best("direct") or hot, "topping off"
+    end
+    return hot or Best("direct", 2) or Best("direct"), "full"
 end
 NS.OocRule = OocRule
 
@@ -398,6 +465,19 @@ local function InstantMacro(unit, only)
     return pre .. "/cast " .. Chain("", unit, only) .. " " .. spell.label
 end
 NS.InstantMacro = InstantMacro
+
+-- the emergency key: Rejuvenation then Swiftmend (two instant presses) - works in combat, where
+-- the game won't tell an addon who's low. Without Swiftmend: Rejuvenation then Regrowth.
+local function EmergencyMacro(unit, only)
+    local hot, fast = Best("hot"), Best("fast")
+    local saver = Saver()
+    local second = saver and saver.label or (fast and fast.label)
+    if not hot or not second then return InstantMacro(unit, only) end
+    local _, class = UnitClass("player")
+    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    return pre .. "/castsequence " .. Chain("", unit, only) .. " reset=6 " .. hot.label .. ", " .. second
+end
+NS.EmergencyMacro = EmergencyMacro
 
 local function SetMacro(b, text)
     if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
@@ -544,7 +624,8 @@ local function Build()
         if b.SetFrameRef then b:SetFrameRef("key", btn) end
         b:SetAttribute("_onenter", [[
             local key = self:GetFrameRef("key")
-            local m, m2 = self:GetAttribute("healmacro"), self:GetAttribute("healmacro2")
+            local m, m2, m3 = self:GetAttribute("healmacro"), self:GetAttribute("healmacro2"), self:GetAttribute("healmacro3")
+            if key and m3 then key:SetAttribute("macrotext3", m3) end
             if key and m then key:SetAttribute("macrotext1", m) end
             if key and m2 then key:SetAttribute("macrotext2", m2) end
         ]])
@@ -553,6 +634,7 @@ local function Build()
             if key then
                 key:SetAttribute("macrotext1", key:GetAttribute("basemacro"))
                 key:SetAttribute("macrotext2", key:GetAttribute("basemacro2"))
+                key:SetAttribute("macrotext3", key:GetAttribute("basemacro3"))
             end
         ]])
         b:HookScript("OnEnter", function(self) NS.hoverUnit = self:GetAttribute("unit") end)
@@ -933,7 +1015,7 @@ Update = function()
         local fast, hot = Best("fast") or Best("direct", 1), Best("hot")
         frame.next:SetText(fast and ("|cfff0c45c%s|r%s"):format(fast.name, hot and (" |cff9aa1ab(moving: " .. hot.name .. ")|r") or "") or "no heal known")
     elseif ooc then
-        frame.next:SetText(("%s%s|r -> %s |cff9aa1ab(%s)|r"):format(why == "low" and "|cffff8060" or "|cfff0c45c", ooc.label,
+        frame.next:SetText(("%s%s|r -> %s |cff9aa1ab(%s)|r"):format((why == "low" or (why or ""):find("^save")) and "|cffff8060" or "|cfff0c45c", ooc.label,
             UnitIsUnit and UnitIsUnit(who, "player") and "you" or (safe(UnitName(who)) or who), why))
     else
         frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden - hover the lowest bar|r" or "|cff8fe08feveryone's fine|r")
@@ -941,26 +1023,30 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base, base2 = SmartMacro(fallback, ooc), InstantMacro(fallback)
-        btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2)
-        local hovered, hovered2
+        local base, base2, base3 = SmartMacro(fallback, ooc), InstantMacro(fallback), EmergencyMacro(fallback)
+        btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
+        local hovered, hovered2, hovered3
         -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
         -- key = your HoT; hovering a bar points both keys at that person
         for _, b in ipairs(bars) do
             local unit = b:GetAttribute("unit")
             if UnitExists(unit) then
                 local r, w = OocRule(unit)
-                local m, m2 = SmartMacro(unit, r, true), InstantMacro(unit, true)
+                local m, m2, m3 = SmartMacro(unit, r, true), InstantMacro(unit, true), EmergencyMacro(unit, true)
+                if b:GetAttribute("healmacro3") ~= m3 then b:SetAttribute("healmacro3", m3) end
+                if b:GetAttribute("macrotext3") ~= m3 then b:SetAttribute("macrotext3", m3) end -- middle-click a bar
                 SetMacro(b, m)
                 if b:GetAttribute("macrotext2") ~= m2 then b:SetAttribute("macrotext2", m2) end
                 if b:GetAttribute("healmacro") ~= m then b:SetAttribute("healmacro", m) end
                 if b:GetAttribute("healmacro2") ~= m2 then b:SetAttribute("healmacro2", m2) end
-                if NS.hoverUnit == unit then hovered, hovered2 = m, m2 end
+                if NS.hoverUnit == unit then hovered, hovered2, hovered3 = m, m2, m3 end
             end
         end
         local k1, k2 = hovered or base, hovered2 or base2
         if btn:GetAttribute("macrotext1") ~= k1 then btn:SetAttribute("macrotext1", k1) end
         if btn:GetAttribute("macrotext2") ~= k2 then btn:SetAttribute("macrotext2", k2) end
+        local k3 = hovered3 or base3
+        if btn:GetAttribute("macrotext3") ~= k3 then btn:SetAttribute("macrotext3", k3) end
     end
     if not inCombat then
         if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
@@ -1104,7 +1190,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         if not ok then Print("couldn't read your spellbook: " .. tostring(err)) end
         if event == "PLAYER_ENTERING_WORLD" and #ranks > 0 and not db.told then
             db.told = true
-            Print("works on the game's own party and raid frames: hover one and press your TwizHeal key (Options > Keybindings > AddOns > TwizHeal), or Alt+click it. Out of combat it picks Rejuvenation/Regrowth/a small heal by rules (moving, topping off); in combat it casts your fast heal, or your HoT while moving. /th window shows TwizHeal's own bars.")
+            Print("works on the game's own party and raid frames: hover one and press your TwizHeal key (Options > Keybindings > AddOns > TwizHeal), or Alt+click it. Out of combat it picks Swiftmend / Regrowth / Rejuvenation / a small heal by how hurt they are; in combat it casts your fast heal. Bind the instant key (Rejuvenation, for moving) and the emergency key (Rejuvenation then Swiftmend) too. /th window shows TwizHeal's own bars.")
         end
     end
     NS.Update()
@@ -1127,6 +1213,7 @@ end)
 _G["BINDING_HEADER_TWIZHEAL"] = "TwizHeal"
 _G["BINDING_NAME_CLICK TwizHealButton:LeftButton"] = "Heal whoever needs it most"
 _G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Instant heal (Rejuvenation / Renew) - use while moving"
+_G["BINDING_NAME_CLICK TwizHealButton:MiddleButton"] = "Emergency: Rejuvenation, then Swiftmend or Regrowth (press twice)"
 
 SLASH_TWIZHEAL1 = "/th"
 SLASH_TWIZHEAL2 = "/twizheal"
@@ -1160,6 +1247,10 @@ SlashCmdList.TWIZHEAL = function(msg)
         local m2 = TwizHealButton and TwizHealButton:GetAttribute("macrotext2") or "(none)"
         Print("the instant-heal key runs:")
         for line in tostring(m2):gmatch("[^\n]+") do Print("  " .. line) end
+        local m3 = TwizHealButton and TwizHealButton:GetAttribute("macrotext3") or "(none)"
+        Print("the emergency key runs:")
+        for line in tostring(m3):gmatch("[^\n]+") do Print("  " .. line) end
+        Print(("out of combat the key picks: %s (%s)"):format(NS.ooc and NS.ooc.label or "-", tostring(NS.oocWhy)))
         Print(("it heals: %s; moving: %s"):format(Who(), tostring(Moving())))
     elseif cmd == "debug" then
         pcall(NS.ReadRanks)

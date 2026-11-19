@@ -1,4 +1,4 @@
-TwizHeal 1.11.1 - one hotkey heals whoever needs it most
+TwizHeal 1.12.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -30,33 +30,27 @@ WHICH HEAL
   heal (Flash Heal, Regrowth, Flash of Light, Lesser Healing Wave).
   /th ranks lists your heals with how much each one heals and costs.
 
-WHICH SPELL - THE RULES (new in 1.4.0, no Shift/Ctrl)
-  One key, no modifiers. TwizHeal decides:
-  Out of combat (it rewrites the key as you move, hover and target):
-    - you're moving                     -> your HoT (Rejuvenation, Renew):
-                                           it's instant, so it casts on the run
-    - they're under half health         -> a real heal sized to the gap
-                                           (Regrowth if it isn't on them,
-                                           else Healing Touch / Heal)
-    - topping off, no HoT of yours on   -> your HoT (cheap, ticks while
-      them                                 everyone drinks)
-    - topping off, your HoT already on  -> the smallest direct heal that
-                                           covers what's missing
-  In combat the game locks the key and doesn't tell macros whether you're
-  moving, so it's one fixed rule:
-    - standing -> your fast heal (Regrowth, Flash Heal, Flash of Light...)
-    - moving   -> the fast heal can't start, so your HoT goes out instead
-  /th test shows what the key will do and who it will heal.
-  Moving: out of combat the key switches to Rejuvenation the moment you
-  move. In combat the game won't let the key change, and a Regrowth refused
-  for moving uses up the press - so bind the INSTANT HEAL key (new in
-  1.11.0): Options > Keybindings > AddOns > TwizHeal > "Instant heal". It
-  always casts Rejuvenation / Renew on your mouseover, friendly target or
-  the tank - works on the run, in combat too. Right-clicking a bar in the
-  party window does the same for that person, and hovering a bar points
-  the instant key at them.
-  When the game hides health or buffs, the rules that need them are skipped
-  (no endless re-casting of a HoT it can't see).
+WHICH SPELL - THE RULES (1.12.0)
+  Out of combat TwizHeal reads how hurt they are and what's ticking on them:
+    - under 31%                -> Swiftmend if your Rejuvenation or Regrowth is on
+                                  them (an instant save). Swiftmend ready but
+                                  nothing on them: Rejuvenation now, Swiftmend on
+                                  the next press. No Swiftmend: Regrowth.
+    - you're moving            -> Rejuvenation (instant)
+    - big gap (under 60%, or   -> Regrowth (a big heal now plus a HoT); Healing
+      more missing than one       Touch if your Regrowth is already ticking
+      Rejuvenation heals)
+    - small gap, no Rejuv on   -> Rejuvenation (cheap, heals over time)
+    - small gap, Rejuv on      -> a small Healing Touch for what it won't cover
+  In combat the game locks the key and hides health from addons, so:
+    - main key       -> Regrowth
+    - instant key    -> Rejuvenation (use while moving)
+    - EMERGENCY key  -> Rejuvenation, then Swiftmend on the 2nd press (both
+      (new)             instant). Without Swiftmend: Rejuvenation, then
+                        Regrowth. Bind it: Options > Keybindings > AddOns >
+                        TwizHeal > "Emergency". Middle-click a bar does the same.
+  Swiftmend is a Restoration talent - until you have it, the emergency key
+  uses Regrowth as the second spell.
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
   Hover a bar and press your TwizHeal key: it heals that person, in or out
