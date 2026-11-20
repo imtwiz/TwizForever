@@ -1,7 +1,20 @@
-TwizBuff 1.4.1 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.5.0 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.
+
+NEAREST FRIEND (new in 1.5.0)
+  Finds the closest friendly player who's missing Mark of the Wild (your
+  class's main buff: Fortitude, Arcane Intellect...) - party members or
+  strangers with a nameplate, in range - and buffs them.
+  - Toggle: /tb nearest, or bind Options > Keybindings > AddOns > TwizBuff >
+    "Toggle nearest-friend mode". While ON, your normal TwizBuff key (and
+    the mouse wheel) buffs the nearest friend missing it, one after another.
+    Removing debuffs still comes first. OFF: back to the usual order.
+  - One-off: bind "Nearest friend missing it", or right-click the TwizBuff
+    button - casts it on the closest one without turning the mode on.
+  Closest = exact yards for group members, else within 10 / 28 yards / spell
+  range. Out of combat only.
 
 DEBUFFS (new in 1.4.0)
   The same key removes debuffs you can cure, before any heal or buff:

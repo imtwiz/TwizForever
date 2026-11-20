@@ -14,7 +14,7 @@
 local ADDON, NS = ...
 TwizBuff = NS
 
-local DEFAULTS = { shown = true, wheel = true, shadowProt = false, thorns = true, hideWhenDone = true, minGroup = 3, strangers = true, skipPvP = false }
+local DEFAULTS = { shown = true, wheel = true, shadowProt = false, thorns = true, hideWhenDone = true, minGroup = 3, strangers = true, skipPvP = false, nearest = false }
 
 -- names: what to cast; also = auras that already count (group versions, greater blessings)
 -- mana = only for people who use mana; group = group version (needs a reagent)
@@ -255,6 +255,57 @@ function NS.Missing()
     return out
 end
 
+-- Nearest friend: the closest friendly player who's missing your main buff (Mark of the Wild,
+-- Fortitude, Arcane Intellect...). Closeness: exact yards for group members when the game
+-- gives positions, else 10 yd / 28 yd / spell-range rings (CheckInteractDistance).
+local function Yards(u)
+    if UnitIsUnit and UnitIsUnit(u, "player") then return 0 end
+    if UnitPosition then
+        local ok, x1, y1, _, i1 = pcall(UnitPosition, "player")
+        local ok2, x2, y2, _, i2 = pcall(UnitPosition, u)
+        if ok and ok2 then
+            x1, y1, x2, y2 = plain(x1), plain(y1), plain(x2), plain(y2)
+            if x1 and x2 and y1 and y2 and i1 == i2 then return math.sqrt((x1 - x2) ^ 2 + (y1 - y2) ^ 2) end
+        end
+    end
+    if CheckInteractDistance and not InCombatLockdown() then
+        local ok, near = pcall(CheckInteractDistance, u, 3)
+        if ok and near then return 9 end
+        ok, near = pcall(CheckInteractDistance, u, 4)
+        if ok and near then return 27 end
+    end
+    return 35
+end
+NS.Yards = Yards
+function NS.NearestTarget(list)
+    local _, class = UnitClass("player")
+    local main = BUFFS[class] and BUFFS[class][1]
+    local spell = main and not main.blessing and not main.selfOnly and main.spell
+    if not spell or not Known(spell) then return nil end
+    local best, bestD, seen = nil, math.huge, {}
+    for _, m in ipairs(list or NS.Missing()) do
+        local key = m.name or m.unit
+        if m.spell == spell and m.inRange and not seen[key] then
+            seen[key] = true
+            local d = Yards(m.unit)
+            if d < bestD then best, bestD = m, d end
+        end
+    end
+    if best then best.yards = bestD end
+    return best
+end
+
+-- the toggle: while on, the TwizBuff key (and wheel) buffs the nearest friend missing your
+-- main buff instead of the usual next-missing-buff order (debuff removal still comes first)
+function TwizBuff_ToggleNearest()
+    if not db then return end
+    db.nearest = not db.nearest
+    local main = (BUFFS[select(2, UnitClass("player"))] or {})[1]
+    Print("nearest-friend " .. tostring(main and main.spell or "buff") .. ": " ..
+        (db.nearest and "|cff8fe08fON|r - your TwizBuff key buffs the closest friend missing it" or "|cffff8060OFF|r"))
+    if NS.Update then NS.Update() end
+end
+
 -- the next cast: a group version when enough group members need the same buff
 function NS.NextCast(list)
     list = list or NS.Missing()
@@ -331,6 +382,9 @@ local function Build()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("TwizBuff", 0.94, 0.77, 0.36)
         GameTooltip:AddLine("Casts the next missing buff. Bind a key in Options > Keybindings > AddOns > TwizBuff, or /tb wheel on to use the mouse wheel.", 1, 1, 1, true)
+        local r = NS.near
+        GameTooltip:AddLine("Right-click: " .. (r and (r.spell .. " on the nearest friend missing it - " .. tostring(r.name or r.unit)) or "nearest friend - nobody in range is missing your buff"), 0.5, 0.8, 1, true)
+        GameTooltip:AddLine("Nearest-friend mode (/tb nearest or its key): " .. (db and db.nearest and "ON" or "off"), 0.5, 0.8, 1, true)
         GameTooltip:Show()
     end)
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -387,6 +441,8 @@ function NS.Update()
     -- needs it most - in combat always, and out of combat when someone is hurt; otherwise it
     -- casts the next missing buff (out of combat only).
     local heal = TwizHealButton and TwizHeal and TwizHeal.pick
+    local near = NS.NearestTarget(list)
+    NS.near = near
     if not inCombat then
         local lines = {}
         -- /click must match the "cast on key down" option, or the heal button ignores it
@@ -397,6 +453,11 @@ function NS.Update()
             -- a debuff you can remove beats a heal or a buff
             lines[#lines + 1] = ("/cast [nocombat,@%s] %s"):format(cleanse.unit, cleanse.spell)
             btn.label:SetText(("%s %s"):format(cleanse.spell, cleanse.unit == "player" and "you" or (cleanse.name or cleanse.unit)))
+            btn:SetAlpha(1)
+        elseif db.nearest and near then
+            -- toggle on: the closest friend missing your main buff
+            lines[#lines + 1] = ("/cast [nocombat,@%s,help,nodead] %s"):format(near.unit, near.spell)
+            btn.label:SetText(("%s %s"):format(near.spell, near.unit == "player" and "you" or (near.name or near.unit)))
             btn:SetAlpha(1)
         elseif heal then
             lines[#lines + 1] = "/click [nocombat] " .. target
@@ -412,6 +473,10 @@ function NS.Update()
         end
         btn:SetAttribute("type", "macro")
         btn:SetAttribute("macrotext", table.concat(lines, "\n"))
+        -- right button / "Nearest friend" key: your main buff on the closest friend missing it
+        local r = near
+        local m2 = r and ("/cast [nocombat,@%s,help,nodead] %s"):format(r.unit, r.spell) or ""
+        if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
         local shown = math.min(#list + #debuffs, ROWS)
         frame:SetHeight(28 + shown * 15 + 42)
         local want = db.shown and (#list > 0 or #debuffs > 0 or not db.hideWhenDone)
@@ -467,6 +532,8 @@ C_Timer.NewTicker(1, function() if db and frame and (frame:IsShown() or db.shown
 
 _G["BINDING_HEADER_TWIZBUFF"] = "TwizBuff"
 _G["BINDING_NAME_CLICK TwizBuffButton:LeftButton"] = "Buff / heal: next missing buff out of combat; with TwizHeal, heals whoever needs it most"
+_G["BINDING_NAME_CLICK TwizBuffButton:RightButton"] = "Nearest friend missing it: Mark of the Wild (your main buff)"
+_G["BINDING_NAME_TWIZBUFF_NEAREST"] = "Toggle nearest-friend mode (the TwizBuff key buffs the closest friend)"
 
 SLASH_TWIZBUFF1 = "/tb"
 SLASH_TWIZBUFF2 = "/twizbuff"
@@ -489,6 +556,8 @@ SlashCmdList.TWIZBUFF = function(msg)
         db[k] = not db[k]
         Print((cmd == "shadow" and "Shadow Protection" or "Thorns") .. ": " .. (db[k] and "included" or "left out"))
         NS.Update()
+    elseif cmd == "nearest" then
+        TwizBuff_ToggleNearest()
     elseif cmd == "cleanse" then
         db.dispel = db.dispel == false
         Print("remove curses / poisons / diseases / magic with the same key: " .. (db.dispel and "on" or "off"))
@@ -512,6 +581,6 @@ SlashCmdList.TWIZBUFF = function(msg)
         db.minGroup = math.max(2, math.min(tonumber(rest), 40))
         Print(("group buff when %d or more need it"):format(db.minGroup))
     else
-        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb pvp - skip PvP-flagged strangers;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb cleanse - remove debuffs with the key on/off;  /tb group N - group version at N people")
+        Print("/tb - show/hide;  /tb wheel on|off - cast with the mouse wheel;  /tb strangers on|off - nearby players too;  /tb pvp - skip PvP-flagged strangers;  /tb auto - hide when all buffed;  /tb shadow, /tb thorns - include those;  /tb cleanse - remove debuffs with the key on/off;  /tb nearest - nearest-friend mode on/off;  /tb group N - group version at N people")
     end
 end

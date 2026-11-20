@@ -58,3 +58,22 @@ L("cleanse off: " .. key())
 C_UnitAuras.GetAuraDataByIndex = function() error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'TwizBuff'") end
 local ok, err = pcall(NS.Update)
 L("aura reads refused: update ok=" .. tostring(ok) .. " " .. tostring(err or ""))
+-- 1.5.0: nearest friend missing Mark of the Wild (right button), and the nearest-friend toggle
+C_UnitAuras.GetAuraDataByIndex = function(u, i, f)
+  if f == "HARMFUL" then return nil end
+  local n = units[u] and units[u].auras[i] return n and { name = n } end
+SlashCmdList.TWIZBUFF("cleanse")
+local yards = { party2 = 25, target = 8, nameplate1 = 40, player = 0 }
+CheckInteractDistance = function(u, i) local d = yards[u] or 50 return (i == 3 and d <= 10) or (i == 4 and d <= 28) end
+UnitPosition = nil
+units.player.auras = { "Mark of the Wild" }
+SIM.Advance(1)
+L("nearest missing MotW: " .. tostring(TwizBuff.near and (TwizBuff.near.unit .. " " .. tostring(TwizBuff.near.yards))) .. " | right button: " .. tostring(TwizBuffButton:GetAttribute("macrotext2")))
+L("main key, toggle off: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || "))
+TwizBuff_ToggleNearest(); SIM.Advance(1)
+L("main key, toggle ON:  " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | label: " .. tostring(TwizBuffButton.label:GetText()))
+units.target.auras = { "Mark of the Wild" }; SIM.Fire("UNIT_AURA", "target"); SIM.Advance(1)
+L("target buffed -> next nearest: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || "))
+SlashCmdList.TWIZBUFF("nearest"); SIM.Advance(1)
+L("toggled off again: nearest=" .. tostring(TwizBuff.db.nearest))
+L("bindings: " .. tostring(_G["BINDING_NAME_CLICK TwizBuffButton:RightButton"]) .. " / " .. tostring(_G["BINDING_NAME_TWIZBUFF_NEAREST"]))
