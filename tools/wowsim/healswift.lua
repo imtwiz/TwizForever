@@ -30,5 +30,12 @@ known.Swiftmend = nil
 SIM.Advance(0.3)
 L("no Swiftmend yet (level 25): " .. tostring(TwizHealButton:GetAttribute("macrotext3")):gsub("\n", " || ") .. " | 25%: " .. rule(500, nil))
 L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:MiddleButton"]))
+-- 1.12.1: above 89% -> no heal
+L("tank 95%:                    " .. rule(1900, nil))
+L("tank 89%:                    " .. rule(1780, nil))
+units.party1.hp = 1900; units.party2 = units.party2; SIM.hots.party1 = nil; NS.moving = false
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+L("hover tank at 95%, key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || "))
+TwizHeal.hoverUnit = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

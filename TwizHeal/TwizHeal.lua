@@ -19,7 +19,7 @@
 local ADDON, NS = ...
 TwizHeal = NS
 
-local DEFAULTS = { shown = true, danger = 0.30, threshold = 0.90, overheal = 1.10, clickCast = true }
+local DEFAULTS = { shown = true, danger = 0.30, threshold = 0.89, overheal = 1.10, clickCast = true }
 local SPELLS = {
     PRIEST  = { direct = { "Lesser Heal", "Heal", "Greater Heal" }, fast = "Flash Heal", hot = "Renew" },
     DRUID   = { direct = { "Healing Touch" }, fast = "Regrowth", hot = "Rejuvenation" },
@@ -266,7 +266,7 @@ function NS.Pick(list)
         if m.inRange and m.deficit > 0 then
             if m.pct <= (db.danger or 0.3) then danger[#danger + 1] = m
             -- HoTs already on them count: only people still short after those ticks
-            elseif m.need > 0 and ((m.pct <= (db.threshold or 0.9) and m.need >= smallest * 0.5) or m.need >= smallest) then
+            elseif m.need > 0 and m.pct <= (db.threshold or 0.89) and m.need >= smallest * 0.5 then
                 need[#need + 1] = m
             -- a tank taking damage with none of your HoTs on them: put one up
             -- (only when nobody else needs healing)
@@ -393,6 +393,8 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
+    -- above 89% (/th threshold): not worth a heal - the key does nothing out of combat
+    if pct and pct > (db and db.threshold or 0.89) then return nil, "fine" end
     local moving = Moving()
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
@@ -450,7 +452,8 @@ local function SmartMacro(unit, ooc, only)
     if combat then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label end
     -- moving fallback, in and out of combat: if the cast above can't start because you're moving
     -- (Regrowth, Healing Touch), this line casts your instant HoT instead
-    if hot then lines[#lines + 1] = "/cast " .. Chain("", unit, only) .. " " .. hot.label end
+    -- (out of combat only when the rules picked a heal: nobody above 89% gets one)
+    if hot then lines[#lines + 1] = "/cast " .. Chain(ooc and "" or "combat,", unit, only) .. " " .. hot.label end
     return table.concat(lines, "\n")
 end
 NS.SmartMacro = SmartMacro
@@ -1152,6 +1155,8 @@ fbTick:SetScript("OnUpdate", function()
         end
     elseif press.failed then
         Print(("the heal on %s failed (range, line of sight or mana?)"):format(who))
+    elseif NS.oocWhy == "fine" and not InCombatLockdown() then
+        Print(("%s is above %d%% health - no heal needed."):format(who, (db.threshold or 0.89) * 100 + 0.5))
     else
         Print(("key pressed but nothing was cast on %s - %s"):format(who,
             #ranks == 0 and "no heals found (/th ranks)" or "/th test shows what the key does"))
@@ -1175,6 +1180,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
         if (db.version or 0) < 3 then db.shown, db.clickCast, db.version = false, true, 3 end
         if db.version < 4 then db.shown, db.version = true, 4 end -- the party window is back: hover a bar + key
+        if db.version < 5 then if db.threshold == 0.90 then db.threshold = 0.89 end; db.version = 5 end -- above 89%: no heal
         NS.db = db
         return
     end
@@ -1267,6 +1273,6 @@ SlashCmdList.TWIZHEAL = function(msg)
                 r.avg > 0 and ("~%d"):format(r.avg) or "", r.hot > 0 and (" + %d over %ds"):format(r.hot, r.dur) or "", r.cost))
         end
     else
-        Print("/th window - show/hide TwizHeal's own bars;  /th clicks - Alt+click healing on party/raid frames;  /th danger 30 - heal anyone at 30% or less first;  /th threshold 90 - who's worth a heal;  /th ranks - your heals")
+        Print("/th window - show/hide TwizHeal's own bars;  /th clicks - Alt+click healing on party/raid frames;  /th danger 30 - heal anyone at 30% or less first;  /th threshold 89 - nobody above this % gets healed;  /th ranks - your heals")
     end
 end

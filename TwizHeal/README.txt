@@ -1,4 +1,4 @@
-TwizHeal 1.12.0 - one hotkey heals whoever needs it most
+TwizHeal 1.12.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -32,6 +32,7 @@ WHICH HEAL
 
 WHICH SPELL - THE RULES (1.12.0)
   Out of combat TwizHeal reads how hurt they are and what's ticking on them:
+    - above 89%                -> no heal at all (change it: /th threshold 80)
     - under 31%                -> Swiftmend if your Rejuvenation or Regrowth is on
                                   them (an instant save). Swiftmend ready but
                                   nothing on them: Rejuvenation now, Swiftmend on
