@@ -428,6 +428,9 @@ local function OocRule(unit)
     local need = pct and (mx - cur) or nil
     -- above 89% (/th threshold): not worth a heal - the key does nothing out of combat
     if pct and pct > (db and db.threshold or 0.89) then return nil, "fine" end
+    -- the game hides their health: it could be 95%, so no automatic heal (the instant and
+    -- emergency keys still cast on demand)
+    if pct == nil then return nil, "hidden" end
     local moving = Moving()
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
@@ -1092,7 +1095,7 @@ Update = function()
         frame.next:SetText(("%s%s|r -> %s |cff9aa1ab(%s)|r"):format((why == "low" or (why or ""):find("^save")) and "|cffff8060" or "|cfff0c45c", ooc.label,
             UnitIsUnit and UnitIsUnit(who, "player") and "you" or (safe(UnitName(who)) or who), why))
     else
-        frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden - hover the lowest bar|r" or "|cff8fe08feveryone's fine|r")
+        frame.next:SetText(NS.hidden and "|cff9aa1abhealth hidden by the game - no auto heals (instant / emergency keys still cast)|r" or "|cff8fe08feveryone's fine|r")
     end
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
@@ -1226,6 +1229,8 @@ fbTick:SetScript("OnUpdate", function()
         end
     elseif press.failed then
         Print(("the heal on %s failed (range, line of sight or mana?)"):format(who))
+    elseif NS.oocWhy == "hidden" and not InCombatLockdown() then
+        Print(("the game is hiding %s's health, so TwizHeal can't tell if they need it - no heal. Your instant or emergency key heals anyway."):format(who))
     elseif NS.oocWhy == "fine" and not InCombatLockdown() then
         Print(("%s is above %d%% health - no heal needed."):format(who, (db.threshold or 0.89) * 100 + 0.5))
     else

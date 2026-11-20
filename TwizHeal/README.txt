@@ -1,4 +1,4 @@
-TwizHeal 1.13.0 - one hotkey heals whoever needs it most
+TwizHeal 1.13.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -38,6 +38,8 @@ WHICH SPELL - THE RULES (1.12.0)
   ID through a hidden button, since "/cast Healing Touch(Rank 3)" does
   nothing on this client.) In combat it's always your top rank.
     - above 89%                -> no heal at all (change it: /th threshold 80)
+    - health hidden by the game -> no heal either: it might be 95%. Your
+                                  instant and emergency keys still cast.
     - under 31%                -> Swiftmend if your Rejuvenation or Regrowth is on
                                   them (an instant save). Swiftmend ready but
                                   nothing on them: Rejuvenation now, Swiftmend on
