@@ -77,3 +77,14 @@ L("target buffed -> next nearest: " .. tostring(TwizBuffButton:GetAttribute("mac
 SlashCmdList.TWIZBUFF("nearest"); SIM.Advance(1)
 L("toggled off again: nearest=" .. tostring(TwizBuff.db.nearest))
 L("bindings: " .. tostring(_G["BINDING_NAME_CLICK TwizBuffButton:RightButton"]) .. " / " .. tostring(_G["BINDING_NAME_TWIZBUFF_NEAREST"]))
+-- 1.5.1: a low-level friend gets a lower rank of Mark of the Wild
+local known = { [1126] = true, [5232] = true, [6756] = true }   -- ranks 1-3 (level 1, 10, 20)
+IsPlayerSpell = function(id) return known[id] == true end
+GetSpellLevelLearned = nil
+TwizBuff.ClearRanks()
+UnitLevel = function(u) return ({ player = 24, party2 = 23, target = 8, nameplate1 = 3 })[u] or 24 end
+units.target.auras = {}
+SlashCmdList.TWIZBUFF("nearest"); SIM.Advance(1)
+L("level 8 nearest: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | cast button: spell " .. tostring(TwizBuffCast1 and TwizBuffCast1:GetAttribute("spell")) .. " on " .. tostring(TwizBuffCast1 and TwizBuffCast1:GetAttribute("unit")) .. " | label: " .. tostring(TwizBuffButton.label:GetText()))
+units.target.auras = { "Mark of the Wild" }; SIM.Advance(1)
+L("level 23 next: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || "))

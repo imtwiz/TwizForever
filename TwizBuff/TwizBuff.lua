@@ -255,6 +255,94 @@ function NS.Missing()
     return out
 end
 
+-- Downranking: the game won't put a buff on someone more than 10 levels below the rank's level
+-- ("target is too low level"). For a low-level target, cast the highest rank they can take.
+-- Ranks come from your spellbook (or the known rank IDs), levels from the game or the rank table.
+-- Casting a lower rank needs its spell ID ("/cast Spell(Rank 3)" doesn't work on this client),
+-- so it goes through a small secure spell button that the key /clicks.
+local RANK_LEVELS = {
+    ["Mark of the Wild"]      = { 1, 10, 20, 30, 40, 50, 60 },
+    ["Thorns"]                = { 6, 14, 24, 34, 44, 54 },
+    ["Power Word: Fortitude"] = { 1, 12, 24, 36, 48, 60 },
+    ["Arcane Intellect"]      = { 1, 14, 28, 42, 56 },
+    ["Divine Spirit"]         = { 30, 40, 50, 60 },
+    ["Shadow Protection"]     = { 30, 42, 56 },
+}
+local RANK_IDS = {
+    ["Mark of the Wild"] = { 1126, 5232, 6756, 5234, 8907, 9884, 9885 },
+    ["Thorns"] = { 467, 782, 1075, 8914, 9756, 9910 },
+    ["Power Word: Fortitude"] = { 1243, 1244, 1245, 2791, 10937, 10938 },
+    ["Arcane Intellect"] = { 1459, 1460, 1461, 10156, 10157 },
+}
+local rankCache = {}
+function NS.Ranks(spell)
+    if rankCache[spell] then return rankCache[spell] end
+    local out, byId = {}, {}
+    local function add(id, rank)
+        if not id or byId[id] then return end
+        local known = (IsPlayerSpell and IsPlayerSpell(id)) or (IsSpellKnown and IsSpellKnown(id))
+        if not known then return end
+        local lvl = GetSpellLevelLearned and plain(GetSpellLevelLearned(id))
+        if type(lvl) ~= "number" or lvl <= 0 then lvl = RANK_LEVELS[spell] and RANK_LEVELS[spell][rank or 0] end
+        byId[id] = true
+        out[#out + 1] = { id = id, rank = rank, level = lvl or 1 }
+    end
+    -- spellbook entries named like the buff
+    if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines then
+        local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+        for line = 1, C_SpellBook.GetNumSpellBookSkillLines() do
+            local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+            if info then
+                for i = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+                    local item = C_SpellBook.GetSpellBookItemInfo(i, bank)
+                    if item and item.name == spell and item.spellID then
+                        add(item.spellID, tonumber(tostring(item.subName or ""):match("(%d+)")))
+                    end
+                end
+            end
+        end
+    end
+    for r, id in ipairs(RANK_IDS[spell] or {}) do add(id, r) end
+    table.sort(out, function(a, b) return a.level < b.level end)
+    rankCache[spell] = out
+    return out
+end
+function NS.ClearRanks() for k in pairs(rankCache) do rankCache[k] = nil end end
+
+-- the rank to use on unit: nil = your best rank (cast by name as usual)
+function NS.RankFor(spell, unit)
+    local ranks = NS.Ranks(spell)
+    if #ranks < 2 then return nil end
+    local tl = plain(UnitLevel(unit))
+    if type(tl) ~= "number" or tl <= 0 then return nil end
+    local pick
+    for _, r in ipairs(ranks) do if r.level <= tl + 10 then pick = r end end
+    pick = pick or ranks[1]
+    if pick == ranks[#ranks] then return nil end
+    return pick
+end
+
+local castButtons = {}
+local function CastButton(n)
+    if castButtons[n] then return castButtons[n] end
+    local b = CreateFrame("Button", "TwizBuffCast" .. n, UIParent, "SecureActionButtonTemplate")
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    b:SetAttribute("type", "spell")
+    b:Hide()
+    castButtons[n] = b
+    return b
+end
+-- the macro line that casts spell on unit, downranked if they're too low for your best rank
+function NS.CastLine(spell, unit, n)
+    local r = NS.RankFor(spell, unit)
+    if not r then return ("/cast [nocombat,@%s,help,nodead] %s"):format(unit, spell), nil end
+    local b = CastButton(n or 1)
+    b:SetAttribute("spell", r.id)
+    b:SetAttribute("unit", unit)
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    return "/click [nocombat] TwizBuffCast" .. (n or 1) .. (keyDown and " LeftButton 1" or ""), r
+end
+
 -- Nearest friend: the closest friendly player who's missing your main buff (Mark of the Wild,
 -- Fortitude, Arcane Intellect...). Closeness: exact yards for group members when the game
 -- gives positions, else 10 yd / 28 yd / spell-range rings (CheckInteractDistance).
@@ -456,16 +544,18 @@ function NS.Update()
             btn:SetAlpha(1)
         elseif db.nearest and near then
             -- toggle on: the closest friend missing your main buff
-            lines[#lines + 1] = ("/cast [nocombat,@%s,help,nodead] %s"):format(near.unit, near.spell)
-            btn.label:SetText(("%s %s"):format(near.spell, near.unit == "player" and "you" or (near.name or near.unit)))
+            local line, r = NS.CastLine(near.spell, near.unit, 1)
+            lines[#lines + 1] = line
+            btn.label:SetText(("%s%s %s"):format(near.spell, r and (" (rank " .. (r.rank or "?") .. ")") or "", near.unit == "player" and "you" or (near.name or near.unit)))
             btn:SetAlpha(1)
         elseif heal then
             lines[#lines + 1] = "/click [nocombat] " .. target
             btn.label:SetText("Heal " .. (heal.unit == "player" and "you" or (heal.name or heal.unit)))
             btn:SetAlpha(1)
         elseif nextCast then
-            lines[#lines + 1] = ("/cast [nocombat,@%s] %s"):format(nextCast.unit, nextCast.spell)
-            btn.label:SetText("Cast " .. nextCast.label)
+            local line, r = NS.CastLine(nextCast.spell, nextCast.unit, 1)
+            lines[#lines + 1] = line
+            btn.label:SetText("Cast " .. nextCast.label .. (r and (" (rank " .. (r.rank or "?") .. ")") or ""))
             btn:SetAlpha(1)
         else
             btn.label:SetText(#list > 0 and "Nobody in range" or "Everyone has your buffs")
@@ -475,7 +565,7 @@ function NS.Update()
         btn:SetAttribute("macrotext", table.concat(lines, "\n"))
         -- right button / "Nearest friend" key: your main buff on the closest friend missing it
         local r = near
-        local m2 = r and ("/cast [nocombat,@%s,help,nodead] %s"):format(r.unit, r.spell) or ""
+        local m2 = r and (NS.CastLine(r.spell, r.unit, 2)) or ""
         if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
         local shown = math.min(#list + #debuffs, ROWS)
         frame:SetHeight(28 + shown * 15 + 42)
@@ -499,6 +589,7 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDA
 end
 local pending
 ev:SetScript("OnEvent", function(_, event, a1)
+    if event == "SPELLS_CHANGED" and NS.ClearRanks then NS.ClearRanks() end -- learned a new rank
     if event == "ADDON_LOADED" then
         if a1 ~= ADDON then return end
         TwizBuffDB = TwizBuffDB or {}

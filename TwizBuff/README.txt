@@ -1,7 +1,13 @@
-TwizBuff 1.5.0 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.5.1 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.
+
+LOW-LEVEL TARGETS (new in 1.5.1)
+  The game won't put a buff on someone more than 10 levels below the rank's
+  level. For a low-level player TwizBuff casts the highest rank they can
+  take - e.g. a level 8 gets Mark of the Wild rank 2 (level 10) instead of
+  your rank 3. The button shows "(rank 2)" when it downranks.
 
 NEAREST FRIEND (new in 1.5.0)
   Finds the closest friendly player who's missing Mark of the Wild (your
