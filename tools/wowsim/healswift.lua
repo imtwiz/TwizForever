@@ -37,5 +37,16 @@ units.party1.hp = 1900; units.party2 = units.party2; SIM.hots.party1 = nil; NS.m
 TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
 L("hover tank at 95%, key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || "))
 TwizHeal.hoverUnit = nil
+-- 1.13.0: downranked heals sized to the gap, cast by spell ID
+units.party1.hp = 1700; SIM.hots.party1 = { { "Rejuvenation", 10 } }; NS.moving = false
+local r, why = NS.OocRule("party1")
+L(("tank 85%% with Rejuv (needs ~155 more): %s rank %s heals %d (%s), downranked=%s"):format(r.label, tostring(r.rank), r.total, why, tostring(NS.Downranked(r))))
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+L("key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || ") .. " | cast button spell " .. tostring(TwizHealCastKey and TwizHealCastKey:GetAttribute("spell")) .. " on " .. tostring(TwizHealCastKey and TwizHealCastKey:GetAttribute("unit")))
+L("bar2 heal: " .. tostring(TwizHealBar2:GetAttribute("healmacro")):gsub("\n", " || "))
+units.party1.hp = 1200; SIM.hots.party1 = nil; NS.moving = true
+local r2 = NS.OocRule("party1")
+L(("moving, tank 60%%: %s rank %s"):format(r2.label, tostring(r2.rank)))
+NS.moving = false; TwizHeal.hoverUnit = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

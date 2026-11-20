@@ -1,4 +1,4 @@
-TwizHeal 1.12.1 - one hotkey heals whoever needs it most
+TwizHeal 1.13.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -31,7 +31,12 @@ WHICH HEAL
   /th ranks lists your heals with how much each one heals and costs.
 
 WHICH SPELL - THE RULES (1.12.0)
-  Out of combat TwizHeal reads how hurt they are and what's ticking on them:
+  Out of combat TwizHeal reads how hurt they are and what's ticking on them,
+  and DOWNRANKS (new in 1.13.0): it casts the smallest rank that still heals
+  everything they're missing - e.g. Healing Touch rank 3 for a 155 HP gap
+  instead of your top rank - to save mana. (Lower ranks are cast by spell
+  ID through a hidden button, since "/cast Healing Touch(Rank 3)" does
+  nothing on this client.) In combat it's always your top rank.
     - above 89%                -> no heal at all (change it: /th threshold 80)
     - under 31%                -> Swiftmend if your Rejuvenation or Regrowth is on
                                   them (an instant save). Swiftmend ready but

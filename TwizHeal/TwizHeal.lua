@@ -49,6 +49,21 @@ NS.safe = safe
 ------------------------------------------------------------------------
 local ranks = {}
 local requested
+-- rank spell IDs, lowest first, for ranks the spellbook may not list
+local RANK_IDS = {
+    DRUID = {
+        ["Healing Touch"] = { 5185, 5186, 5187, 5188, 5189, 6778, 8903, 9758, 9888, 9889, 25297 },
+        ["Regrowth"]      = { 8936, 8938, 8939, 8940, 8941, 9750, 9856, 9857, 9858 },
+        ["Rejuvenation"]  = { 774, 1058, 1430, 2090, 2091, 3627, 8910, 9839, 9840, 9841, 25299 },
+    },
+    PRIEST = {
+        ["Lesser Heal"] = { 2050, 2052, 2053 }, ["Heal"] = { 2054, 2055, 6063, 6064 },
+        ["Flash Heal"] = { 2061, 9472, 9473, 9474, 10915, 10916, 10917 },
+        ["Renew"] = { 139, 6074, 6075, 6076, 6077, 6078, 10927, 10928, 10929, 25315 },
+    },
+    PALADIN = { ["Holy Light"] = { 635, 639, 647, 1026, 1042, 3472, 10328, 10329, 25292 }, ["Flash of Light"] = { 19750, 19939, 19940, 19941, 19942, 19943 } },
+    SHAMAN = { ["Healing Wave"] = { 331, 332, 547, 913, 939, 959, 8005, 10395, 10396, 25357 }, ["Lesser Healing Wave"] = { 8004, 8008, 8010, 10466, 10467, 10468 } },
+}
 
 local function SpellBookItems()
     local out = {}
@@ -132,7 +147,23 @@ function NS.ReadRanks()
                 kind = kind, fast = kind == "fast", total = avg + hot, est = est,
                 -- cast by plain name: this client silently ignores "/cast Spell(Rank 3)" (nothing happens),
                 -- and a plain name casts your best rank
-                label = it.name, rankText = it.sub }
+                label = it.name, rankText = it.sub, id = it.id }
+        end
+    end
+    -- lower ranks the spellbook doesn't list (it may show only your best): the known rank IDs
+    local have = {}
+    for _, r in ipairs(ranks) do have[r.id or 0] = true end
+    for name, ids in pairs(RANK_IDS[class] or {}) do
+        local kind = kindOf[name]
+        for rk, id in ipairs(ids) do
+            if kind and not have[id] and ((IsPlayerSpell and IsPlayerSpell(id)) or (IsSpellKnown and IsSpellKnown(id))) then
+                local avg, hot, dur = HealAmount(id)
+                if avg then
+                    ranks[#ranks + 1] = { name = name, rank = rk, avg = avg, hot = hot, dur = dur, cost = Cost(id), kind = kind,
+                        fast = kind == "fast", total = avg + hot, est = false, label = name, rankText = "Rank " .. rk, id = id }
+                    have[id] = true
+                end
+            end
         end
     end
     table.sort(ranks, function(a, b) return a.total < b.total end)
@@ -148,7 +179,8 @@ local function PickRank(deficit, kind)
     for _, r in ipairs(ranks) do
         if r.kind == kind and r.cost <= mana then
             best = r
-            if r.total * (db.overheal or 1.1) >= deficit then return r end
+            -- the smallest rank that heals at least everything they're missing (cheapest that's enough)
+            if r.total >= deficit then return r end
         end
     end
     if best then return best end
@@ -339,6 +371,7 @@ end
 -- moving: the game's start/stop-moving events (reliable even when it hides your speed), or your speed
 local function Moving()
     if NS.moving then return true end
+    if IsPlayerMoving then local ok, m = pcall(IsPlayerMoving); if ok and safe(m) then return true end end
     local s = GetUnitSpeed and safe(GetUnitSpeed("player"))
     return (s and s > 0) or (IsFalling and IsFalling() and true) or false
 end
@@ -406,12 +439,12 @@ local function OocRule(unit)
             if hasHot or hasFast then return saver, "save" end
             if hot and not hidden then return hot, "save: Rejuvenation, then Swiftmend" end
         end
-        if moving and hot then return hot, "moving" end
+        if moving and hot then return (need and PickRank(need, "hot")) or hot, "moving" end
         if fast and not hasFast then return PickRank(need, "fast") or fast, "low" end
         return PickRank(need, "direct") or Best("direct"), "low"
     end
-    -- 2. moving: only instants work
-    if moving and hot then return hot, "moving" end
+    -- 2. moving: only instants work (a Rejuvenation rank big enough for the gap)
+    if moving and hot then return (need and need > 0 and PickRank(need, "hot")) or hot, "moving" end
     -- 3. how much is missing after what's already ticking on them
     local left = need and math.max(0, need - (incoming or 0)) or nil
     local hotTotal = hot and (hot.total or 0) or 0
@@ -441,14 +474,52 @@ local function Chain(c, unit, only)
 end
 -- ooc = the spell the rules picked for out of combat (nil = do nothing out of combat)
 -- only = heal exactly that unit (TwizHeal's own bars)
-local function SmartMacro(unit, ooc, only)
+-- Downranked heals: "/cast Healing Touch(Rank 3)" does nothing on this client, so a lower rank
+-- is cast by spell ID through a hidden secure spell button that the key /clicks.
+local castButtons = {}
+local function CastButton(key)
+    if castButtons[key] then return castButtons[key] end
+    local b = CreateFrame("Button", "TwizHealCast" .. key, UIParent, "SecureActionButtonTemplate")
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    b:SetAttribute("type", "spell")
+    b:Hide()
+    castButtons[key] = b
+    return b
+end
+-- a group token for a mouseover/target that's in your group (stays right after the mouse moves)
+local function StableUnit(u)
+    if u ~= "mouseover" and u ~= "target" then return u end
+    if UnitIsUnit then
+        if UnitIsUnit(u, "player") then return "player" end
+        local prefix, n = IsInRaid() and "raid" or "party", IsInRaid() and 40 or 4
+        for i = 1, n do local g = prefix .. i; if UnitExists(g) and UnitIsUnit(u, g) then return g end end
+    end
+    return u
+end
+local function Downranked(r)
+    if not r or not r.id or not r.kind then return false end
+    local best = Best(r.kind)
+    return best and best ~= r and (r.total or 0) < (best.total or 0)
+end
+NS.Downranked = Downranked
+
+local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     local fast, hot = Best("fast"), Best("hot")
     local combat = fast or Best("direct", 1) or Best("direct")
     local _, class = UnitClass("player")
     local lines = {}
     -- druids: drop cat/bear/travel form first (heals can't be cast in them)
     if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
-    if ooc then lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label end
+    if ooc and Downranked(ooc) and (oocUnit or only) then
+        -- a smaller rank that still covers what they're missing: cheaper
+        local b = CastButton(castKey or "Key")
+        b:SetAttribute("spell", ooc.id)
+        b:SetAttribute("unit", StableUnit(only and unit or oocUnit))
+        local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+        lines[#lines + 1] = "/click [nocombat] " .. b:GetName() .. (keyDown and " LeftButton 1" or "")
+    elseif ooc then
+        lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label
+    end
     if combat then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label end
     -- moving fallback, in and out of combat: if the cast above can't start because you're moving
     -- (Regrowth, Healing Touch), this line casts your instant HoT instead
@@ -1026,16 +1097,16 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base, base2, base3 = SmartMacro(fallback, ooc), InstantMacro(fallback), EmergencyMacro(fallback)
+        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key"), InstantMacro(fallback), EmergencyMacro(fallback)
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local hovered, hovered2, hovered3
         -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
         -- key = your HoT; hovering a bar points both keys at that person
-        for _, b in ipairs(bars) do
+        for i, b in ipairs(bars) do
             local unit = b:GetAttribute("unit")
             if UnitExists(unit) then
                 local r, w = OocRule(unit)
-                local m, m2, m3 = SmartMacro(unit, r, true), InstantMacro(unit, true), EmergencyMacro(unit, true)
+                local m, m2, m3 = SmartMacro(unit, r, true, unit, "Bar" .. i), InstantMacro(unit, true), EmergencyMacro(unit, true)
                 if b:GetAttribute("healmacro3") ~= m3 then b:SetAttribute("healmacro3", m3) end
                 if b:GetAttribute("macrotext3") ~= m3 then b:SetAttribute("macrotext3", m3) end -- middle-click a bar
                 SetMacro(b, m)
