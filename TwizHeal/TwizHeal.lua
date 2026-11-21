@@ -385,6 +385,7 @@ NS.Moving = Moving
 
 -- Swiftmend: instant, eats a Rejuvenation/Regrowth on the target to heal them a lot at once
 local SAVE_PCT = 0.31
+local SWIFT_PCT = 0.75 -- Swiftmend whenever they're under this and your HoT is on them
 local SAVER = { DRUID = "Swiftmend" }
 local function KnowsSpell(name)
     if not name then return false end
@@ -458,7 +459,16 @@ local function OocRule(unit)
     local left = need and math.max(0, need - (incoming or 0)) or nil
     local hotTotal = hot and (hot.total or 0) or 0
     local big = pct and (pct < 0.6 or (hotTotal > 0 and left and left > hotTotal))
-    -- your Regrowth is already on them: top them up with the Healing Touch rank that covers the rest
+    -- under 75% with your Regrowth or Rejuvenation on them: Swiftmend (instant, big heal)
+    if pct < SWIFT_PCT and (hasFast or hasHot) then
+        local saver = Saver()
+        if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
+    end
+    -- right after your Regrowth: Rejuvenation if it isn't up (instant)
+    if hasFast and hot and not hasHot then
+        return (left and left > 0 and PickRank(left, "hot")) or hot, "after Regrowth"
+    end
+    -- Regrowth (and Rejuvenation) already on them: the Healing Touch rank that covers the rest
     if hasFast and left and left > 0 then
         return PickRank(left, "direct") or Best("direct"), "Regrowth on"
     end
@@ -533,11 +543,16 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     elseif ooc then
         lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label
     end
-    -- in combat (no reading auras or health): Regrowth first, then Healing Touch on the next
-    -- presses while that Regrowth ticks; back to Regrowth after 12 s without a press
+    -- in combat (no reading auras or health): Regrowth, Rejuvenation, then Healing Touch on the
+    -- next presses; back to Regrowth after 12 s without a press. (Swiftmend stays on the
+    -- emergency key: in a sequence, a Swiftmend on cooldown would stall it.)
     local direct = Best("direct")
     if combat and fast and direct and combat == fast then
-        lines[#lines + 1] = "/castsequence " .. Chain("combat,", unit, only) .. " reset=12 " .. fast.label .. ", " .. direct.label .. ", " .. direct.label
+        -- Regrowth, then Rejuvenation right after (instant), then Healing Touch
+        local seq = { fast.label }
+        if hot then seq[#seq + 1] = hot.label end
+        seq[#seq + 1] = direct.label; seq[#seq + 1] = direct.label
+        lines[#lines + 1] = "/castsequence " .. Chain("combat,", unit, only) .. " reset=12 " .. table.concat(seq, ", ")
     elseif combat then
         lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label
     end

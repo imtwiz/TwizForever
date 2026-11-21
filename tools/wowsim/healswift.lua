@@ -89,5 +89,18 @@ L(("Regrowth on, tank 50%%: %s rank %s"):format(r.label, tostring(r.rank)))
 SIM.Advance(0.3)
 L("combat line: " .. (tostring(TwizHealButton:GetAttribute("macrotext1")):match("/castsequence[^\n]+") or "none"))
 units.party1.hp = 2000; SIM.hots.party1 = nil
+-- 1.14.3: after Regrowth -> Rejuvenation; under 75% with a HoT -> Swiftmend
+known.Swiftmend = true; C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
+units.party1.hp = 1700; SIM.hots.party1 = { { "Regrowth", 15 } }; NS.moving = false
+L("85%, Regrowth on:            " .. rule(1700, { { "Regrowth", 15 } }))
+L("85%, Regrowth + Rejuv on:    " .. rule(1700, { { "Regrowth", 15 }, { "Rejuvenation", 10 } }))
+L("70%, Regrowth on:            " .. rule(1400, { { "Regrowth", 15 } }))
+L("70%, Rejuv on:               " .. rule(1400, { { "Rejuvenation", 10 } }))
+C_Spell.GetSpellCooldown = function() return { startTime = GetTime() - 2, duration = 15 } end
+L("70%, Regrowth on, Swift cd:  " .. rule(1400, { { "Regrowth", 15 } }))
+C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
+SIM.Advance(0.3)
+L("combat line: " .. (tostring(TwizHealButton:GetAttribute("macrotext1")):match("/castsequence[^\n]+") or "none"))
+units.party1.hp = 2000; SIM.hots.party1 = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
