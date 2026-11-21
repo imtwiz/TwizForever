@@ -6,9 +6,10 @@ local rest = [==[
 local NS = TwizHeal
 local L = function(s) SIM.log[#SIM.log + 1] = s end
 SIM.Advance(0.3)
-local key = tostring(TwizHealButton:GetAttribute("macrotext1"))
-L("combat line: " .. (key:match("/click %[combat%][^\n]+") or key))
-local cyc = TwizHealCycleKey
+-- 1.17: the key itself heals nobody in combat; a hovered bar does (its macro is swapped onto the key)
+local key = tostring(TwizHealBar2:GetAttribute("healmacro"))
+L("bar2 combat line: " .. (key:match("/click %[combat%][^\n]+") or key))
+local cyc = TwizHealCycleBar2
 L("cycle ids: " .. tostring(cyc and cyc:GetAttribute("cycleids")) .. " | combat Healing Touch: rank " .. tostring(NS.CombatDirect() and NS.CombatDirect().rank))
 -- run the restricted snippet like the game would: only secure functions exist (no GetTime, no strsplit)
 local target = "party1"

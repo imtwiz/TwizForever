@@ -1,4 +1,4 @@
-TwizHeal 1.16.2 - one hotkey heals whoever needs it most
+TwizHeal 1.17.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -13,8 +13,21 @@ WHO GETS HEALED
       into a color): green, orange, red
     - a pulsing red "LOWEST >" frame marks the lowest bar when health can
       be read
-  Hover the red / marked bar and press your key - that heals them. Without
-  a hover the key heals whoever was lowest when the fight started.
+  Hover the red / marked bar and press your key - that heals them.
+
+NO HEALS ABOVE 90% IN COMBAT (1.17.0)
+  In combat the game hides health, so the key can't check 90% itself.
+  Instead, each bar in the TwizHeal window gets invisible mouse blockers
+  in combat: over the filled (green) part of the bar and over its last
+  10%. The game draws the fill from the real health, so the only part of
+  a bar you can hover or click is the dark, empty stretch left of the 90%
+  mark - and that only exists when someone is under 90%. Hover that dark
+  part and press your key. A full or nearly full bar can't be hovered, so
+  nobody above 90% gets healed.
+  Without hovering a bar, the main key casts nothing in combat (also when
+  TwizBuff calls it). The instant and emergency keys are still manual
+  overrides and heal whoever you point them at. The game's own party
+  frames can't be blocked like this - use the TwizHeal window in combat.
   Tanks are whoever has the tank role, whoever enemies are attacking, or
   warriors; healers are those with the healer role, or priests.
 
@@ -39,8 +52,9 @@ WHICH SPELL - THE RULES (1.16.0)
       cooldown                     still missing after the ticks
     - health hidden by the game -> nothing (instant / emergency keys still cast)
   In combat the game locks the key and hides health from addons, so:
-    - main key       -> Regrowth, Rejuvenation, Swiftmend (once learned),
-                        then Healing Touch on the next presses. A different
+    - main key, over -> Regrowth, Rejuvenation, Swiftmend (once learned),
+      the dark part      then Healing Touch on the next presses. A different
+      of a bar (1.17)
                         target, or a new fight, starts over at Regrowth. New in 1.15.0: the Healing Touch
                         here is a SMALLER rank - about 20% of your group's
                         biggest health pool, never your top rank (health can't
@@ -62,8 +76,9 @@ WHICH RANK WENT OUT (1.14.1)
   screen when the window is hidden). /th castinfo turns it off or on.
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
-  Hover a bar and press your TwizHeal key: it heals that person, in or out
-  of combat. Clicking a bar heals them too.
+  Hover a bar and press your TwizHeal key: it heals that person (in combat:
+  hover the dark, empty part of the bar - see 1.17.0 above). Clicking a bar
+  heals them too.
   No title bar - just the bars. Each bar has a thin row under it: mana
   (blue, shown even in cat/bear form) and energy/rage beside it.
   Each bar shows a role icon (tank / healer / dps) and a colored border

@@ -574,7 +574,10 @@ local function CycleButton(key, unitopts, ids)
 end
 NS.CycleButton = CycleButton
 
-local function SmartMacro(unit, ooc, only, oocUnit, castKey)
+-- noCombat: the key's own macro when no bar is hovered. In combat the game hides health, so the
+-- key can't check 90% itself: it casts nothing unless you hover the empty part of a bar (see the
+-- mouse blockers in the bar build), which only exists when that person is under 90%.
+local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
     local fast, hot = Best("fast"), Best("hot")
     local combat = fast or Best("direct", 1) or Best("direct")
     local _, class = UnitClass("player")
@@ -597,6 +600,7 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     local direct = Best("direct")
     local cd = CombatDirect()
     local cyc
+    if noCombat then combat = nil end
     if combat and fast and fast.id and cd and combat == fast then
         -- the combo: Regrowth, Rejuvenation, Swiftmend (if learned; a press on cooldown just moves
         -- on), then Healing Touch
@@ -625,7 +629,9 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     -- moving fallback, in and out of combat: if the cast above can't start because you're moving
     -- (Regrowth, Healing Touch), this line casts your instant HoT instead
     -- (out of combat only when the rules picked a heal: nobody above 89% gets one)
-    if hot then lines[#lines + 1] = "/cast " .. Chain(ooc and "" or "combat,", unit, only) .. " " .. hot.label end
+    if hot and noCombat then
+        if ooc then lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. hot.label end
+    elseif hot then lines[#lines + 1] = "/cast " .. Chain(ooc and "" or "combat,", unit, only) .. " " .. hot.label end
     return table.concat(lines, "\n")
 end
 NS.SmartMacro = SmartMacro
@@ -785,6 +791,20 @@ local function Build()
             b[k] = pb
         end
         b.mana:SetStatusBarColor(0.0, 0.44, 0.87)
+        -- in combat (health hidden): invisible mouse blockers over the filled part of the bar and
+        -- over its last 10%. The fill is drawn by the game from the real health, so the only spot
+        -- you can hover or click is the empty stretch left of the 90% mark - which only exists when
+        -- this person is under 90%. No hover, no heal.
+        local lvl = b.over:GetFrameLevel() + 5
+        b.blockFill = CreateFrame("Frame", nil, b)
+        b.blockFill:SetPoint("TOPLEFT", b.bar, "TOPLEFT", 0, 0)
+        b.blockFill:SetPoint("BOTTOMRIGHT", b.bar:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
+        b.blockTop = CreateFrame("Frame", nil, b)
+        b.blockTop:SetPoint("TOPRIGHT", b.bar, "TOPRIGHT", 0, 0); b.blockTop:SetPoint("BOTTOMRIGHT", b.bar, "BOTTOMRIGHT", 0, 0)
+        b.blockTop:SetWidth(20)
+        for _, bl in ipairs({ b.blockFill, b.blockTop }) do
+            bl:SetFrameLevel(lvl); bl:EnableMouse(true); bl:Hide()
+        end
         b:Hide()
         bars[i] = b
     end
@@ -839,6 +859,7 @@ function NS.Layout(live)
         b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, -TOP - (i - 1) * (RowH(h) + 2))
         b.bar:ClearAllPoints(); b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, ph + 1)
         if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2); b.absBar:SetWidth(math.max(60, w - 12) - 2) end
+        if b.blockTop then b.blockTop:SetWidth(math.max(1, ((math.max(60, w - 12) - 2) * (1 - SWIFT_PCT)))) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
         -- tall bars: buff icons on top, numbers underneath; short bars: everything on one line
@@ -1244,7 +1265,7 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key"), InstantMacro(fallback), EmergencyMacro(fallback)
+        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key", true), InstantMacro(fallback), EmergencyMacro(fallback)
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local hovered, hovered2, hovered3
         -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
@@ -1438,6 +1459,10 @@ fbTick:SetScript("OnUpdate", function()
         if Once("fine" .. who) then
             Print(("%s %s above %d%% health - no heal needed."):format(who == "you" and "you" or who, who == "you" and "are" or "is", (db.threshold or 0.89) * 100 + 0.5))
         end
+    elseif InCombatLockdown() then
+        if Once("combat") then
+            Print("in combat TwizHeal only heals someone under 90%: hover the empty (dark) part of their bar in the TwizHeal window and press the key. Full or nearly full bars can't be hovered.")
+        end
     else
         Print(("key pressed but nothing was cast on %s - %s"):format(who,
             #ranks == 0 and "no heals found (/th ranks)" or "/th test shows what the key does"))
@@ -1447,9 +1472,17 @@ end)
 ------------------------------------------------------------------------
 -- Events, slash
 ------------------------------------------------------------------------
+-- the combat mouse blockers on every bar (see the bar build)
+function NS.SetBlockers(on)
+    for _, b in ipairs(bars) do
+        for _, bl in ipairs({ b.blockFill, b.blockTop }) do
+            if bl then if on then bl:Show() else bl:Hide() end end
+        end
+    end
+end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
-    "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE",
+    "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE",
     "PLAYER_STARTED_MOVING", "PLAYER_STOPPED_MOVING", "UPDATE_MOUSEOVER_UNIT", "PLAYER_TARGET_CHANGED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
@@ -1466,6 +1499,8 @@ ev:SetScript("OnEvent", function(_, event, a1)
         return
     end
     if not db then return end
+    if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then NS.SetBlockers(event == "PLAYER_REGEN_DISABLED") end
+    if event == "PLAYER_REGEN_DISABLED" then return end
     -- moving / hovering / targeting: just re-run the rules so the key is right when you press it
     if event == "PLAYER_STARTED_MOVING" then NS.moving = true elseif event == "PLAYER_STOPPED_MOVING" then NS.moving = false end
     if event == "PLAYER_STARTED_MOVING" or event == "PLAYER_STOPPED_MOVING" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_TARGET_CHANGED" then
