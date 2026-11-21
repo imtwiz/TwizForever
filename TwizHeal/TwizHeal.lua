@@ -1501,14 +1501,16 @@ Update = function()
         end
     end
     -- what the hotkey will do
-    -- who the key heals: your mouseover, else a friendly target, else the pick (or the tank when health is hidden)
+    -- who the key heals (1.24.1): the TwizHeal bar you hover, else the lowest (the pick; the tank when
+    -- health is hidden) - exactly as if you clicked their bar. Your target and mouseover no longer
+    -- take over the heal-the-lowest key (the instant / emergency keys still follow them).
     local fallback = pick and pick.unit
     if not fallback then
         fallback = "player"
         if NS.hidden then for _, u in ipairs(Units()) do if u ~= "player" and Role(u) == "TANK" then fallback = u; break end end end
     end
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
-    local who = (NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit) or friend("mouseover") and "mouseover" or friend("target") and "target" or fallback
+    local who = (NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit) or fallback
     local ooc, why
     ooc, why = OocRule(who)
     if inCombat then
@@ -1523,7 +1525,7 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key"), InstantMacro(fallback), EmergencyMacro(fallback)
+        local base, base2, base3 = SmartMacro(who, ooc, true, who, "Key"), InstantMacro(fallback), EmergencyMacro(fallback)
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local base4 = QuickMacro(fallback)
         btn:SetAttribute("basemacro4", base4)
@@ -1645,7 +1647,7 @@ function NS.HideNotReady()
 end
 local function Who()
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
-    local u = NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit or friend("mouseover") and "mouseover" or friend("target") and "target" or NS.fallback or "player"
+    local u = NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit or NS.fallback or "player"
     if UnitIsUnit and UnitIsUnit(u, "player") then return "you" end
     return safe(UnitName(u)) or u
 end
