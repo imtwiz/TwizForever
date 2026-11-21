@@ -1,4 +1,4 @@
-TwizHeal 1.14.3 - one hotkey heals whoever needs it most
+TwizHeal 1.14.4 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -53,8 +53,9 @@ WHICH SPELL - THE RULES (1.12.0)
                                   nothing on them: Rejuvenation now, Swiftmend on
                                   the next press. No Swiftmend: Regrowth.
     - you're moving            -> Rejuvenation (instant)
-    - under 75% with your      -> Swiftmend (instant), when it's off cooldown
-      Regrowth or Rejuv on them
+    - FIRST: under 90% with    -> Swiftmend (instant, works while moving),
+      your Regrowth or Rejuv      whenever it's off cooldown
+      on them
     - your Regrowth on them,   -> Rejuvenation right after (instant)
       no Rejuvenation yet
     - Regrowth and Rejuv on    -> Healing Touch, the rank that covers what's

@@ -385,7 +385,7 @@ NS.Moving = Moving
 
 -- Swiftmend: instant, eats a Rejuvenation/Regrowth on the target to heal them a lot at once
 local SAVE_PCT = 0.31
-local SWIFT_PCT = 0.75 -- Swiftmend whenever they're under this and your HoT is on them
+local SWIFT_PCT = 0.90 -- Swiftmend first whenever they're under this and your HoT is on them
 local SAVER = { DRUID = "Swiftmend" }
 local function KnowsSpell(name)
     if not name then return false end
@@ -442,6 +442,13 @@ local function OocRule(unit)
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
 
+    -- 0. first priority: Swiftmend whenever your Rejuvenation or Regrowth is on them and they're
+    --    below 90% (instant, so it works while moving too)
+    if pct and pct < SWIFT_PCT and (hasFast or hasHot) then
+        local saver = Saver()
+        if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
+    end
+
     -- 1. save them
     if pct and pct < SAVE_PCT then
         local saver = Saver()
@@ -459,11 +466,6 @@ local function OocRule(unit)
     local left = need and math.max(0, need - (incoming or 0)) or nil
     local hotTotal = hot and (hot.total or 0) or 0
     local big = pct and (pct < 0.6 or (hotTotal > 0 and left and left > hotTotal))
-    -- under 75% with your Regrowth or Rejuvenation on them: Swiftmend (instant, big heal)
-    if pct < SWIFT_PCT and (hasFast or hasHot) then
-        local saver = Saver()
-        if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
-    end
     -- right after your Regrowth: Rejuvenation if it isn't up (instant)
     if hasFast and hot and not hasHot then
         return (left and left > 0 and PickRank(left, "hot")) or hot, "after Regrowth"

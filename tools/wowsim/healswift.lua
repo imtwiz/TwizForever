@@ -102,5 +102,11 @@ C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
 SIM.Advance(0.3)
 L("combat line: " .. (tostring(TwizHealButton:GetAttribute("macrotext1")):match("/castsequence[^\n]+") or "none"))
 units.party1.hp = 2000; SIM.hots.party1 = nil
+-- 1.14.4: Swiftmend first, below 90%, whenever your HoT is on them (moving too)
+L("88%, Rejuv on:               " .. rule(1760, { { "Rejuvenation", 10 } }))
+L("85%, Regrowth on:            " .. rule(1700, { { "Regrowth", 15 } }))
+L("85%, Regrowth on, moving:    " .. rule(1700, { { "Regrowth", 15 } }, true))
+L("92%, Rejuv on:               " .. rule(1840, { { "Rejuvenation", 10 } }))
+NS.moving = false; units.party1.hp = 2000; SIM.hots.party1 = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
