@@ -153,9 +153,13 @@ L(("mana 45%%: %s (%s)"):format(r and r.label or "-", tostring(why)))
 assert(r and r.label == "Read Leyline")
 TwizHeal.hoverUnit = nil; SIM.Advance(0.3)
 L("key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || "))
-mana = 1200  -- 60%
+mana = 1600  -- 80%
 r = NS.OocRule("party1")
-L(("mana 60%%: %s"):format(r and r.label or "nothing"))
+L(("mana 80%%: %s"):format(r and r.label or "nothing"))
+mana = 1500  -- exactly 75%
+r = NS.OocRule("party1")
+L(("mana 75%%: %s"):format(r and r.label or "nothing"))
+assert(r and r.label == "Read Leyline")
 mana = 900; C_Spell.GetSpellCooldown = function() return { startTime = GetTime() - 5, duration = 120 } end
 r = NS.OocRule("party1")
 L(("mana 45%%, on cooldown: %s"):format(r and r.label or "nothing"))

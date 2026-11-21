@@ -478,9 +478,9 @@ local function GroupHeal()
 end
 NS.GroupHeal = GroupHeal
 
--- Read Leyline (Skyborne racial, 1.21.0): your mana under 50% -> cast it when it's off cooldown
+-- Read Leyline (Skyborne racial, 1.21.0): your mana at 75% or less (1.22.1) -> cast it when it's off cooldown
 -- (+50% health and mana regeneration for 15 sec; more when Attuned at a ley line)
-local MANA_PCT = 0.50
+local MANA_PCT = 0.75 -- 75% or less (1.22.1)
 local REGEN_NAMES = { "Read Leyline", "Read Ley Line" }
 local function Regen()
     for _, n in ipairs(REGEN_NAMES) do if KnowsSpell(n) then return n end end
@@ -534,10 +534,10 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
-    -- your mana under 50%: Read Leyline when it's ready - unless someone is under 40% (save
+    -- your mana at 75% or less: Read Leyline when it's ready - unless someone is under 40% (save
     -- them first) or you're moving (it has a cast time)
     local regen = Regen()
-    if regen and not InCombatLockdown() and not Moving() and SpellReady(regen) and (ManaPct() or 1) < MANA_PCT
+    if regen and not InCombatLockdown() and not Moving() and SpellReady(regen) and (ManaPct() or 1) <= MANA_PCT
         and not (pct and pct < NS_PCT) and (NS.LowCount() or 0) == 0 then
         return { name = regen, label = regen, kind = "self" }, "mana"
     end

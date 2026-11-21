@@ -1,4 +1,4 @@
-TwizHeal 1.22.0 - one hotkey heals whoever needs it most
+TwizHeal 1.22.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -37,8 +37,8 @@ HOTS COUNT
   about to cover. Heals are the smallest rank that covers the rest (/th
   ranks lists your heals with how much each one heals and costs).
 
-READ LEYLINE UNDER 50% MANA (1.21.0)
-  Skyborne racial. Out of combat, when your mana is under 50% and Read
+READ LEYLINE AT 75% MANA OR LESS (1.21.0, 75% since 1.22.1)
+  Skyborne racial. Out of combat, when your mana is 75% or less and Read
   Leyline is off cooldown, the next press of your TwizHeal key (or a bar
   click) casts it instead of a heal: +50% health and mana regeneration for
   15 sec (double when Attuned at a ley line). The press after that heals as
