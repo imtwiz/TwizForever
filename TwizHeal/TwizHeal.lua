@@ -765,7 +765,10 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
     -- in combat, Read Leyline first whenever it's off cooldown (1.22.0): the game hides nothing
     -- here, but the key is locked, so it can't check your mana - at most once per 2 min. On
     -- cooldown the line is skipped and the heal goes out (its "not ready" error is hidden).
+    -- 1.23.2: only when your mana is 75% or less as the fight starts (the key is locked in combat,
+    -- so this is the last moment it can check)
     local regen = not noCombat and Regen()
+    if regen and (ManaPct() or 1) > MANA_PCT then regen = nil end
     if regen and (cyc or combat) then lines[#lines + 1] = "/cast [combat] " .. regen end
     if cyc then
         local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")

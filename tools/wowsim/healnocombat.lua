@@ -186,7 +186,12 @@ units.party1.hp = 700; SIM.hots.party1 = nil
 r = NS.OocRule("party1")
 L(("mana 45%%, tank at 35%%: %s"):format(r and r.label or "nothing"))
 assert(r.label ~= "Read Leyline")
-units.party1.hp = 1700; SIM.hots.party1 = nil; mana = 1800
+units.party1.hp = 1700; SIM.hots.party1 = nil; mana = 2000
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+local full = tostring(TwizHealBar2:GetAttribute("healmacro"))
+L("bar2 heal at 100% mana: " .. full:gsub("\n", " || "))
+assert(not full:find("Read Leyline"), "no Read Leyline at full mana")
+mana = 1400
 TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
 local hm = tostring(TwizHealBar2:GetAttribute("healmacro"))
 L("bar2 heal with Read Leyline known: " .. hm:gsub("\n", " || "))
