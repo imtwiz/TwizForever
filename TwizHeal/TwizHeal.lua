@@ -1416,8 +1416,14 @@ fbTick:SetScript("OnUpdate", function()
     press.said = true
     if press.done or (db and db.feedback == false) then return end
     local who = press.who or "?"
+    local whose = who == "you" and "your" or (who .. "'s")
+    -- the same note over and over is spam: each kind of message at most every 20 seconds
+    NS.lastNote = NS.lastNote or {}
+    local function Once(key) local t = NS.lastNote[key]; if t and GetTime() - t < 20 then return false end; NS.lastNote[key] = GetTime(); return true end
+    -- a spell on cooldown in the combat cycle (Swiftmend) is expected: the next press moves on
+    if press.err and press.err:lower():find("not ready") then return end
     if press.err then
-        Print(("couldn't heal %s: %s"):format(who, press.err))
+        if Once("err" .. press.err) then Print(("couldn't heal %s: %s"):format(who, press.err)) end
         if press.err:lower():find("moving") and not NS.toldInstant then
             NS.toldInstant = true
             Print("while moving, use your instant-heal key (Options > Keybindings > AddOns > TwizHeal > \"Instant heal\"), or right-click a bar - it casts Rejuvenation, which works on the run.")
@@ -1425,9 +1431,13 @@ fbTick:SetScript("OnUpdate", function()
     elseif press.failed then
         Print(("the heal on %s failed (range, line of sight or mana?)"):format(who))
     elseif NS.oocWhy == "hidden" and not InCombatLockdown() then
-        Print(("the game is hiding %s's health, so TwizHeal can't tell if they need it - no heal. Your instant or emergency key heals anyway."):format(who))
+        if Once("hidden") then
+            Print(("the game is hiding %s health right now, so TwizHeal can't tell if a heal is needed - no heal. Your instant or emergency key heals anyway."):format(whose))
+        end
     elseif NS.oocWhy == "fine" and not InCombatLockdown() then
-        Print(("%s is above %d%% health - no heal needed."):format(who, (db.threshold or 0.89) * 100 + 0.5))
+        if Once("fine" .. who) then
+            Print(("%s %s above %d%% health - no heal needed."):format(who == "you" and "you" or who, who == "you" and "are" or "is", (db.threshold or 0.89) * 100 + 0.5))
+        end
     else
         Print(("key pressed but nothing was cast on %s - %s"):format(who,
             #ranks == 0 and "no heals found (/th ranks)" or "/th test shows what the key does"))
