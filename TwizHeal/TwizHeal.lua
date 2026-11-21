@@ -1523,7 +1523,7 @@ Update = function()
     NS.ooc, NS.oocWhy = ooc, why
     if not inCombat then NS.fallback = fallback end
     if not inCombat then
-        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key", true), InstantMacro(fallback), EmergencyMacro(fallback)
+        local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key"), InstantMacro(fallback), EmergencyMacro(fallback)
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local base4 = QuickMacro(fallback)
         btn:SetAttribute("basemacro4", base4)
@@ -1754,7 +1754,7 @@ fbTick:SetScript("OnUpdate", function()
         end
     elseif InCombatLockdown() then
         if Once("combat") then
-            Print("in combat TwizHeal only heals someone under 90%: hover their bar in the TwizHeal window and press the key, or click it. Bars at 90% or more can't be hovered or clicked.")
+            Print(("key pressed in combat but nothing was cast on %s - out of range, line of sight, or moving?"):format(who))
         end
     else
         Print(("key pressed but nothing was cast on %s - %s"):format(who,

@@ -1,4 +1,4 @@
-TwizHeal 1.23.2 - one hotkey heals whoever needs it most
+TwizHeal 1.24.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -27,10 +27,14 @@ NO HEALS ABOVE 90% IN COMBAT (1.17.0, whole bar clickable in 1.17.1)
   swallow your clicks). /th guard turns the blocker off or on. /th debug
   says which mode you're in. After a fight where your presses healed
   nobody, TwizHeal prints one "last fight: ..." line - send it to Claude.
-  Without hovering a bar, the main key casts nothing in combat (also when
-  TwizBuff calls it). The instant and emergency keys are still manual
-  overrides and heal whoever you point them at. The game's own party
-  frames can't be blocked like this - use the TwizHeal window in combat.
+  1.24.0: the "heal whoever needs it most" key, with no bar hovered, follows
+  the same rules as clicking a bar: out of combat the same rules pick the
+  spell; in combat it runs the Regrowth -> Rejuvenation -> Healing Touch
+  combo (and Read Leyline first when your mana was 75% or less at the pull)
+  on your mouseover, else your friendly target, else whoever was lowest when
+  the fight started. The 90% blocker only exists on the bars - the key
+  can't check health in combat, so point it with the bars when that matters.
+  The instant and emergency keys are still manual overrides.
   Tanks are whoever has the tank role, whoever enemies are attacking, or
   warriors; healers are those with the healer role, or priests.
 
