@@ -139,5 +139,31 @@ L("health hidden, pick: " .. tostring(p and p.name))
 SIM.Fire("PLAYER_ENTERING_WORLD")
 SlashCmdList["TWIZHEAL"]("prehot")
 UnitHealth = realH; C_UnitAuras.GetAuraDataByIndex = realIdx
+-- 1.21.0: mana under 50% -> Read Leyline when ready (Skyborne racial)
+local info3 = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Read Leyline" then return { name = n } end return info3(n) end
+local mana = 1000
+UnitPower = function(u, t) return u == "player" and mana or 0 end
+UnitPowerMax = function(u, t) return 2000 end
+units.player.hp = 1000; units.party1.hp = 2000; units.party2.hp = 1300
+SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }; NS.lowAt = nil
+mana = 900   -- 45%
+local r, why = NS.OocRule("party1")
+L(("mana 45%%: %s (%s)"):format(r and r.label or "-", tostring(why)))
+assert(r and r.label == "Read Leyline")
+TwizHeal.hoverUnit = nil; SIM.Advance(0.3)
+L("key: " .. tostring(TwizHealButton:GetAttribute("macrotext1")):gsub("\n", " || "))
+mana = 1200  -- 60%
+r = NS.OocRule("party1")
+L(("mana 60%%: %s"):format(r and r.label or "nothing"))
+mana = 900; C_Spell.GetSpellCooldown = function() return { startTime = GetTime() - 5, duration = 120 } end
+r = NS.OocRule("party1")
+L(("mana 45%%, on cooldown: %s"):format(r and r.label or "nothing"))
+C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
+units.party1.hp = 700; SIM.hots.party1 = nil
+r = NS.OocRule("party1")
+L(("mana 45%%, tank at 35%%: %s"):format(r and r.label or "nothing"))
+assert(r.label ~= "Read Leyline")
+units.party1.hp = 2000; C_Spell.GetSpellInfo = info3
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

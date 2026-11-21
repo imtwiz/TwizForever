@@ -1,4 +1,4 @@
-TwizHeal 1.20.1 - one hotkey heals whoever needs it most
+TwizHeal 1.21.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -36,6 +36,14 @@ HOTS COUNT
   taken off what they're missing, so nobody gets a big heal their HoT was
   about to cover. Heals are the smallest rank that covers the rest (/th
   ranks lists your heals with how much each one heals and costs).
+
+READ LEYLINE UNDER 50% MANA (1.21.0)
+  Skyborne racial. Out of combat, when your mana is under 50% and Read
+  Leyline is off cooldown, the next press of your TwizHeal key (or a bar
+  click) casts it instead of a heal: +50% health and mana regeneration for
+  15 sec (double when Attuned at a ley line). The press after that heals as
+  usual. Skipped while anyone is under 40% (they come first) and while
+  you're moving (it has a 2 sec cast). Not in combat: the game locks the key.
 
 TRANQUILITY: 3 OR MORE UNDER 40% (1.20.0)
   Once you've learned Tranquility (druid, level 30):

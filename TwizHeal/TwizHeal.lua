@@ -477,6 +477,20 @@ local function GroupHeal()
     if n and KnowsSpell(n) then return n end
 end
 NS.GroupHeal = GroupHeal
+
+-- Read Leyline (Skyborne racial, 1.21.0): your mana under 50% -> cast it when it's off cooldown
+-- (+50% health and mana regeneration for 15 sec; more when Attuned at a ley line)
+local MANA_PCT = 0.50
+local REGEN_NAMES = { "Read Leyline", "Read Ley Line" }
+local function Regen()
+    for _, n in ipairs(REGEN_NAMES) do if KnowsSpell(n) then return n end end
+end
+NS.Regen = Regen
+local function ManaPct()
+    local cur, mx = safe(UnitPower("player", 0)), safe(UnitPowerMax("player", 0))
+    if cur and mx and mx > 0 then return cur / mx end
+end
+NS.ManaPct = ManaPct
 local function Stop()
     local g = GroupHeal()
     return g and ("/stopmacro [channeling:" .. g .. "]\n") or ""
@@ -520,6 +534,13 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
+    -- your mana under 50%: Read Leyline when it's ready - unless someone is under 40% (save
+    -- them first) or you're moving (it has a cast time)
+    local regen = Regen()
+    if regen and not InCombatLockdown() and not Moving() and SpellReady(regen) and (ManaPct() or 1) < MANA_PCT
+        and not (pct and pct < NS_PCT) and (NS.LowCount() or 0) == 0 then
+        return { name = regen, label = regen, kind = "self" }, "mana"
+    end
     -- health hidden but your buffs readable, out of combat: pre-HoT anyway (1.20.1)
     if pct == nil and not hidden and not InCombatLockdown() and UnitExists(u) and not UnitIsDeadOrGhost(u) then
         if fast and not hots[fast.name] and not Moving() then return fast, "pre-HoT" end
@@ -699,7 +720,7 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
     if stop ~= "" then lines[#lines + 1] = stop:sub(1, -2) end
     -- druids: drop cat/bear/travel form first (heals can't be cast in them)
     if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
-    if ooc and ooc.kind == "group" then
+    if ooc and (ooc.kind == "group" or ooc.kind == "self") then
         lines[#lines + 1] = "/cast [nocombat] " .. ooc.label
         ooc = nil -- no single-target heal behind it (moving -> the Rejuvenation line below)
         lines.group = true
