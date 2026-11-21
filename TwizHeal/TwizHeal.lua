@@ -565,14 +565,21 @@ local function OocRule(unit)
     end
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
+    -- no 89% limit out of combat (1.23.0): a press always heals. The smallest Healing Touch that
+    -- covers what's missing after your HoTs (rank 1 at full health)
+    local function Small()
+        local gap = math.max(1, (need or 0) - (incoming or 0))
+        return PickRank(gap, "direct") or Best("direct") or hot or fast, "heal"
+    end
     -- PRE-HoT (1.18.0): out of combat, above 89%, one Regrowth then one Rejuvenation (your top
-    -- ranks - they're there to soak the pull); nothing more after that. Not when buffs can't be
-    -- read (it could be on them already).
+    -- ranks - they're there to soak the pull); after that, a small Healing Touch
     if pct > (db and db.threshold or 0.89) then
-        if hidden or InCombatLockdown() then return nil, "fine" end
-        if fast and not hasFast and not moving then return fast, "pre-HoT" end
-        if hot and not hasHot then return hot, "pre-HoT" end
-        return nil, "fine"
+        if not hidden and not InCombatLockdown() then
+            if fast and not hasFast and not moving then return fast, "pre-HoT" end
+            if hot and not hasHot then return hot, "pre-HoT" end
+        end
+        if moving and hot then return hot, "moving" end
+        return Small()
     end
     local left = need and math.max(0, need - (incoming or 0)) or nil
 
@@ -587,7 +594,6 @@ local function OocRule(unit)
         if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
     end
     -- above 89% (/th threshold): not worth starting a new heal
-    if pct > (db and db.threshold or 0.89) then return nil, "fine" end
     -- 3. moving: Regrowth can't be cast - Rejuvenation (the combo picks up from there)
     if moving and hot then return (need and PickRank(need, "hot")) or hot, "moving" end
     -- 4. start the combo: Regrowth sized to the gap
@@ -599,7 +605,7 @@ local function OocRule(unit)
         return PickRank(left, "direct") or Best("direct"), "Regrowth on"
     end
     if hot and not hasHot then return hot, "topping off" end
-    return nil, "fine"
+    return Small()
 end
 NS.OocRule = OocRule
 

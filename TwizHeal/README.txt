@@ -1,4 +1,4 @@
-TwizHeal 1.22.1 - one hotkey heals whoever needs it most
+TwizHeal 1.23.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -87,6 +87,11 @@ WHICH SPELL - THE RULES (1.16.0)
                                    nothing more once both are on. With nobody
                                    hurt, the key pre-HoTs everyone in turn: tank,
                                    then healer, then damage. Out of combat only.
+    - above 89%, both HoTs on   -> a small Healing Touch (1.23.0: no 89% limit
+      (1.23.0)                     out of combat - a press always heals; rank 1
+                                   at full health). Your threshold (/th
+                                   threshold) now only decides who the key picks
+                                   when you don't point it at anyone.
                                    1.20.1: works even when the game hides their
                                    health or other people's buffs (only YOUR
                                    HoTs are checked). /th prehot shows, for each

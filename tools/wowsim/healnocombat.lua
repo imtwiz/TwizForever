@@ -139,6 +139,11 @@ L("health hidden, pick: " .. tostring(p and p.name))
 SIM.Fire("PLAYER_ENTERING_WORLD")
 SlashCmdList["TWIZHEAL"]("prehot")
 UnitHealth = realH; C_UnitAuras.GetAuraDataByIndex = realIdx
+-- 1.23.0: no 89% limit out of combat - full health with both HoTs on still gets a small heal
+units.party1.hp = 2000; SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }
+local rr, ww = NS.OocRule("party1")
+L(("tank 100%%, both HoTs on: %s rank %s (%s)"):format(rr and rr.label or "-", tostring(rr and rr.rank), tostring(ww)))
+assert(rr and rr.label == "Healing Touch" and rr.rank == 1)
 -- 1.21.0: mana under 50% -> Read Leyline when ready (Skyborne racial)
 local info3 = C_Spell.GetSpellInfo
 C_Spell.GetSpellInfo = function(n) if n == "Read Leyline" then return { name = n } end return info3(n) end
