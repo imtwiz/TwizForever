@@ -4,4 +4,5 @@
     <Binding name="CLICK TwizHealButton:MiddleButton" category="ADDONS"/>
     <Binding name="CLICK TwizHealButton:Button4" category="ADDONS"/>
     <Binding name="CLICK TwizHealButton:Button5" category="ADDONS"/>
+    <Binding name="CLICK TwizHealButton:Decurse" category="ADDONS"/>
 </Bindings>

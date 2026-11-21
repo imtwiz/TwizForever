@@ -891,6 +891,39 @@ local function GroupMacro()
 end
 NS.GroupMacro = GroupMacro
 
+-- the Decurse key (1.26.0): in combat the game hides debuffs, so you choose - hover a bar (or the
+-- game's frames: mouseover / target) and press it. Druid: Remove Curse; with Shift: Abolish /
+-- Cure Poison. (Each kind you can remove gets a modifier: none, Shift, Ctrl, Alt.)
+local function DecurseMacro(unit, only)
+    local _, class = UnitClass("player")
+    local can = DISPELS[class]
+    if not can then return "" end
+    local kinds = {}
+    for kind in pairs(can) do kinds[#kinds + 1] = kind end
+    table.sort(kinds, function(a, b) return DISPEL_ORDER[a] < DISPEL_ORDER[b] end)
+    local spells, seen = {}, {}
+    for _, kind in ipairs(kinds) do
+        for _, n in ipairs(can[kind]) do
+            if Known(n) then
+                if not seen[n] then seen[n] = true; spells[#spells + 1] = n end
+                break
+            end
+        end
+    end
+    if #spells == 0 then return "" end
+    local mods = { "", "mod:shift,", "mod:ctrl,", "mod:alt," }
+    local parts = {}
+    for i = #spells, 1, -1 do -- modifier clauses first, the plain one last
+        if mods[i] then
+            local m = mods[i]
+            local chain = Chain(m, unit, only)
+            parts[#parts + 1] = chain .. " " .. spells[i]
+        end
+    end
+    return Stop() .. (class == "DRUID" and "/cancelform [form]\n" or "") .. "/cast " .. table.concat(parts, "; ")
+end
+NS.DecurseMacro = DecurseMacro
+
 local function SetMacro(b, text)
     if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
 end
@@ -1076,6 +1109,8 @@ local function Build()
             local m, m2, m3 = self:GetAttribute("healmacro"), self:GetAttribute("healmacro2"), self:GetAttribute("healmacro3")
             local m4 = self:GetAttribute("healmacro4")
             if key and m4 then key:SetAttribute("macrotext4", m4) end
+            local m6 = self:GetAttribute("healmacro6")
+            if key and m6 then key:SetAttribute("*macrotext-Decurse", m6) end
             if key and m3 then key:SetAttribute("macrotext3", m3) end
             if key and m then key:SetAttribute("macrotext1", m) end
             if key and m2 then key:SetAttribute("macrotext2", m2) end
@@ -1087,6 +1122,7 @@ local function Build()
                 key:SetAttribute("macrotext2", key:GetAttribute("basemacro2"))
                 key:SetAttribute("macrotext3", key:GetAttribute("basemacro3"))
                 key:SetAttribute("macrotext4", key:GetAttribute("basemacro4"))
+                key:SetAttribute("*macrotext-Decurse", key:GetAttribute("basemacro6"))
             end
         ]])
         b:HookScript("OnEnter", function(self) NS.hoverUnit = self:GetAttribute("unit") end)
@@ -1580,6 +1616,9 @@ Update = function()
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local base4 = QuickMacro(fallback)
         btn:SetAttribute("basemacro4", base4)
+        local base6 = DecurseMacro(fallback)
+        btn:SetAttribute("basemacro6", base6)
+        local hovered6
         local m5 = GroupMacro()
         if btn:GetAttribute("macrotext5") ~= m5 then btn:SetAttribute("macrotext5", m5) end
         local hovered, hovered2, hovered3, hovered4
@@ -1597,6 +1636,9 @@ Update = function()
                 if b:GetAttribute("macrotext4") ~= m4 then b:SetAttribute("macrotext4", m4) end -- mouse button 4 on a bar
                 if b:GetAttribute("macrotext5") ~= m5 then b:SetAttribute("macrotext5", m5) end -- mouse button 5: Tranquility
                 if NS.hoverUnit == unit then hovered4 = m4 end
+                local m6 = DecurseMacro(unit, true)
+                if b:GetAttribute("healmacro6") ~= m6 then b:SetAttribute("healmacro6", m6) end
+                if NS.hoverUnit == unit then hovered6 = m6 end
                 SetMacro(b, m)
                 if b:GetAttribute("macrotext2") ~= m2 then b:SetAttribute("macrotext2", m2) end
                 if b:GetAttribute("healmacro") ~= m then b:SetAttribute("healmacro", m) end
@@ -1611,6 +1653,8 @@ Update = function()
         if btn:GetAttribute("macrotext3") ~= k3 then btn:SetAttribute("macrotext3", k3) end
         local k4 = hovered4 or base4
         if btn:GetAttribute("macrotext4") ~= k4 then btn:SetAttribute("macrotext4", k4) end
+        local k6 = hovered6 or base6
+        if btn:GetAttribute("*macrotext-Decurse") ~= k6 then btn:SetAttribute("*macrotext-Decurse", k6) end
     end
     if not inCombat then
         if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
@@ -1908,6 +1952,7 @@ _G["BINDING_NAME_CLICK TwizHealButton:LeftButton"] = "Heal whoever needs it most
 _G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Instant heal (Rejuvenation / Renew) - use while moving"
 _G["BINDING_NAME_CLICK TwizHealButton:MiddleButton"] = "Emergency: Rejuvenation, then Swiftmend or Regrowth (press twice)"
 _G["BINDING_NAME_CLICK TwizHealButton:Button4"] = "Nature's Swiftness + Healing Touch (hover someone under 40%)"
+_G["BINDING_NAME_CLICK TwizHealButton:Decurse"] = "Decurse the hovered bar (Shift: poison) - works in combat"
 _G["BINDING_NAME_CLICK TwizHealButton:Button5"] = "Tranquility (3+ under 40%; won't cut its own channel)"
 
 SLASH_TWIZHEAL1 = "/th"

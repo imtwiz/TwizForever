@@ -182,6 +182,18 @@ units.party2.hp = 400  -- 31%: heal first
 rd = NS.OocRule("party2")
 L(("rogue 31%%, cursed: %s"):format(rd and rd.label or "-"))
 assert(rd.label ~= "Remove Curse")
+-- 1.26.0: the Decurse key, for combat: hover a bar, press it
+local infoAP = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Abolish Poison" then return { name = n } end return infoAP(n) end
+TwizHeal.hoverUnit = "party2"; SIM.Advance(0.3)
+local dk = tostring(TwizHealButton:GetAttribute("*macrotext-Decurse"))
+L("Decurse key on the rogue: " .. dk:gsub("\n", " || "))
+assert(dk:find("%[mod:shift,@party2%] Abolish Poison; %[@party2%] Remove Curse"))
+L("bar3 Decurse: " .. tostring(TwizHealBar3:GetAttribute("healmacro6")):gsub("\n", " || "))
+TwizHeal.hoverUnit = nil; SIM.Advance(0.3)
+L("Decurse key, no hover: " .. tostring(TwizHealButton:GetAttribute("*macrotext-Decurse")):gsub("\n", " || "))
+L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:Decurse"]))
+C_Spell.GetSpellInfo = infoAP
 cursed = {}; units.party2.hp = 1300
 C_UnitAuras.GetAuraDataByIndex = idx0; C_Spell.GetSpellInfo = info4
 -- 1.21.0: mana under 50% -> Read Leyline when ready (Skyborne racial)

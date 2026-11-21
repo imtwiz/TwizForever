@@ -1,4 +1,4 @@
-TwizHeal 1.25.0 - one hotkey heals whoever needs it most
+TwizHeal 1.26.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -52,9 +52,13 @@ DECURSE (1.25.0)
   click on their bar - or the heal-the-lowest key - removes it first.
   Under 40% they get healed first. Abolish Poison already on them counts as
   handled. The heal-the-lowest key goes to someone with a removable debuff
-  right after anyone in danger (30% or less). Out of combat only: in combat
-  the game hides debuffs and locks the keys - use TwizBuff's cleanse key or
-  your action bar there.
+  right after anyone in danger (30% or less).
+  IN COMBAT (1.26.0) the game hides debuffs, so you pick, like the other
+  hover keys: hover a bar and press the new "Decurse" key (Options >
+  Keybindings > AddOns > TwizHeal). Druid: Remove Curse; hold Shift for
+  Abolish Poison (Cure Poison before you learn it). Without a bar hovered
+  it goes to your mouseover, then friendly target, then the lowest. Works
+  out of combat too.
 
 READ LEYLINE AT 75% MANA OR LESS (1.21.0, 75% since 1.22.1)
   Skyborne racial. Out of combat, when your mana is 75% or less and Read
