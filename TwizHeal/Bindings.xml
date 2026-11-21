@@ -2,4 +2,5 @@
     <Binding name="CLICK TwizHealButton:LeftButton" header="TWIZHEAL" category="ADDONS"/>
     <Binding name="CLICK TwizHealButton:RightButton" category="ADDONS"/>
     <Binding name="CLICK TwizHealButton:MiddleButton" category="ADDONS"/>
+    <Binding name="CLICK TwizHealButton:Button4" category="ADDONS"/>
 </Bindings>

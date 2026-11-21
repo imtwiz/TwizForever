@@ -1,4 +1,4 @@
-TwizHeal 1.18.0 - one hotkey heals whoever needs it most
+TwizHeal 1.19.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -36,6 +36,21 @@ HOTS COUNT
   taken off what they're missing, so nobody gets a big heal their HoT was
   about to cover. Heals are the smallest rank that covers the rest (/th
   ranks lists your heals with how much each one heals and costs).
+
+NATURE'S SWIFTNESS UNDER 40% (1.19.0)
+  Once you've learned Nature's Swiftness (Restoration talent):
+    - out of combat, anyone under 40% -> Nature's Swiftness, then an instant
+      Healing Touch (rank sized to what's missing) in ONE press of the main
+      key. On cooldown -> the normal rules below.
+    - in combat the game hides health, so: bars of anyone under 40% get a red
+      strip along the bottom. Hover that bar and press the new
+      "Nature's Swiftness + Healing Touch" key (Options > Keybindings >
+      AddOns > TwizHeal), or click the bar with mouse button 4. It casts
+      Nature's Swiftness then your biggest Healing Touch, instantly.
+      If Nature's Swiftness is on cooldown, that press does nothing - use
+      the emergency key instead.
+  Until you learn it, the new key works like the emergency key and no red
+  strip shows.
 
 WHICH SPELL - THE RULES (1.16.0)
   The combo: REGROWTH, then REJUVENATION right after, then SWIFTMEND once

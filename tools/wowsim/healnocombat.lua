@@ -60,5 +60,32 @@ SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }
 L("tank has both:        " .. who())
 SIM.hots.party2 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }; SIM.hots.player = SIM.hots.party2
 L("everyone has both:    " .. who())
+-- 1.19.0: under 40% -> Nature's Swiftness + Healing Touch (when known and ready)
+local realInfo = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Nature's Swiftness" then return { name = n } end return realInfo(n) end
+SIM.hots.party1 = nil; units.party1.hp = 700   -- tank 35%
+local r, why = NS.OocRule("party1")
+L(("tank 35%%: %s rank %s + %s (%s)"):format(r.label, tostring(r.rank), tostring(r.swift), why))
+assert(r.swift == "Nature's Swiftness")
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+local k1 = tostring(TwizHealButton:GetAttribute("macrotext1"))
+L("key on tank 35%: " .. k1:gsub("\n", " || "))
+assert(k1:find("/cast %[nocombat%] Nature's Swiftness"))
+L("NS key (button 4): " .. tostring(TwizHealButton:GetAttribute("macrotext4")):gsub("\n", " || "))
+L("bar2 NS strip: " .. tostring(TwizHealBar2.low:GetValue()))
+assert(TwizHealBar2.low:GetValue() == 1)
+units.party1.hp = 900  -- 45%
+r, why = NS.OocRule("party1")
+L(("tank 45%%: %s (%s), swift=%s"):format(r.label, why, tostring(r.swift)))
+C_Spell.GetSpellCooldown = function() return { startTime = GetTime() - 2, duration = 180 } end
+units.party1.hp = 700
+r, why = NS.OocRule("party1")
+L(("tank 35%%, NS on cooldown: %s (%s)"):format(r.label, why))
+C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
+C_Spell.GetSpellInfo = realInfo; TwizHeal.hoverUnit = nil
+r = NS.OocRule("party1")
+L(("tank 35%%, no NS learned: %s"):format(r.label))
+L("NS key without NS: " .. tostring(NS.QuickMacro("party1")):gsub("\n", " || "))
+L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:Button4"]))
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

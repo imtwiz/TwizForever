@@ -406,6 +406,9 @@ NS.Moving = Moving
 local SAVE_PCT = 0.31
 local SWIFT_PCT = 0.90 -- Swiftmend at this or under, once your Regrowth + Rejuvenation are on them
 local SAVER = { DRUID = "Swiftmend" }
+-- under 40%: Nature's Swiftness, then an instant Healing Touch (1.19.0)
+local NS_PCT = 0.40
+local QUICK = { DRUID = { swift = "Nature's Swiftness", heal = "direct" } }
 local function KnowsSpell(name)
     if not name then return false end
     if C_Spell and C_Spell.GetSpellInfo then
@@ -430,6 +433,13 @@ local function Saver()
     if name and KnowsSpell(name) then return { name = name, label = name, kind = "save" } end
 end
 NS.Saver = Saver
+-- Nature's Swiftness, if you know it: { name, heal = the spell kind it makes instant }
+local function Quick()
+    local _, class = UnitClass("player")
+    local q = QUICK[class]
+    if q and KnowsSpell(q.swift) and Best(q.heal) then return q end
+end
+NS.Quick = Quick
 
 -- The rules, out of combat (where health and buffs can be read):
 --   below 31%            -> Swiftmend if your Rejuvenation/Regrowth is on them (instant save);
@@ -456,6 +466,14 @@ local function OocRule(unit)
     -- emergency keys still cast on demand)
     if pct == nil then return nil, "hidden" end
     local moving = Moving()
+    -- under 40%: Nature's Swiftness, then Healing Touch - instant (1.19.0). Sized to what's
+    -- missing after your HoTs (they're low, so usually a big rank).
+    local q = Quick()
+    if q and pct < NS_PCT and SpellReady(q.swift) then
+        local left0 = math.max(0, (need or 0) - (incoming or 0))
+        local r = PickRank(left0 > 0 and left0 or (need or 0), q.heal) or Best(q.heal)
+        if r then return setmetatable({ swift = q.swift }, { __index = r }), "Nature's Swiftness" end
+    end
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
     -- PRE-HoT (1.18.0): out of combat, above 89%, one Regrowth then one Rejuvenation (your top
@@ -611,6 +629,7 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
     local lines = {}
     -- druids: drop cat/bear/travel form first (heals can't be cast in them)
     if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
+    if ooc and ooc.swift then lines[#lines + 1] = "/cast [nocombat] " .. ooc.swift end
     if ooc and Downranked(ooc) and (oocUnit or only) then
         -- a smaller rank that still covers what they're missing: cheaper
         local b = CastButton(castKey or "Key")
@@ -686,6 +705,20 @@ local function EmergencyMacro(unit, only)
     return pre .. "/castsequence " .. Chain("", unit, only) .. " reset=6 " .. hot.label .. ", " .. second
 end
 NS.EmergencyMacro = EmergencyMacro
+
+-- the Nature's Swiftness key (1.19.0): Nature's Swiftness, then your biggest Healing Touch -
+-- instant. For combat, where the game hides health: hover a bar that's red / under 40% and press
+-- it. (Nature's Swiftness on cooldown: the press does nothing - use the emergency key.)
+-- Without Nature's Swiftness it works like the emergency key.
+local function QuickMacro(unit, only)
+    local q = Quick()
+    if not q then return EmergencyMacro(unit, only) end
+    local heal = Best(q.heal)
+    local _, class = UnitClass("player")
+    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    return pre .. "/cast " .. q.swift .. "\n/cast " .. Chain("", unit, only) .. " " .. heal.label
+end
+NS.QuickMacro = QuickMacro
 
 local function SetMacro(b, text)
     if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
@@ -824,6 +857,15 @@ local function Build()
         -- covers the whole bar or nothing - under 90% the whole bar can be hovered and clicked.
         -- (No curve support: fall back to blocking the green part and the last 10%.)
         local lvl = b.over:GetFrameLevel() + 5
+        -- a red strip along the bottom of the bar when they're under 40% and you have Nature's
+        -- Swiftness: hover them and press the Nature's Swiftness key (works with hidden health)
+        b.low = CreateFrame("StatusBar", nil, b.bar)
+        b.low:SetPoint("BOTTOMLEFT", b.bar, "BOTTOMLEFT", 0, 0); b.low:SetPoint("BOTTOMRIGHT", b.bar, "BOTTOMRIGHT", 0, 0)
+        b.low:SetHeight(3)
+        b.low:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        b.low:SetStatusBarColor(1, 0.1, 0.1, 1)
+        b.low:SetMinMaxValues(0, 1); b.low:SetValue(0)
+        b.low:SetFrameLevel(b.over:GetFrameLevel() + 1)
         b.guard = CreateFrame("StatusBar", nil, b)
         b.guard:SetAllPoints(b.bar)
         b.guard:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
@@ -858,6 +900,8 @@ local function Build()
         b:SetAttribute("_onenter", [[
             local key = self:GetFrameRef("key")
             local m, m2, m3 = self:GetAttribute("healmacro"), self:GetAttribute("healmacro2"), self:GetAttribute("healmacro3")
+            local m4 = self:GetAttribute("healmacro4")
+            if key and m4 then key:SetAttribute("macrotext4", m4) end
             if key and m3 then key:SetAttribute("macrotext3", m3) end
             if key and m then key:SetAttribute("macrotext1", m) end
             if key and m2 then key:SetAttribute("macrotext2", m2) end
@@ -868,6 +912,7 @@ local function Build()
                 key:SetAttribute("macrotext1", key:GetAttribute("basemacro"))
                 key:SetAttribute("macrotext2", key:GetAttribute("basemacro2"))
                 key:SetAttribute("macrotext3", key:GetAttribute("basemacro3"))
+                key:SetAttribute("macrotext4", key:GetAttribute("basemacro4"))
             end
         ]])
         b:HookScript("OnEnter", function(self) NS.hoverUnit = self:GetAttribute("unit") end)
@@ -1212,6 +1257,30 @@ function NS.DrawGuard(b, unit, pct)
     if c then ok, v = pcall(UnitHealthPercent, unit, true, c) end
     if not ok or v == nil or not pcall(b.guard.SetValue, b.guard, v) then b.guard:SetValue(1) end -- unknown: blocked
 end
+-- 1 under 40% health, 0 from 40% up: the red "use Nature's Swiftness" strip (1.19.0)
+local lowCurve
+function NS.LowCurve(again)
+    if again then lowCurve = nil end
+    if lowCurve ~= nil then return lowCurve end
+    lowCurve = false
+    if not (C_CurveUtil and C_CurveUtil.CreateCurve and UnitHealthPercent and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step) then return false end
+    local ok, c = pcall(C_CurveUtil.CreateCurve)
+    if not ok or not c or not pcall(c.SetType, c, Enum.LuaCurveType.Step) then return false end
+    for _, pt in ipairs({ { 0, 1 }, { NS_PCT, 0 }, { 1, 0 } }) do
+        if not pcall(c.AddPoint, c, pt[1], pt[2]) then return false end
+    end
+    lowCurve = c
+    return c
+end
+function NS.DrawLow(b, unit, pct)
+    if not b.low then return end
+    if not Quick() or UnitIsDeadOrGhost(unit) then b.low:SetValue(0); return end
+    if pct then b.low:SetValue(pct < NS_PCT and 1 or 0); return end
+    local c = NS.LowCurve()
+    local ok, v = false, nil
+    if c then ok, v = pcall(UnitHealthPercent, unit, false, c) end
+    if not ok or v == nil or not pcall(b.low.SetValue, b.low, v) then b.low:SetValue(0) end
+end
 local function CurveColorBar(b, unit)
     if not (C_CurveUtil and C_CurveUtil.CreateColorCurve and UnitHealthPercent and CreateColor) then return false end
     if not hpCurve then
@@ -1283,6 +1352,7 @@ Update = function()
             pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
             pcall(NS.DrawIncoming, b, unit)
             pcall(NS.DrawGuard, b, unit, m and m.pct)
+            pcall(NS.DrawLow, b, unit, m and m.pct)
             if m then b.bar:SetStatusBarColor(HealthColor(pct))
             elseif not CurveColorBar(b, unit) then b.bar:SetStatusBarColor(0.45, 0.5, 0.55) end -- unknown: grey
             pcall(DrawPower, b, unit)
@@ -1331,7 +1401,9 @@ Update = function()
     if not inCombat then
         local base, base2, base3 = SmartMacro(fallback, ooc, nil, who, "Key", true), InstantMacro(fallback), EmergencyMacro(fallback)
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
-        local hovered, hovered2, hovered3
+        local base4 = QuickMacro(fallback)
+        btn:SetAttribute("basemacro4", base4)
+        local hovered, hovered2, hovered3, hovered4
         -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
         -- key = your HoT; hovering a bar points both keys at that person
         for i, b in ipairs(bars) do
@@ -1341,6 +1413,10 @@ Update = function()
                 local m, m2, m3 = SmartMacro(unit, r, true, unit, "Bar" .. i), InstantMacro(unit, true), EmergencyMacro(unit, true)
                 if b:GetAttribute("healmacro3") ~= m3 then b:SetAttribute("healmacro3", m3) end
                 if b:GetAttribute("macrotext3") ~= m3 then b:SetAttribute("macrotext3", m3) end -- middle-click a bar
+                local m4 = QuickMacro(unit, true)
+                if b:GetAttribute("healmacro4") ~= m4 then b:SetAttribute("healmacro4", m4) end
+                if b:GetAttribute("macrotext4") ~= m4 then b:SetAttribute("macrotext4", m4) end -- mouse button 4 on a bar
+                if NS.hoverUnit == unit then hovered4 = m4 end
                 SetMacro(b, m)
                 if b:GetAttribute("macrotext2") ~= m2 then b:SetAttribute("macrotext2", m2) end
                 if b:GetAttribute("healmacro") ~= m then b:SetAttribute("healmacro", m) end
@@ -1353,6 +1429,8 @@ Update = function()
         if btn:GetAttribute("macrotext2") ~= k2 then btn:SetAttribute("macrotext2", k2) end
         local k3 = hovered3 or base3
         if btn:GetAttribute("macrotext3") ~= k3 then btn:SetAttribute("macrotext3", k3) end
+        local k4 = hovered4 or base4
+        if btn:GetAttribute("macrotext4") ~= k4 then btn:SetAttribute("macrotext4", k4) end
     end
     if not inCombat then
         if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
@@ -1601,6 +1679,7 @@ _G["BINDING_HEADER_TWIZHEAL"] = "TwizHeal"
 _G["BINDING_NAME_CLICK TwizHealButton:LeftButton"] = "Heal whoever needs it most"
 _G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Instant heal (Rejuvenation / Renew) - use while moving"
 _G["BINDING_NAME_CLICK TwizHealButton:MiddleButton"] = "Emergency: Rejuvenation, then Swiftmend or Regrowth (press twice)"
+_G["BINDING_NAME_CLICK TwizHealButton:Button4"] = "Nature's Swiftness + Healing Touch (hover someone under 40%)"
 
 SLASH_TWIZHEAL1 = "/th"
 SLASH_TWIZHEAL2 = "/twizheal"
