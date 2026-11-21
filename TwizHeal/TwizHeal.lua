@@ -936,6 +936,11 @@ local function Build()
     end)
     if db.pos then frame:ClearAllPoints(); frame:SetPoint(db.pos[1], UIParent, db.pos[2], db.pos[3], db.pos[4]) end
     Skin.Panel(frame)
+    -- transparent window (1.27.2): only the bars show. The window itself no longer catches the
+    -- mouse either, so the empty corners of the cross click through to the world (drag a bar
+    -- to move the window; the corner grip still resizes it)
+    if frame.SetBackdropColor then frame:SetBackdropColor(0, 0, 0, 0); frame:SetBackdropBorderColor(0, 0, 0, 0) end
+    frame:EnableMouse(false)
     frame.title = Skin.Text(frame, "title"); frame.title:SetPoint("TOPLEFT", 10, -9); frame.title:SetText("TwizHeal")
     frame.next = Skin.Text(frame, "small"); frame.next:SetPoint("LEFT", frame.title, "RIGHT", 8, 0); frame.next:SetPoint("RIGHT", -28, 0)
     local close = Skin.IconButton(frame, "x", "Hide (/th to show)", function() if not InCombatLockdown() then db.shown = false; frame:Hide() end end)
