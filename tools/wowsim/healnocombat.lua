@@ -9,7 +9,7 @@ units.party1.hp = 1900; SIM.hots.party1 = nil; NS.moving = false; TwizHeal.hover
 SIM.Advance(0.3)
 local key = tostring(TwizHealButton:GetAttribute("macrotext1"))
 L("key (no hover): " .. key:gsub("\n", " || "))
-assert(not key:find("%[combat%]") and not key:find("combat,"), "key must not heal in combat")
+assert(not key:find("%[combat") and not key:find("%[@") and not key:find("^/cast %[@"), "key must not heal in combat")
 local bar = tostring(TwizHealBar1:GetAttribute("healmacro"))
 L("bar1 heal: " .. bar:gsub("\n", " || "))
 assert(bar:find("%[combat%]") or bar:find("combat,"), "bar keeps its combat heal")
@@ -49,5 +49,16 @@ L("hidden 90% -> " .. TwizHealBar2.guard:GetValue())
 units.party1.hp = 1810; NS.DrawGuard(TwizHealBar2, "party1")
 L("hidden 90.5% -> " .. TwizHealBar2.guard:GetValue())
 UnitHealthPercent = realPct
+-- 1.18.0: out of combat pre-HoT - one Regrowth and one Rejuvenation each, tank first
+units.party1.hp = 2000; units.party2.hp = 1300; units.player.hp = 1000
+SIM.hots.party1 = nil; SIM.hots.party2 = nil; SIM.hots.player = nil
+local function who() local p = NS.Pick(NS.Scan()); local r, why = p and NS.OocRule(p.unit); return (p and p.name or "-") .. ": " .. (r and r.label or "-") .. " (" .. tostring(why) .. ")" end
+L("all full, nothing on: " .. who())
+SIM.hots.party1 = { { "Regrowth", 21 } }
+L("tank has Regrowth:    " .. who())
+SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }
+L("tank has both:        " .. who())
+SIM.hots.party2 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }; SIM.hots.player = SIM.hots.party2
+L("everyone has both:    " .. who())
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

@@ -1,4 +1,4 @@
-TwizHeal 1.17.1 - one hotkey heals whoever needs it most
+TwizHeal 1.18.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -40,12 +40,15 @@ HOTS COUNT
 WHICH SPELL - THE RULES (1.16.0)
   The combo: REGROWTH, then REJUVENATION right after, then SWIFTMEND once
   they're at 90% or under. Out of combat (health and buffs readable):
-    - above 90%                 -> nothing (no combo in progress either)
+    - above 89%, PRE-HoT (1.18) -> one Regrowth, then one Rejuvenation (your
+                                   top ranks), so they're HoT'd before the pull;
+                                   nothing more once both are on. With nobody
+                                   hurt, the key pre-HoTs everyone in turn: tank,
+                                   then healer, then damage. Out of combat only.
     - your Regrowth on them,    -> Rejuvenation (instant)
       no Rejuvenation yet
     - your HoTs on them, 90% or -> Swiftmend, when it's off cooldown
       under
-    - above 89% and nothing on  -> nothing (/th threshold to change)
     - moving                    -> Rejuvenation (instant; the combo picks up)
     - nothing on them           -> Regrowth, the rank sized to the gap
     - combo done, Swiftmend on  -> Healing Touch, the rank that covers what's

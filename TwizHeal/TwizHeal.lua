@@ -276,11 +276,11 @@ function NS.Scan()
             if not hp or not max then
                 NS.hidden = true   -- the game is hiding health right now: TwizHeal can't judge this person
             elseif max > 0 then
-                local hots, incoming = MyHoTs(u)
+                local hots, incoming, hotsHidden = MyHoTs(u)
                 -- what's still missing once your HoTs finish ticking
                 local deficit = max - hp
                 out[#out + 1] = { unit = u, name = safe(UnitName(u)) or u, hp = hp, max = max, pct = hp / max, deficit = deficit,
-                    need = math.max(0, deficit - incoming), hots = hots, incoming = incoming,
+                    need = math.max(0, deficit - incoming), hots = hots, incoming = incoming, hotsHidden = hotsHidden,
                     role = Role(u), inRange = InRange(u, ranks[1] and ranks[1].name) }
             end
         end
@@ -322,7 +322,26 @@ function NS.Pick(list)
     end)
     if need[1] then return need[1], false end
     table.sort(upkeep, function(a, b) return a.pct < b.pct end)
-    return upkeep[1], false
+    if upkeep[1] then return upkeep[1], false end
+    -- out of combat, nobody hurt: pre-HoT (1.18.0) - one Regrowth and one Rejuvenation on each
+    -- person before the pull, tank first, then healer, then damage
+    if not InCombatLockdown() then
+        local _, class = UnitClass("player")
+        local set = SPELLS[class] or {}
+        local pre = {}
+        for _, m in ipairs(list) do
+            if m.inRange and not m.hotsHidden and m.hots
+                and ((set.fast and Has("fast") and not m.hots[set.fast]) or (set.hot and Has("hot") and not m.hots[set.hot])) then
+                pre[#pre + 1] = m
+            end
+        end
+        table.sort(pre, function(a, b)
+            local ra, rb = ROLE_RANK[a.role] or 3, ROLE_RANK[b.role] or 3
+            if ra ~= rb then return ra < rb end
+            return a.pct < b.pct
+        end)
+        if pre[1] then return pre[1], false end
+    end
 end
 
 -- What to cast on them: { rank, kind, mod } (mod = the modifier that casts it in combat)
@@ -436,10 +455,18 @@ local function OocRule(unit)
     -- the game hides their health: it could be 95%, so no automatic heal (the instant and
     -- emergency keys still cast on demand)
     if pct == nil then return nil, "hidden" end
-    if pct > SWIFT_PCT then return nil, "fine" end
     local moving = Moving()
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
+    -- PRE-HoT (1.18.0): out of combat, above 89%, one Regrowth then one Rejuvenation (your top
+    -- ranks - they're there to soak the pull); nothing more after that. Not when buffs can't be
+    -- read (it could be on them already).
+    if pct > (db and db.threshold or 0.89) then
+        if hidden or InCombatLockdown() then return nil, "fine" end
+        if fast and not hasFast and not moving then return fast, "pre-HoT" end
+        if hot and not hasHot then return hot, "pre-HoT" end
+        return nil, "fine"
+    end
     local left = need and math.max(0, need - (incoming or 0)) or nil
 
     -- THE COMBO (Alan's rule): Regrowth, then Rejuvenation right after, then Swiftmend at 90% or under
@@ -1494,7 +1521,7 @@ fbTick:SetScript("OnUpdate", function()
         end
     elseif NS.oocWhy == "fine" and not InCombatLockdown() then
         if Once("fine" .. who) then
-            Print(("%s %s above %d%% health - no heal needed."):format(who == "you" and "you" or who, who == "you" and "are" or "is", (db.threshold or 0.89) * 100 + 0.5))
+            Print(("%s %s above %d%% health with your HoTs up - no heal needed."):format(who == "you" and "you" or who, who == "you" and "are" or "is", (db.threshold or 0.89) * 100 + 0.5))
         end
     elseif InCombatLockdown() then
         if Once("combat") then
