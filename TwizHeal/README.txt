@@ -1,4 +1,4 @@
-TwizHeal 1.23.0 - one hotkey heals whoever needs it most
+TwizHeal 1.23.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -22,8 +22,11 @@ NO HEALS ABOVE 90% IN COMBAT (1.17.0, whole bar clickable in 1.17.1)
   bar when someone is at 90% or more, and nothing when they're under 90%.
   So in combat: hover or click anyone under 90% anywhere on their bar; bars
   at 90% or more can't be hovered or clicked, so they don't get healed.
-  (If your game doesn't offer the needed curve function, it falls back to
-  1.17.0: only the dark, empty part of a bar left of the 90% mark works.)
+  1.23.1: if your game doesn't offer the needed curve function, or it
+  fails, nothing blocks the bars (the old fallback could cover every bar and
+  swallow your clicks). /th guard turns the blocker off or on. /th debug
+  says which mode you're in. After a fight where your presses healed
+  nobody, TwizHeal prints one "last fight: ..." line - send it to Claude.
   Without hovering a bar, the main key casts nothing in combat (also when
   TwizBuff calls it). The instant and emergency keys are still manual
   overrides and heal whoever you point them at. The game's own party

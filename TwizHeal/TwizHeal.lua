@@ -1013,8 +1013,8 @@ local function Build()
     -- tell you when a press didn't heal (out of range, can't cast while moving...)
     btn:HookScript("PostClick", function() if NS.OnPress then NS.OnPress() end end)
     -- when the key or a bar was pressed (its errors are checked as they happen, before PostClick)
-    btn:HookScript("PreClick", function() NS.clickAt = GetTime() end)
-    for _, b in ipairs(bars) do b:HookScript("PreClick", function() NS.clickAt = GetTime() end) end
+    btn:HookScript("PreClick", function() NS.clickAt = GetTime(); NS.FightCount("key") end)
+    for _, b in ipairs(bars) do b:HookScript("PreClick", function() NS.clickAt = GetTime(); NS.FightCount("bar") end) end
     for _, b in ipairs(bars) do
         if b.SetFrameRef then b:SetFrameRef("key", btn) end
         b:SetAttribute("_onenter", [[
@@ -1375,7 +1375,8 @@ function NS.DrawGuard(b, unit, pct)
     local c = NS.GuardCurve()
     local ok, v = false, nil
     if c then ok, v = pcall(UnitHealthPercent, unit, true, c) end
-    if not ok or v == nil or not pcall(b.guard.SetValue, b.guard, v) then b.guard:SetValue(1) end -- unknown: blocked
+    -- can't tell (1.23.1): leave the bar clickable - a heal too many beats a heal that never comes
+    if not ok or v == nil or not pcall(b.guard.SetValue, b.guard, v) then b.guard:SetValue(0); NS.guardFailed = true end
 end
 -- 1 under 40% health, 0 from 40% up: the red "use Nature's Swiftness" strip (1.19.0)
 local lowCurve
@@ -1657,6 +1658,8 @@ end
 -- errors are held until the press settles: a heal that went out wins over the "another action
 -- in progress" a second macro line can raise
 fb:SetScript("OnEvent", function(_, event, a1, a2)
+    if event == "UNIT_SPELLCAST_SUCCEEDED" and a1 == "player" then NS.FightCount("casts")
+    elseif event == "UI_ERROR_MESSAGE" and GetTime() - (NS.clickAt or 0) < 0.5 then NS.FightCount("err", type(a2) == "string" and a2 or a1) end
     if GetTime() - press.at > 0.6 or press.said then return end
     if event == "UI_ERROR_MESSAGE" then
         local msg = safe(type(a2) == "string" and a2 or a1)
@@ -1760,13 +1763,35 @@ end)
 -- Events, slash
 ------------------------------------------------------------------------
 -- the combat mouse blockers on every bar (see the bar build)
+-- 1.23.1: only the whole-bar blocker driven by the game's health curve. Without that curve (or
+-- with /th guard off) nothing blocks the bars: the old fallback could cover every bar in combat
+-- and swallow your clicks.
 function NS.SetBlockers(on)
     for _, b in ipairs(bars) do
-        for _, bl in ipairs({ b.blockFill, b.blockTop }) do
-            if bl and bl == b.blockTop and b.useGuard then bl:Hide()
-            elseif bl then if on then bl:Show() else bl:Hide() end end
+        if b.blockTop then b.blockTop:Hide() end
+        if b.blockFill then
+            if on and b.useGuard and db and db.combatGuard ~= false then b.blockFill:Show() else b.blockFill:Hide() end
         end
     end
+end
+
+-- after a fight where your TwizHeal presses healed nobody: one line saying what happened
+local fight = {}
+function NS.FightStart() fight = { key = 0, bar = 0, casts = 0, errs = {} } end
+function NS.FightEnd()
+    local f = fight
+    fight = {}
+    if not f.key or (f.key + f.bar) < 3 or f.casts > 0 then return end
+    local errs = {}
+    for msg, n in pairs(f.errs) do errs[#errs + 1] = ("%s x%d"):format(msg, n) end
+    Print(("last fight: %d key presses, %d bar clicks, no spell went out. Errors: %s. Bar blocker: %s. Tell Claude this line.")
+        :format(f.key, f.bar, #errs > 0 and table.concat(errs, ", ") or "none",
+        (db and db.combatGuard == false) and "off" or (NS.GuardCurve() and (NS.guardFailed and "curve, failed" or "curve") or "none")))
+end
+function NS.FightCount(kind, msg)
+    if not fight.key then return end
+    if kind == "err" then msg = safe(msg); if type(msg) == "string" then fight.errs[msg] = (fight.errs[msg] or 0) + 1 end
+    else fight[kind] = fight[kind] + 1 end
 end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "PLAYER_LEVEL_UP",
@@ -1789,6 +1814,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
     end
     if not db then return end
     if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then NS.SetBlockers(event == "PLAYER_REGEN_DISABLED") end
+    if event == "PLAYER_REGEN_DISABLED" then NS.FightStart() elseif event == "PLAYER_REGEN_ENABLED" then NS.FightEnd() end
     if event == "PLAYER_REGEN_DISABLED" then return end
     -- moving / hovering / targeting: just re-run the rules so the key is right when you press it
     if event == "PLAYER_STARTED_MOVING" then NS.moving = true elseif event == "PLAYER_STOPPED_MOVING" then NS.moving = false end
@@ -1881,6 +1907,11 @@ SlashCmdList.TWIZHEAL = function(msg)
             tostring(IsInGroup and IsInGroup())))
         Print("combat 90% guard: " .. (NS.GuardCurve() and "whole bar (curve)" or "fallback - only the dark part of a bar under 90%"))
         reported = nil; NS.Update()
+    elseif cmd == "guard" then
+        db.combatGuard = db.combatGuard == false
+        NS.SetBlockers(InCombatLockdown() and db.combatGuard)
+        Print("in-combat bar blocker (no clicks on bars at 90%+): " .. (db.combatGuard and "on" or "off")
+            .. (NS.GuardCurve() and "" or " - your game lacks the health curve it needs, so it stays off anyway"))
     elseif cmd == "prehot" then
         -- why each person does or doesn't get a pre-HoT
         for _, u in ipairs(Units()) do
