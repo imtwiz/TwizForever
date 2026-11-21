@@ -756,6 +756,11 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
         local opts = only and unit or ("[@mouseover,help,nodead] mouseover; [@target,help,nodead] target; " .. unit)
         cyc = CycleButton(castKey or "Key", opts, table.concat(ids, ","))
     end
+    -- in combat, Read Leyline first whenever it's off cooldown (1.22.0): the game hides nothing
+    -- here, but the key is locked, so it can't check your mana - at most once per 2 min. On
+    -- cooldown the line is skipped and the heal goes out (its "not ready" error is hidden).
+    local regen = not noCombat and Regen()
+    if regen and (cyc or combat) then lines[#lines + 1] = "/cast [combat] " .. regen end
     if cyc then
         local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
         lines[#lines + 1] = "/click [combat] " .. cyc:GetName() .. (keyDown and " LeftButton 1" or "")
@@ -1001,6 +1006,9 @@ local function Build()
     btn:SetAttribute("type", "macro")
     -- tell you when a press didn't heal (out of range, can't cast while moving...)
     btn:HookScript("PostClick", function() if NS.OnPress then NS.OnPress() end end)
+    -- when the key or a bar was pressed (its errors are checked as they happen, before PostClick)
+    btn:HookScript("PreClick", function() NS.clickAt = GetTime() end)
+    for _, b in ipairs(bars) do b:HookScript("PreClick", function() NS.clickAt = GetTime() end) end
     for _, b in ipairs(bars) do
         if b.SetFrameRef then b:SetFrameRef("key", btn) end
         b:SetAttribute("_onenter", [[
@@ -1605,6 +1613,26 @@ end
 -- Feedback: after a press, say in chat if the heal didn't go out, and why
 ------------------------------------------------------------------------
 local press = { at = 0 }
+-- Read Leyline on cooldown makes every combat press say "Spell is not ready yet": hide that one
+-- message right after a TwizHeal press (1.22.0); every other error still shows
+function NS.HideNotReady()
+    if NS.errHooked or not UIErrorsFrame or not UIErrorsFrame.GetScript then return end
+    local orig = UIErrorsFrame:GetScript("OnEvent")
+    if not orig then return end
+    NS.errHooked = true
+    local notReady = {}
+    for _, k in ipairs({ "SPELL_FAILED_NOT_READY", "ERR_SPELL_COOLDOWN", "ERR_ABILITY_COOLDOWN" }) do
+        local v = _G[k]; if type(v) == "string" then notReady[v] = true end
+    end
+    UIErrorsFrame:SetScript("OnEvent", function(self, event, ...)
+        if event == "UI_ERROR_MESSAGE" and Regen() and GetTime() - (NS.clickAt or 0) < 0.5 then
+            local _, msg = ...
+            msg = safe(msg)
+            if msg and (notReady[msg] or msg:lower():find("not ready")) then return end
+        end
+        return orig(self, event, ...)
+    end)
+end
 local function Who()
     local function friend(u) return UnitExists(u) and not UnitIsDeadOrGhost(u) and (not UnitCanAssist or UnitCanAssist("player", u)) end
     local u = NS.hoverUnit and UnitExists(NS.hoverUnit) and NS.hoverUnit or friend("mouseover") and "mouseover" or friend("target") and "target" or NS.fallback or "player"
@@ -1750,6 +1778,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         if db.version < 4 then db.shown, db.version = true, 4 end -- the party window is back: hover a bar + key
         if db.version < 5 then if db.threshold == 0.90 then db.threshold = 0.89 end; db.version = 5 end -- above 89%: no heal
         NS.db = db
+        pcall(NS.HideNotReady)
         return
     end
     if not db then return end

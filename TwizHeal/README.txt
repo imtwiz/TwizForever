@@ -1,4 +1,4 @@
-TwizHeal 1.21.0 - one hotkey heals whoever needs it most
+TwizHeal 1.22.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -43,7 +43,14 @@ READ LEYLINE UNDER 50% MANA (1.21.0)
   click) casts it instead of a heal: +50% health and mana regeneration for
   15 sec (double when Attuned at a ley line). The press after that heals as
   usual. Skipped while anyone is under 40% (they come first) and while
-  you're moving (it has a 2 sec cast). Not in combat: the game locks the key.
+  you're moving (it has a 2 sec cast).
+  In combat (1.22.0): hovering or clicking a bar to heal casts Read Leyline
+  first whenever it's off cooldown - the key is locked in combat, so it
+  can't check your mana; at most once every 2 min. That press is the 2 sec
+  Read Leyline cast; the next press heals. While it's on cooldown the heal
+  goes out as usual, and its "Spell is not ready yet" message is hidden.
+  The key without a bar hovered, and the instant / emergency / Nature's
+  Swiftness / Tranquility keys, never cast it.
 
 TRANQUILITY: 3 OR MORE UNDER 40% (1.20.0)
   Once you've learned Tranquility (druid, level 30):

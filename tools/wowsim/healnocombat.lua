@@ -164,6 +164,26 @@ units.party1.hp = 700; SIM.hots.party1 = nil
 r = NS.OocRule("party1")
 L(("mana 45%%, tank at 35%%: %s"):format(r and r.label or "nothing"))
 assert(r.label ~= "Read Leyline")
+units.party1.hp = 1700; SIM.hots.party1 = nil; mana = 1800
+TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
+local hm = tostring(TwizHealBar2:GetAttribute("healmacro"))
+L("bar2 heal with Read Leyline known: " .. hm:gsub("\n", " || "))
+assert(hm:find("/cast %[combat%] Read Leyline\n/click %[combat%]") or hm:find("/cast %[combat%] Read Leyline\n/castsequence"))
+local base = tostring(TwizHealButton:GetAttribute("basemacro"))
+assert(not base:find("%[combat%] Read Leyline"), "no-hover key stays silent in combat")
+-- the "not ready" error from Read Leyline is hidden right after a TwizHeal press, others shown
+local shown = {}
+UIErrorsFrame = CreateFrame("Frame", "UIErrorsFrame")
+UIErrorsFrame:SetScript("OnEvent", function(_, e, t, msg) shown[#shown + 1] = msg end)
+SPELL_FAILED_NOT_READY = "Spell is not ready yet."
+NS.errHooked = nil; NS.HideNotReady()
+local h = UIErrorsFrame:GetScript("OnEvent")
+NS.clickAt = GetTime(); h(UIErrorsFrame, "UI_ERROR_MESSAGE", 1, "Spell is not ready yet.")
+h(UIErrorsFrame, "UI_ERROR_MESSAGE", 1, "Out of range.")
+SIM.Advance(2); h(UIErrorsFrame, "UI_ERROR_MESSAGE", 1, "Spell is not ready yet.")
+L("errors shown: " .. table.concat(shown, " | "))
+assert(#shown == 2 and shown[1] == "Out of range.")
+TwizHeal.hoverUnit = nil
 units.party1.hp = 2000; C_Spell.GetSpellInfo = info3
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
