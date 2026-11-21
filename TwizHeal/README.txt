@@ -1,4 +1,4 @@
-TwizHeal 1.26.0 - one hotkey heals whoever needs it most
+TwizHeal 1.27.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -154,6 +154,15 @@ WHICH RANK WENT OUT (1.14.1)
   screen when the window is hidden). /th castinfo turns it off or on.
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
+  1.27.0: laid out as a CROSS -
+                 [ tank ]
+        [ dps ]  [ dps ]  [ dps ]
+                 [healer]
+  Roles come from the group's role setting (the role icons). If nobody has
+  a role set: bar 1 (you) on top, bars 2/3/4 in the middle, bar 5 at the
+  bottom. The window rearranges itself when roles change (out of combat -
+  bars can't move in a fight). Drag the corner grip to resize: width sets
+  each bar's width (all three columns), height sets the bar height.
   Hover a bar and press your TwizHeal key: it heals that person (in combat
   only if they're under 90% - see 1.17.1 above). Clicking a bar
   heals them too.

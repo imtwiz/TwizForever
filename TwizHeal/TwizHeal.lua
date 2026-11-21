@@ -445,6 +445,7 @@ end
 ------------------------------------------------------------------------
 local frame, btn, bars = nil, nil, {}
 local MAXBARS = 5
+local GAP = 2 -- space between the bars of the cross
 
 -- the strongest rank of a kind you can cast (used when health is hidden)
 local function Best(kind, step)
@@ -950,8 +951,8 @@ local function Build()
 
     -- resize: drag the grip in the bottom-right corner (out of combat - the game locks secure frames)
     frame:SetResizable(true)
-    if frame.SetResizeBounds then frame:SetResizeBounds(140, 50, 600, 500)
-    elseif frame.SetMinResize then frame:SetMinResize(140, 50); frame:SetMaxResize(600, 500) end
+    if frame.SetResizeBounds then frame:SetResizeBounds(200, 50, 1200, 500)
+    elseif frame.SetMinResize then frame:SetMinResize(200, 50); frame:SetMaxResize(1200, 500) end
     local grip = CreateFrame("Button", nil, frame)
     grip:SetSize(14, 14); grip:SetPoint("BOTTOMRIGHT", -2, 2); grip:SetFrameLevel(frame:GetFrameLevel() + 10)
     grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
@@ -965,9 +966,9 @@ local function Build()
         if not frame.sizing then return end
         frame:StopMovingOrSizing(); frame.sizing = false
         -- bar height from the new height, spread over the people shown
-        local n = math.max(1, frame.shownBars or 1)
-        db.barH = NS.HealthHeightFor(frame:GetHeight(), n)
-        db.width = math.floor(frame:GetWidth())
+        -- the cross: 3 columns, 3 rows
+        db.barH = NS.HealthHeightFor(frame:GetHeight(), 3)
+        db.width = math.max(60, math.floor((frame:GetWidth() - 12 - 2 * GAP) / 3)) + 12
         NS.Layout()
         local p, _, rp, x, y = frame:GetPoint(); db.pos = { p, rp, x, y }
     end)
@@ -1139,20 +1140,65 @@ function NS.HealthHeightFor(height, n)
     local row = (height - 2 * TOP) / math.max(1, n) - 2
     return math.max(10, math.min(60, math.floor((row - 1) * 0.8)))
 end
--- live = while dragging the grip (keep the height the mouse sets)
+-- THE CROSS (1.27.0): tank on top, the 3 damage dealers in the middle row, the healer at the
+-- bottom. Without roles set in the group: bar 1 (you) on top, 2/3/4 in the middle, 5 at the bottom.
+local SLOT_POS = { top = { 1, 0 }, midL = { 0, 1 }, midC = { 1, 1 }, midR = { 2, 1 }, bottom = { 1, 2 } }
+local SLOT_ORDER = { "top", "midL", "midC", "midR", "bottom" }
+function NS.CrossSlots()
+    local slotOf, roles, any = {}, {}, false
+    local exists = {}
+    for i, b in ipairs(bars) do
+        local u = b:GetAttribute("unit")
+        exists[i] = u and UnitExists(u)
+        if exists[i] then
+            local r = UnitGroupRolesAssigned and safe(UnitGroupRolesAssigned(u))
+            if r == "TANK" or r == "HEALER" or r == "DAMAGER" then roles[i] = r; any = true end
+        end
+    end
+    if not any then
+        for i in ipairs(bars) do slotOf[i] = SLOT_ORDER[i] end
+        return slotOf
+    end
+    local free = { top = true, midL = true, midC = true, midR = true, bottom = true }
+    local function take(i, list)
+        for _, sl in ipairs(list) do if free[sl] then slotOf[i] = sl; free[sl] = nil; return end end
+    end
+    for i in ipairs(bars) do if roles[i] == "TANK" and free.top then take(i, { "top" }) end end
+    for i in ipairs(bars) do if roles[i] == "HEALER" and not slotOf[i] and free.bottom then take(i, { "bottom" }) end end
+    local mid = { "midL", "midC", "midR", "top", "bottom" }
+    for i in ipairs(bars) do if exists[i] and not slotOf[i] then take(i, mid) end end
+    for i in ipairs(bars) do if not slotOf[i] then take(i, mid) end end
+    return slotOf
+end
+function NS.CrossKey()
+    local t = NS.CrossSlots()
+    local k = {}
+    for i = 1, #bars do k[i] = t[i] or "-" end
+    return table.concat(k, ",")
+end
+-- live = while dragging the grip (keep the size the mouse sets)
 function NS.Layout(live)
     if not frame or InCombatLockdown() then return end
-    local n = math.max(1, frame.shownBars or 1)
-    local w = live and frame:GetWidth() or (db.width or 220)
-    local h = live and NS.HealthHeightFor(frame:GetHeight(), n) or (db.barH or 20)
-    if not live then frame:SetWidth(w) end
+    local bw, h
+    if live then
+        bw = math.max(60, math.floor((frame:GetWidth() - 12 - 2 * GAP) / 3))
+        h = NS.HealthHeightFor(frame:GetHeight(), 3)
+    else
+        bw = math.max(60, (db.width or 132) - 12)
+        h = db.barH or 20
+        frame:SetWidth(12 + 3 * bw + 2 * GAP)
+    end
     local ph = PowerH(h)
+    local slots = NS.CrossSlots()
+    frame.crossKey = NS.CrossKey()
     for i, b in ipairs(bars) do
-        b:SetSize(math.max(60, w - 12), RowH(h))
-        b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, -TOP - (i - 1) * (RowH(h) + 2))
+        local pos = SLOT_POS[slots[i] or "midC"]
+        b:SetSize(bw, RowH(h))
+        b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6 + pos[1] * (bw + GAP), -TOP - pos[2] * (RowH(h) + GAP))
+        b.slot = slots[i]
         b.bar:ClearAllPoints(); b.bar:SetPoint("TOPLEFT", 1, -1); b.bar:SetPoint("BOTTOMRIGHT", -1, ph + 1)
-        if b.incBar then b.incBar:SetWidth(math.max(60, w - 12) - 2); b.absBar:SetWidth(math.max(60, w - 12) - 2) end
-        if b.blockTop then b.blockTop:SetWidth(math.max(1, ((math.max(60, w - 12) - 2) * (1 - SWIFT_PCT)))) end
+        if b.incBar then b.incBar:SetWidth(bw - 2); b.absBar:SetWidth(bw - 2) end
+        if b.blockTop then b.blockTop:SetWidth(math.max(1, ((bw - 2) * (1 - SWIFT_PCT)))) end
         b.powerH = ph
         b.laid = nil -- power bars re-anchor on the next update
         -- tall bars: buff icons on top, numbers underneath; short bars: everything on one line
@@ -1165,7 +1211,7 @@ function NS.Layout(live)
         end
         b.role:SetSize(math.max(8, fsz + 2), math.max(8, fsz + 2))
     end
-    if not live then frame:SetHeight(2 * TOP + n * (RowH(h) + 2) - 2) end
+    if not live then frame:SetHeight(2 * TOP + 3 * RowH(h) + 2 * GAP) end
 end
 
 local POWER_COLOR = { [0] = { 0.0, 0.44, 0.87 }, [1] = { 0.78, 0.25, 0.25 }, [2] = { 1, 0.5, 0.25 }, [3] = { 1, 0.82, 0 }, [6] = { 0, 0.82, 1 } }
@@ -1657,7 +1703,7 @@ Update = function()
         if btn:GetAttribute("*macrotext-Decurse") ~= k6 then btn:SetAttribute("*macrotext-Decurse", k6) end
     end
     if not inCombat then
-        if frame.shownBars ~= shown or not frame.laidOut then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
+        if frame.shownBars ~= shown or not frame.laidOut or frame.crossKey ~= NS.CrossKey() then frame.shownBars, frame.laidOut = shown, true; NS.Layout() end
         frame:SetShown(db.shown and #ranks > 0)
     end
     NS.pick = pick
@@ -1908,6 +1954,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         if (db.version or 0) < 3 then db.shown, db.clickCast, db.version = false, true, 3 end
         if db.version < 4 then db.shown, db.version = true, 4 end -- the party window is back: hover a bar + key
         if db.version < 5 then if db.threshold == 0.90 then db.threshold = 0.89 end; db.version = 5 end -- above 89%: no heal
+        if db.version < 6 then db.width = math.max(110, math.floor((db.width or 220) * 0.6)); db.version = 6 end -- the cross: 3 columns
         NS.db = db
         pcall(NS.HideNotReady)
         return
