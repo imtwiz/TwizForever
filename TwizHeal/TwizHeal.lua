@@ -791,17 +791,28 @@ local function Build()
             b[k] = pb
         end
         b.mana:SetStatusBarColor(0.0, 0.44, 0.87)
-        -- in combat (health hidden): invisible mouse blockers over the filled part of the bar and
-        -- over its last 10%. The fill is drawn by the game from the real health, so the only spot
-        -- you can hover or click is the empty stretch left of the 90% mark - which only exists when
-        -- this person is under 90%. No hover, no heal.
+        -- in combat (health hidden): an invisible mouse blocker over the whole bar for anyone at 90%
+        -- or more (1.17.1). b.guard is a hidden bar the game fills from the real health through a
+        -- step curve: full at 90%+, empty under 90%. The blocker is pinned to its fill, so it
+        -- covers the whole bar or nothing - under 90% the whole bar can be hovered and clicked.
+        -- (No curve support: fall back to blocking the green part and the last 10%.)
         local lvl = b.over:GetFrameLevel() + 5
+        b.guard = CreateFrame("StatusBar", nil, b)
+        b.guard:SetAllPoints(b.bar)
+        b.guard:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        b.guard:SetStatusBarColor(0, 0, 0, 0)
+        b.guard:SetMinMaxValues(0, 1); b.guard:SetValue(0)
         b.blockFill = CreateFrame("Frame", nil, b)
         b.blockFill:SetPoint("TOPLEFT", b.bar, "TOPLEFT", 0, 0)
-        b.blockFill:SetPoint("BOTTOMRIGHT", b.bar:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
         b.blockTop = CreateFrame("Frame", nil, b)
         b.blockTop:SetPoint("TOPRIGHT", b.bar, "TOPRIGHT", 0, 0); b.blockTop:SetPoint("BOTTOMRIGHT", b.bar, "BOTTOMRIGHT", 0, 0)
         b.blockTop:SetWidth(20)
+        if NS.GuardCurve() then
+            b.blockFill:SetPoint("BOTTOMRIGHT", b.guard:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
+            b.useGuard = true
+        else
+            b.blockFill:SetPoint("BOTTOMRIGHT", b.bar:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
+        end
         for _, bl in ipairs({ b.blockFill, b.blockTop }) do
             bl:SetFrameLevel(lvl); bl:EnableMouse(true); bl:Hide()
         end
@@ -1149,6 +1160,31 @@ end
 -- turn it into a color for us: a color curve evaluated by the game (green -> orange -> red).
 -- The bar shows who's low at a glance; hover the reddest bar and press your key.
 local hpCurve
+-- 1 at 90%+ health, 0 under: drives the combat mouse blocker (1.17.1)
+local guardCurve
+function NS.GuardCurve(again)
+    if again then guardCurve = nil end
+    if guardCurve ~= nil then return guardCurve end
+    guardCurve = false
+    if not (C_CurveUtil and C_CurveUtil.CreateCurve and UnitHealthPercent) then return false end
+    local ok, c = pcall(C_CurveUtil.CreateCurve)
+    if not ok or not c then return false end
+    if not (c.SetType and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step) then return false end
+    if not pcall(c.SetType, c, Enum.LuaCurveType.Step) then return false end
+    for _, pt in ipairs({ { 0, 0 }, { SWIFT_PCT + 0.001, 1 }, { 1, 1 } }) do
+        if not pcall(c.AddPoint, c, pt[1], pt[2]) then return false end
+    end
+    guardCurve = c
+    return c
+end
+function NS.DrawGuard(b, unit, pct)
+    if not b.guard then return end
+    if pct then b.guard:SetValue(pct > SWIFT_PCT and 1 or 0); return end
+    local c = NS.GuardCurve()
+    local ok, v = false, nil
+    if c then ok, v = pcall(UnitHealthPercent, unit, true, c) end
+    if not ok or v == nil or not pcall(b.guard.SetValue, b.guard, v) then b.guard:SetValue(1) end -- unknown: blocked
+end
 local function CurveColorBar(b, unit)
     if not (C_CurveUtil and C_CurveUtil.CreateColorCurve and UnitHealthPercent and CreateColor) then return false end
     if not hpCurve then
@@ -1219,6 +1255,7 @@ Update = function()
             pcall(b.bar.SetMinMaxValues, b.bar, 0, UnitHealthMax(unit) or 1)
             pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
             pcall(NS.DrawIncoming, b, unit)
+            pcall(NS.DrawGuard, b, unit, m and m.pct)
             if m then b.bar:SetStatusBarColor(HealthColor(pct))
             elseif not CurveColorBar(b, unit) then b.bar:SetStatusBarColor(0.45, 0.5, 0.55) end -- unknown: grey
             pcall(DrawPower, b, unit)
@@ -1461,7 +1498,7 @@ fbTick:SetScript("OnUpdate", function()
         end
     elseif InCombatLockdown() then
         if Once("combat") then
-            Print("in combat TwizHeal only heals someone under 90%: hover the empty (dark) part of their bar in the TwizHeal window and press the key. Full or nearly full bars can't be hovered.")
+            Print("in combat TwizHeal only heals someone under 90%: hover their bar in the TwizHeal window and press the key, or click it. Bars at 90% or more can't be hovered or clicked.")
         end
     else
         Print(("key pressed but nothing was cast on %s - %s"):format(who,
@@ -1476,7 +1513,8 @@ end)
 function NS.SetBlockers(on)
     for _, b in ipairs(bars) do
         for _, bl in ipairs({ b.blockFill, b.blockTop }) do
-            if bl then if on then bl:Show() else bl:Hide() end end
+            if bl and bl == b.blockTop and b.useGuard then bl:Hide()
+            elseif bl then if on then bl:Show() else bl:Hide() end end
         end
     end
 end
@@ -1588,6 +1626,7 @@ SlashCmdList.TWIZHEAL = function(msg)
         Print(("heals found: %d; your health %s; window %s; in group: %s"):format(#ranks,
             safe(hp) and tostring(hp) or "HIDDEN by the game", frame and (frame:IsShown() and "shown" or "hidden") or "not built",
             tostring(IsInGroup and IsInGroup())))
+        Print("combat 90% guard: " .. (NS.GuardCurve() and "whole bar (curve)" or "fallback - only the dark part of a bar under 90%"))
         reported = nil; NS.Update()
     elseif cmd == "ranks" then
         NS.ReadRanks()

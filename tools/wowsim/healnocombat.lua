@@ -22,5 +22,32 @@ assert(b.blockFill:IsShown() and b.blockTop:IsShown())
 SIM.Fire("PLAYER_REGEN_ENABLED")
 assert(not b.blockFill:IsShown() and not b.blockTop:IsShown())
 L("blockers after combat hidden: ok")
+-- 1.17.1: the whole bar is clickable under 90%, blocked at 90%+ (guard bar via a step curve)
+L("guard in use (no curve API in sim -> fallback): " .. tostring(b.useGuard))
+units.party1.hp = 1900; SIM.Advance(0.3)   -- 95% (readable)
+L("tank 95% guard value: " .. tostring(TwizHealBar2.guard:GetValue()))
+assert(TwizHealBar2.guard:GetValue() == 1)
+units.party1.hp = 1700; SIM.Advance(0.3)   -- 85%
+L("tank 85% guard value: " .. tostring(TwizHealBar2.guard:GetValue()))
+assert(TwizHealBar2.guard:GetValue() == 0)
+-- curve API present: hidden health goes through the step curve
+local pts
+C_CurveUtil = C_CurveUtil or {}
+C_CurveUtil.CreateCurve = function() pts = {}; return { SetType = function() end, AddPoint = function(_, x, y) pts[#pts + 1] = { x, y } end } end
+Enum = Enum or {}; Enum.LuaCurveType = Enum.LuaCurveType or { Step = 2, Linear = 0 }
+local realPct = UnitHealthPercent
+UnitHealthPercent = function(u, pred, curve)
+  local p = units[u] and units[u].hp / units[u].max or 1
+  if curve and curve.AddPoint and pts then local v = 0; for _, q in ipairs(pts) do if p >= q[1] then v = q[2] end end; return v end
+  return p
+end
+L("guard curve built: " .. tostring(NS.GuardCurve(true) and true) .. " points " .. #pts)
+NS.DrawGuard(TwizHealBar2, "party1")   -- hidden-health path
+L("hidden 85% -> " .. TwizHealBar2.guard:GetValue())
+units.party1.hp = 1800; NS.DrawGuard(TwizHealBar2, "party1")
+L("hidden 90% -> " .. TwizHealBar2.guard:GetValue())
+units.party1.hp = 1810; NS.DrawGuard(TwizHealBar2, "party1")
+L("hidden 90.5% -> " .. TwizHealBar2.guard:GetValue())
+UnitHealthPercent = realPct
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
