@@ -1,4 +1,4 @@
-TwizHeal 1.19.0 - one hotkey heals whoever needs it most
+TwizHeal 1.20.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -37,6 +37,18 @@ HOTS COUNT
   about to cover. Heals are the smallest rank that covers the rest (/th
   ranks lists your heals with how much each one heals and costs).
 
+TRANQUILITY: 3 OR MORE UNDER 40% (1.20.0)
+  Once you've learned Tranquility (druid, level 30):
+    - out of combat, 3 or more of your group under 40% (in range) -> the main
+      key channels Tranquility (not while moving: Rejuvenation instead).
+    - in combat the game hides health, so TwizHeal can't count: when 3 or
+      more bars show the red under-40% strip, press the new "Tranquility"
+      key (Options > Keybindings > AddOns > TwizHeal), or click any bar with
+      mouse button 5.
+    - the full channel: every TwizHeal key and bar click does nothing while
+      Tranquility is channeling, so mashing keys never cuts it short. Only
+      moving or a silence ends it early.
+
 NATURE'S SWIFTNESS UNDER 40% (1.19.0)
   Once you've learned Nature's Swiftness (Restoration talent):
     - out of combat, anyone under 40% -> Nature's Swiftness, then an instant
@@ -49,8 +61,8 @@ NATURE'S SWIFTNESS UNDER 40% (1.19.0)
       Nature's Swiftness then your biggest Healing Touch, instantly.
       If Nature's Swiftness is on cooldown, that press does nothing - use
       the emergency key instead.
-  Until you learn it, the new key works like the emergency key and no red
-  strip shows.
+  Until you learn it, the new key works like the emergency key. (The red
+  strip shows once you know Nature's Swiftness or Tranquility.)
 
 WHICH SPELL - THE RULES (1.16.0)
   The combo: REGROWTH, then REJUVENATION right after, then SWIFTMEND once

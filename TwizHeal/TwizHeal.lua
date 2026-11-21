@@ -441,6 +441,39 @@ local function Quick()
 end
 NS.Quick = Quick
 
+-- Tranquility (1.20.0): 3 or more group members under 40% -> channel it. Every TwizHeal key and
+-- bar starts with "/stopmacro [channeling:Tranquility]", so pressing them mid-channel never cuts
+-- it short: it runs the full channel unless you move or get silenced.
+local GROUP_HEAL = { DRUID = "Tranquility" }
+local GROUP_PCT, GROUP_COUNT = 0.40, 3
+local function GroupHeal()
+    local _, class = UnitClass("player")
+    local n = GROUP_HEAL[class]
+    if n and KnowsSpell(n) then return n end
+end
+NS.GroupHeal = GroupHeal
+local function Stop()
+    local g = GroupHeal()
+    return g and ("/stopmacro [channeling:" .. g .. "]\n") or ""
+end
+NS.Stop = Stop
+-- how many in the group are under 40% (and in range); nil when the game hides health
+function NS.LowCount()
+    local now = GetTime()
+    if NS.lowAt == now then return NS.lowN end
+    local n, hiddenAny = 0, false
+    for _, u in ipairs(Units()) do
+        if UnitExists(u) and UnitIsConnected(u) and not UnitIsDeadOrGhost(u) then
+            local hp, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
+            if hp and mx and mx > 0 then
+                if hp / mx < GROUP_PCT and InRange(u, ranks[1] and ranks[1].name) then n = n + 1 end
+            else hiddenAny = true end
+        end
+    end
+    NS.lowAt, NS.lowN = now, (n == 0 and hiddenAny) and nil or n
+    return NS.lowN
+end
+
 -- The rules, out of combat (where health and buffs can be read):
 --   below 31%            -> Swiftmend if your Rejuvenation/Regrowth is on them (instant save);
 --                           Rejuvenation first if Swiftmend is ready but nothing is on them yet
@@ -466,6 +499,11 @@ local function OocRule(unit)
     -- emergency keys still cast on demand)
     if pct == nil then return nil, "hidden" end
     local moving = Moving()
+    -- 3+ under 40%: Tranquility (channeled; not while moving)
+    local g = GroupHeal()
+    if g and not moving and SpellReady(g) and (NS.LowCount() or 0) >= GROUP_COUNT then
+        return { name = g, label = g, kind = "group" }, "Tranquility"
+    end
     -- under 40%: Nature's Swiftness, then Healing Touch - instant (1.19.0). Sized to what's
     -- missing after your HoTs (they're low, so usually a big rank).
     local q = Quick()
@@ -627,8 +665,15 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
     local combat = fast or Best("direct", 1) or Best("direct")
     local _, class = UnitClass("player")
     local lines = {}
+    local stop = Stop()
+    if stop ~= "" then lines[#lines + 1] = stop:sub(1, -2) end
     -- druids: drop cat/bear/travel form first (heals can't be cast in them)
     if class == "DRUID" then lines[#lines + 1] = "/cancelform [form]" end
+    if ooc and ooc.kind == "group" then
+        lines[#lines + 1] = "/cast [nocombat] " .. ooc.label
+        ooc = nil -- no single-target heal behind it (moving -> the Rejuvenation line below)
+        lines.group = true
+    end
     if ooc and ooc.swift then lines[#lines + 1] = "/cast [nocombat] " .. ooc.swift end
     if ooc and Downranked(ooc) and (oocUnit or only) then
         -- a smaller rank that still covers what they're missing: cheaper
@@ -688,7 +733,7 @@ local function InstantMacro(unit, only)
     local spell = hot or Best("fast") or Best("direct")
     if not spell then return "" end
     local _, class = UnitClass("player")
-    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    local pre = Stop() .. (class == "DRUID" and "/cancelform [form]\n" or "")
     return pre .. "/cast " .. Chain("", unit, only) .. " " .. spell.label
 end
 NS.InstantMacro = InstantMacro
@@ -701,7 +746,7 @@ local function EmergencyMacro(unit, only)
     local second = saver and saver.label or (fast and fast.label)
     if not hot or not second then return InstantMacro(unit, only) end
     local _, class = UnitClass("player")
-    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    local pre = Stop() .. (class == "DRUID" and "/cancelform [form]\n" or "")
     return pre .. "/castsequence " .. Chain("", unit, only) .. " reset=6 " .. hot.label .. ", " .. second
 end
 NS.EmergencyMacro = EmergencyMacro
@@ -715,10 +760,20 @@ local function QuickMacro(unit, only)
     if not q then return EmergencyMacro(unit, only) end
     local heal = Best(q.heal)
     local _, class = UnitClass("player")
-    local pre = class == "DRUID" and "/cancelform [form]\n" or ""
+    local pre = Stop() .. (class == "DRUID" and "/cancelform [form]\n" or "")
     return pre .. "/cast " .. q.swift .. "\n/cast " .. Chain("", unit, only) .. " " .. heal.label
 end
 NS.QuickMacro = QuickMacro
+
+-- the Tranquility key (1.20.0): for combat, where the game hides health - when 3 or more bars
+-- show the red under-40% strip, press it. Pressing again mid-channel does nothing.
+local function GroupMacro()
+    local g = GroupHeal()
+    if not g then return "" end
+    local _, class = UnitClass("player")
+    return Stop() .. (class == "DRUID" and "/cancelform [form]\n" or "") .. "/cast " .. g
+end
+NS.GroupMacro = GroupMacro
 
 local function SetMacro(b, text)
     if b and b:GetAttribute("macrotext") ~= text then b:SetAttribute("macrotext", text) end
@@ -1274,7 +1329,7 @@ function NS.LowCurve(again)
 end
 function NS.DrawLow(b, unit, pct)
     if not b.low then return end
-    if not Quick() or UnitIsDeadOrGhost(unit) then b.low:SetValue(0); return end
+    if not (Quick() or GroupHeal()) or UnitIsDeadOrGhost(unit) then b.low:SetValue(0); return end
     if pct then b.low:SetValue(pct < NS_PCT and 1 or 0); return end
     local c = NS.LowCurve()
     local ok, v = false, nil
@@ -1403,6 +1458,8 @@ Update = function()
         btn:SetAttribute("basemacro", base); btn:SetAttribute("basemacro2", base2); btn:SetAttribute("basemacro3", base3)
         local base4 = QuickMacro(fallback)
         btn:SetAttribute("basemacro4", base4)
+        local m5 = GroupMacro()
+        if btn:GetAttribute("macrotext5") ~= m5 then btn:SetAttribute("macrotext5", m5) end
         local hovered, hovered2, hovered3, hovered4
         -- each bar keeps its own heals: left-click / main key = the rules, right-click / instant
         -- key = your HoT; hovering a bar points both keys at that person
@@ -1416,6 +1473,7 @@ Update = function()
                 local m4 = QuickMacro(unit, true)
                 if b:GetAttribute("healmacro4") ~= m4 then b:SetAttribute("healmacro4", m4) end
                 if b:GetAttribute("macrotext4") ~= m4 then b:SetAttribute("macrotext4", m4) end -- mouse button 4 on a bar
+                if b:GetAttribute("macrotext5") ~= m5 then b:SetAttribute("macrotext5", m5) end -- mouse button 5: Tranquility
                 if NS.hoverUnit == unit then hovered4 = m4 end
                 SetMacro(b, m)
                 if b:GetAttribute("macrotext2") ~= m2 then b:SetAttribute("macrotext2", m2) end
@@ -1578,6 +1636,8 @@ fbTick:SetScript("OnUpdate", function()
     if press.at == 0 or press.said or GetTime() - press.at < 0.6 then return end
     press.said = true
     if press.done or (db and db.feedback == false) then return end
+    -- pressed during Tranquility: the key held off on purpose
+    if UnitChannelInfo and GroupHeal() and safe((UnitChannelInfo("player"))) == GroupHeal() then return end
     local who = press.who or "?"
     local whose = who == "you" and "your" or (who .. "'s")
     -- the same note over and over is spam: each kind of message at most every 20 seconds
@@ -1680,6 +1740,7 @@ _G["BINDING_NAME_CLICK TwizHealButton:LeftButton"] = "Heal whoever needs it most
 _G["BINDING_NAME_CLICK TwizHealButton:RightButton"] = "Instant heal (Rejuvenation / Renew) - use while moving"
 _G["BINDING_NAME_CLICK TwizHealButton:MiddleButton"] = "Emergency: Rejuvenation, then Swiftmend or Regrowth (press twice)"
 _G["BINDING_NAME_CLICK TwizHealButton:Button4"] = "Nature's Swiftness + Healing Touch (hover someone under 40%)"
+_G["BINDING_NAME_CLICK TwizHealButton:Button5"] = "Tranquility (3+ under 40%; won't cut its own channel)"
 
 SLASH_TWIZHEAL1 = "/th"
 SLASH_TWIZHEAL2 = "/twizheal"

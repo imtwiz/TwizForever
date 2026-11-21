@@ -87,5 +87,29 @@ r = NS.OocRule("party1")
 L(("tank 35%%, no NS learned: %s"):format(r.label))
 L("NS key without NS: " .. tostring(NS.QuickMacro("party1")):gsub("\n", " || "))
 L("binding: " .. tostring(_G["BINDING_NAME_CLICK TwizHealButton:Button4"]))
+-- 1.20.0: 3+ under 40% -> Tranquility; no key cuts the channel
+local info2 = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Tranquility" then return { name = n } end return info2(n) end
+units.player.hp = 300; units.party1.hp = 700; units.party2.hp = 400   -- 30%, 35%, 31%
+NS.lowAt = nil
+local r3, w3 = NS.OocRule("party1")
+L(("3 under 40%%: %s (%s)"):format(r3.label, w3))
+assert(r3.label == "Tranquility")
+SIM.Advance(0.3)
+local k = tostring(TwizHealButton:GetAttribute("macrotext1"))
+L("key: " .. k:gsub("\n", " || "))
+assert(k:find("^/stopmacro %[channeling:Tranquility%]") and k:find("/cast %[nocombat%] Tranquility"))
+L("Tranquility key (button 5): " .. tostring(TwizHealButton:GetAttribute("macrotext5")):gsub("\n", " || "))
+L("emergency key: " .. tostring(TwizHealButton:GetAttribute("macrotext3")):gsub("\n", " || "))
+L("bar1 heal: " .. tostring(TwizHealBar1:GetAttribute("healmacro")):gsub("\n", " || "))
+units.party2.hp = 1300; NS.lowAt = nil
+local r2 = NS.OocRule("party1")
+L(("only 2 under 40%%: %s"):format(r2.label))
+assert(r2.label ~= "Tranquility")
+NS.moving = true; units.party2.hp = 400; NS.lowAt = nil
+L(("3 under 40%%, moving: %s"):format(NS.OocRule("party1").label))
+NS.moving = false
+C_Spell.GetSpellInfo = info2
+units.player.hp = 1000; units.party1.hp = 2000; units.party2.hp = 1300
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
