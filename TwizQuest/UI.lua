@@ -499,6 +499,7 @@ local function Build()
         return {
             { "Plan again", function() NS.Replan() end },
             { "Share All", function() frame.shareAll:Click() end, nil, not IsInGroup() },
+            { "Share this zone's quests (or this dungeon's)", function() NS.ShareZoneCmd() end, nil, not IsInGroup() },
             { synced and "Drop All (off while synced)" or "Drop All", function() frame.dropAll:Click() end, nil, synced },
             { "Drop All incl. dungeon/class", function() NS.DropAllCmd(true) end, nil, synced },
             { "Party: " .. (NS.db.party and "sync on" or "sync off"), function() SlashCmdList.QUESTROUTE(NS.db.party and "party off" or "party on") end },
@@ -895,6 +896,15 @@ end)
 ------------------------------------------------------------------------
 -- Slash commands
 ------------------------------------------------------------------------
+function NS.ShareZoneCmd()
+    local n, why, skipped, here, instance = NS.ShareZone()
+    skipped = skipped or 0
+    local where = here and ((instance and "this dungeon (" or "") .. here .. (instance and ")" or "")) or "here"
+    if why then NS.Print(why .. ".")
+    elseif n == 0 then NS.Print(("no shareable quests for %s%s."):format(where, skipped > 0 and " the group doesn't already have" or ""))
+    else NS.Print(("sharing %d quest%s for %s (one every 0.5s)."):format(n, n == 1 and "" or "s", where)) end
+end
+
 function NS.ShareAllCmd()
     local n, why, skipped = NS.ShareAll()
     skipped = skipped or 0
@@ -1025,6 +1035,7 @@ local function Help()
     print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
     print("  /tq solo         - back to your own route")
     print("  /tq shareall     - offer every shareable quest to your party (Share All button)")
+    print("  /tq sharezone    - offer your quests for the zone you're in (inside a dungeon: only that dungeon's)")
     print("  /tq dropall      - abandon every quest except dungeon and class quests, asks first (Drop All button)")
     print("  /tq dropall dungeons - same, including dungeon and class quests (shift-click Drop All)")
     print("  /tq service      - sell & repair stop when bags are nearly full / gear is breaking (now " .. (NS.db.service and "on" or "off") .. ")")
@@ -1085,6 +1096,8 @@ SlashCmdList.QUESTROUTE = function(msg)
         NS.EndGroupPlan(); return
     elseif cmd == "shareall" then
         NS.ShareAllCmd(); return
+    elseif cmd == "sharezone" or cmd == "zone" then
+        NS.ShareZoneCmd(); return
     elseif cmd == "dropall" then
         NS.DropAllCmd((rest or ""):lower() == "dungeons" or nil); return
     elseif cmd == "party" then

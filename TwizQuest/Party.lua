@@ -487,6 +487,51 @@ function NS.ShareAll()
     return n, nil, skipped
 end
 
+-- Share the quests for where you are: the zone you're in, or - inside a dungeon or raid - only
+-- that instance's quests. A quest belongs to a zone by its quest-log header (the log groups
+-- quests under their zone or dungeon), or by Questie's zone for it.
+local function HereName()
+    if IsInInstance and IsInInstance() and GetInstanceInfo then
+        local name = NS.safe((GetInstanceInfo()))
+        if name and name ~= "" then return name, true end
+    end
+    return NS.safe(GetRealZoneText and GetRealZoneText() or GetZoneText()), false
+end
+local function QuestieZoneName(id)
+    local B = NS.Bridge and NS.Bridge()
+    local DB = B and B.DB
+    if not (DB and DB.QueryQuestSingle) then return nil end
+    local ok, area = pcall(DB.QueryQuestSingle, id, "zoneOrSort")
+    if not ok or type(area) ~= "number" or area <= 0 then return nil end
+    local info = C_Map and C_Map.GetAreaInfo and C_Map.GetAreaInfo(area)
+    return info
+end
+function NS.ShareZone()
+    if not InGroup() then return 0, "join a party first" end
+    local here, instance = HereName()
+    if not here then return 0, "can't tell where you are" end
+    local n, skipped, header = 0, 0, nil
+    local count = C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries() or 0
+    for i = 1, count do
+        local info = C_QuestLog.GetInfo(i)
+        if info and NS.safe(info.isHeader) then
+            header = NS.safe(info.title)
+        else
+            local id = info and NS.safe(info.questID)
+            if id and id > 0 and C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id) then
+                local zone = header
+                if zone ~= here then zone = QuestieZoneName(id) or zone end
+                if zone == here then
+                    if NS.GroupHasAll(id) then skipped = skipped + 1
+                    else shareQ[#shareQ + 1] = id; n = n + 1 end
+                end
+            end
+        end
+    end
+    if n > 0 and not sharing then sharing = true; ShareNext() end
+    return n, nil, skipped, here, instance
+end
+
 -- a quest you just picked up: offer it to the group (skipped when everyone in
 -- the party is synced and already has it)
 function NS.ShareOnPickup(id)

@@ -1,5 +1,11 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.19.0
+  - Share this zone's quests: "more" menu > "Share this zone's quests", or
+    /tq sharezone. Offers your shareable quests for the zone you're in -
+    and inside a dungeon or raid, ONLY that dungeon's quests. Quests the
+    whole group already has are skipped.
+
 NEW IN 1.18.8
   - Fixed an error after kills when the game hides your target's name from
     addons (learning kill XP just skips that kill).
