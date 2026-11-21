@@ -102,7 +102,9 @@ local function HealAmount(id)
     local avg = 0
     local lo, hi = text:match("(%d[%d,]*) to (%d[%d,]*)")
     if lo then avg = (Num(lo) + Num(hi)) / 2 end
+    -- "...175 damage over 12 sec", "...for 32 over 12 sec", "and another 98 over 21 sec"
     local hot, dur = text:match("(%d[%d,]*) damage over (%d+) sec")
+    if not hot then hot, dur = text:match("(%d[%d,]*) over (%d+) sec") end
     hot, dur = Num(hot) or 0, tonumber(dur) or 0
     if avg == 0 and hot == 0 then return nil end
     return avg, hot, dur
@@ -456,6 +458,10 @@ local function OocRule(unit)
     local left = need and math.max(0, need - (incoming or 0)) or nil
     local hotTotal = hot and (hot.total or 0) or 0
     local big = pct and (pct < 0.6 or (hotTotal > 0 and left and left > hotTotal))
+    -- your Regrowth is already on them: top them up with the Healing Touch rank that covers the rest
+    if hasFast and left and left > 0 then
+        return PickRank(left, "direct") or Best("direct"), "Regrowth on"
+    end
     if big then
         if fast and not hasFast then return PickRank(left or need, "fast") or fast, "big gap" end
         return PickRank(left or need, "direct") or Best("direct"), "big gap"
@@ -527,7 +533,14 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     elseif ooc then
         lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label
     end
-    if combat then lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label end
+    -- in combat (no reading auras or health): Regrowth first, then Healing Touch on the next
+    -- presses while that Regrowth ticks; back to Regrowth after 12 s without a press
+    local direct = Best("direct")
+    if combat and fast and direct and combat == fast then
+        lines[#lines + 1] = "/castsequence " .. Chain("combat,", unit, only) .. " reset=12 " .. fast.label .. ", " .. direct.label .. ", " .. direct.label
+    elseif combat then
+        lines[#lines + 1] = "/cast " .. Chain("combat,", unit, only) .. " " .. combat.label
+    end
     -- moving fallback, in and out of combat: if the cast above can't start because you're moving
     -- (Regrowth, Healing Touch), this line casts your instant HoT instead
     -- (out of combat only when the rules picked a heal: nobody above 89% gets one)

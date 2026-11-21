@@ -79,5 +79,15 @@ SIM.Fire("UNIT_SPELLCAST_SENT", "player", "Tank", "guid", 5188)
 L("cast line: " .. tostring(NS.castLine and NS.castLine:GetText()))
 SIM.Fire("UNIT_SPELLCAST_SENT", "player", "Rogue", "guid", 1430)
 L("cast line: " .. tostring(NS.castLine and NS.castLine:GetText()))
+-- 1.14.2: Regrowth already on them -> the right Healing Touch rank
+units.party1.hp = 1700; SIM.hots.party1 = { { "Regrowth", 15 } }; NS.moving = false
+local r = NS.OocRule("party1")
+L(("Regrowth on, tank 85%%: %s rank %s (%s)"):format(r.label, tostring(r.rank), select(2, NS.OocRule("party1"))))
+units.party1.hp = 1000
+r = NS.OocRule("party1")
+L(("Regrowth on, tank 50%%: %s rank %s"):format(r.label, tostring(r.rank)))
+SIM.Advance(0.3)
+L("combat line: " .. (tostring(TwizHealButton:GetAttribute("macrotext1")):match("/castsequence[^\n]+") or "none"))
+units.party1.hp = 2000; SIM.hots.party1 = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

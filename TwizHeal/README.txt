@@ -1,4 +1,4 @@
-TwizHeal 1.14.1 - one hotkey heals whoever needs it most
+TwizHeal 1.14.2 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -53,13 +53,16 @@ WHICH SPELL - THE RULES (1.12.0)
                                   nothing on them: Rejuvenation now, Swiftmend on
                                   the next press. No Swiftmend: Regrowth.
     - you're moving            -> Rejuvenation (instant)
+    - your Regrowth already on -> Healing Touch, the rank that covers what's
+      them                        still missing after Regrowth's ticks
     - big gap (under 60%, or   -> Regrowth (a big heal now plus a HoT); Healing
       more missing than one       Touch if your Regrowth is already ticking
       Rejuvenation heals)
     - small gap, no Rejuv on   -> Rejuvenation (cheap, heals over time)
     - small gap, Rejuv on      -> a small Healing Touch for what it won't cover
   In combat the game locks the key and hides health from addons, so:
-    - main key       -> Regrowth
+    - main key       -> Regrowth, then Healing Touch on the next presses
+                        (back to Regrowth after 12 s without a press)
     - instant key    -> Rejuvenation (use while moving)
     - EMERGENCY key  -> Rejuvenation, then Swiftmend on the 2nd press (both
       (new)             instant). Without Swiftmend: Rejuvenation, then
