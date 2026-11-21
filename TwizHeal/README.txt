@@ -1,4 +1,4 @@
-TwizHeal 1.24.1 - one hotkey heals whoever needs it most
+TwizHeal 1.25.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -45,6 +45,16 @@ HOTS COUNT
   taken off what they're missing, so nobody gets a big heal their HoT was
   about to cover. Heals are the smallest rank that covers the rest (/th
   ranks lists your heals with how much each one heals and costs).
+
+DECURSE (1.25.0)
+  Same rule as TwizBuff: when someone has a debuff you can remove (druid:
+  curses with Remove Curse, poisons with Abolish / Cure Poison), a heal
+  click on their bar - or the heal-the-lowest key - removes it first.
+  Under 40% they get healed first. Abolish Poison already on them counts as
+  handled. The heal-the-lowest key goes to someone with a removable debuff
+  right after anyone in danger (30% or less). Out of combat only: in combat
+  the game hides debuffs and locks the keys - use TwizBuff's cleanse key or
+  your action bar there.
 
 READ LEYLINE AT 75% MANA OR LESS (1.21.0, 75% since 1.22.1)
   Skyborne racial. Out of combat, when your mana is 75% or less and Read

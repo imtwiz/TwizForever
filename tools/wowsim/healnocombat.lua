@@ -158,6 +158,32 @@ units.party1.hp = 2000; SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation"
 local rr, ww = NS.OocRule("party1")
 L(("tank 100%%, both HoTs on: %s rank %s (%s)"):format(rr and rr.label or "-", tostring(rr and rr.rank), tostring(ww)))
 assert(rr and rr.label == "Healing Touch" and rr.rank == 1)
+-- 1.25.0: decurse rule on heal clicks
+local idx0 = C_UnitAuras.GetAuraDataByIndex
+local info4 = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Remove Curse" then return { name = n } end return info4(n) end
+local cursed = { party2 = true }
+C_UnitAuras.GetAuraDataByIndex = function(u, i, filter)
+  if filter and filter:find("HARMFUL") then
+    if cursed[u] and i == 1 then return { name = "Curse of Weakness", dispelName = "Curse" } end
+    return nil
+  end
+  return idx0(u, i, filter)
+end
+units.party1.hp = 2000; units.party2.hp = 1100; SIM.hots.party1 = nil; SIM.hots.party2 = nil
+local rd, wd = NS.OocRule("party2")
+L(("rogue 85%%, cursed: %s (%s)"):format(rd and rd.label or "-", tostring(wd)))
+assert(rd and rd.label == "Remove Curse")
+local pk = NS.Pick(NS.Scan())
+L("pick with a curse on the rogue: " .. tostring(pk and pk.name))
+SIM.Advance(0.3)
+L("bar3 click: " .. tostring(TwizHealBar3 and TwizHealBar3:GetAttribute("healmacro")):gsub("\n", " || "))
+units.party2.hp = 400  -- 31%: heal first
+rd = NS.OocRule("party2")
+L(("rogue 31%%, cursed: %s"):format(rd and rd.label or "-"))
+assert(rd.label ~= "Remove Curse")
+cursed = {}; units.party2.hp = 1300
+C_UnitAuras.GetAuraDataByIndex = idx0; C_Spell.GetSpellInfo = info4
 -- 1.21.0: mana under 50% -> Read Leyline when ready (Skyborne racial)
 local info3 = C_Spell.GetSpellInfo
 C_Spell.GetSpellInfo = function(n) if n == "Read Leyline" then return { name = n } end return info3(n) end

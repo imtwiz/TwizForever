@@ -284,6 +284,46 @@ local function MyHoTs(unit)
 end
 NS.MyHoTs = MyHoTs
 
+-- DECURSE (1.25.0, the same rule as TwizBuff): a debuff you can remove -> remove it first
+local DISPELS = {
+    DRUID   = { Curse = { "Remove Curse" }, Poison = { "Abolish Poison", "Cure Poison" } },
+    PRIEST  = { Magic = { "Dispel Magic" }, Disease = { "Abolish Disease", "Cure Disease" } },
+    MAGE    = { Curse = { "Remove Lesser Curse", "Remove Curse" } },
+    PALADIN = { Magic = { "Cleanse" }, Poison = { "Cleanse", "Purify" }, Disease = { "Cleanse", "Purify" } },
+    SHAMAN  = { Poison = { "Cure Poison" }, Disease = { "Cure Disease" } },
+}
+local ABOLISH = { Poison = "Abolish Poison", Disease = "Abolish Disease" }
+local DISPEL_ORDER = { Curse = 1, Poison = 2, Disease = 3, Magic = 4 }
+local function Known(name)
+    if C_Spell and C_Spell.GetSpellInfo then local ok, i = pcall(C_Spell.GetSpellInfo, name); if ok and i then return true end end
+    if GetSpellInfo then local ok, n = pcall(GetSpellInfo, name); return ok and n ~= nil end
+    return false
+end
+-- the spell that removes something on them, and what kind it is (nil when nothing / can't read)
+function NS.Dispel(unit)
+    local _, class = UnitClass("player")
+    local can = DISPELS[class]
+    if not can or not UnitExists(unit) or UnitIsDeadOrGhost(unit) then return end
+    local best, bestKind
+    for i = 1, 40 do
+        local a, blocked = AuraAt(unit, i, "HARMFUL")
+        if blocked or not a then break end
+        local kind = safe(a.dispelName)
+        local list = kind and can[kind]
+        if list then
+            local sp
+            for _, n in ipairs(list) do if Known(n) then sp = n; break end end
+            -- Abolish Poison / Disease already on them is clearing it
+            if sp and ABOLISH[kind] == sp then
+                local ok, have = pcall(function() return C_UnitAuras.GetAuraDataBySpellName(unit, sp, "HELPFUL") end)
+                if ok and have then sp = nil end
+            end
+            if sp and (not bestKind or DISPEL_ORDER[kind] < DISPEL_ORDER[bestKind]) then best, bestKind = sp, kind end
+        end
+    end
+    return best, bestKind
+end
+
 -- everyone, with health and role: { unit, name, hp, max, pct, deficit, role, inRange }
 function NS.Scan()
     local out = {}
@@ -328,6 +368,12 @@ function NS.Pick(list)
     end
     table.sort(danger, function(a, b) return a.pct < b.pct end)
     if danger[1] then return danger[1], true end
+    -- then a curse / poison you can remove (1.25.0)
+    if not InCombatLockdown() then
+        for _, m in ipairs(list) do
+            if m.inRange and NS.Dispel(m.unit) then return m, false end
+        end
+    end
     -- the lowest first (after the HoTs already ticking on them); role only breaks near-ties
     local function eff(m) return m.max and m.max > 0 and (m.max - m.need) / m.max or m.pct end
     table.sort(need, function(a, b)
@@ -534,6 +580,11 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
+    -- decurse (1.25.0): a curse/poison you can remove -> remove it (heals come first under 40%)
+    if not InCombatLockdown() and not (pct and pct < NS_PCT) then
+        local sp, kind = NS.Dispel(u)
+        if sp and SpellReady(sp) then return { name = sp, label = sp, kind = "dispel" }, "remove " .. kind:lower() end
+    end
     -- your mana at 75% or less: Read Leyline when it's ready - unless someone is under 40% (save
     -- them first) or you're moving (it has a cast time)
     local regen = Regen()
