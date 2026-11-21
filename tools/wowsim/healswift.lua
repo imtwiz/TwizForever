@@ -57,5 +57,21 @@ units.party2.hp = 1050                            -- rogue ~81%
 p = NS.Pick(NS.Scan())
 L("tank 80%, rogue 81% (near-tie) -> pick: " .. tostring(p and p.name))
 units.party2.hp = 1300; units.party1.hp = 2000
+-- 1.14.0: lowest marker (health readable), color curve (health hidden)
+units.party1.hp = 1600; units.party2.hp = 650; SIM.Advance(0.3)
+L(("LOWEST marker: tank %s, rogue %s"):format(tostring(TwizHealBar2.lowMark and TwizHealBar2.lowMark.__shown), tostring(TwizHealBar3.lowMark and TwizHealBar3.lowMark.__shown)))
+-- hidden health: the game turns it into a color for us
+local evaluated = 0
+C_CurveUtil = { CreateColorCurve = function() return { SetType = function() end, AddPoint = function() end } end }
+CreateColor = function(r, g, b) return { r = r, g = g, b = b } end
+Enum = Enum or {}; Enum.LuaCurveType = { Linear = 1 }
+UnitHealthPercent = function(u, pred, curve) evaluated = evaluated + 1; return { GetRGB = function() return 1, 0.2, 0.2 end } end
+issecretvalue = function(v) return v == "SECRET" end
+local realHealth = UnitHealth
+UnitHealth = function(u) return "SECRET" end
+SIM.Advance(0.3)
+L(("health hidden: color from the game's curve for %d bars; rogue LOWEST marker now %s"):format(evaluated, tostring(TwizHealBar3.lowMark.__shown)))
+UnitHealth = realHealth; issecretvalue = function() return false end
+units.party2.hp = 1300; units.party1.hp = 2000
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

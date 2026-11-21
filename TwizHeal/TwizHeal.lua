@@ -1030,6 +1030,44 @@ local function HealthColor(pct)
     return 0.16, 0.78, 0.30
 end
 
+-- When the game hides health (in combat), addons can't compare it - but the game can still
+-- turn it into a color for us: a color curve evaluated by the game (green -> orange -> red).
+-- The bar shows who's low at a glance; hover the reddest bar and press your key.
+local hpCurve
+local function CurveColorBar(b, unit)
+    if not (C_CurveUtil and C_CurveUtil.CreateColorCurve and UnitHealthPercent and CreateColor) then return false end
+    if not hpCurve then
+        local ok, c = pcall(C_CurveUtil.CreateColorCurve)
+        if not ok or not c then return false end
+        if c.SetType and Enum and Enum.LuaCurveType then pcall(c.SetType, c, Enum.LuaCurveType.Linear) end
+        for _, pt in ipairs({ { 0, 1, 0.2, 0.2 }, { 0.35, 1, 0.4, 0.4 }, { 0.6, 1, 0.69, 0.4 }, { 0.89, 0.16, 0.78, 0.30 }, { 1, 0.16, 0.78, 0.30 } }) do
+            pcall(c.AddPoint, c, pt[1], CreateColor(pt[2], pt[3], pt[4]))
+        end
+        hpCurve = c
+    end
+    local ok, col = pcall(UnitHealthPercent, unit, true, hpCurve)
+    if not ok or not col or not col.GetRGB then return false end
+    local tex = b.bar:GetStatusBarTexture()
+    return tex and pcall(function() tex:SetVertexColor(col:GetRGB()) end) or false
+end
+NS.CurveColorBar = CurveColorBar
+
+-- the "LOWEST" marker: a pulsing red frame around the lowest bar (when health can be read)
+local function LowMark(b)
+    if b.lowMark then return b.lowMark end
+    local f = CreateFrame("Frame", nil, b, "BackdropTemplate")
+    f:SetPoint("TOPLEFT", -3, 3); f:SetPoint("BOTTOMRIGHT", 3, -3)
+    f:SetFrameLevel(b:GetFrameLevel() + 8)
+    if f.SetBackdrop then f:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 }); f:SetBackdropBorderColor(1, 0.25, 0.25, 1) end
+    f.label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.label:SetPoint("RIGHT", f, "LEFT", -2, 0); f.label:SetText("|cffff5050LOWEST >|r")
+    local t = 0
+    f:SetScript("OnUpdate", function(self, e) t = t + e; self:SetAlpha(0.55 + 0.45 * math.abs(math.sin(t * 4))) end)
+    f:Hide()
+    b.lowMark = f
+    return f
+end
+
 local Update
 local reported
 function NS.Update()
@@ -1050,6 +1088,11 @@ Update = function()
     -- bars
     local byUnit = {}
     for _, m in ipairs(list) do byUnit[m.unit] = m end
+    -- the lowest one worth a heal (only when health can be read)
+    local lowest
+    for _, m in ipairs(list) do
+        if m.inRange and m.pct <= (db.threshold or 0.89) and not UnitIsDeadOrGhost(m.unit) and (not lowest or m.pct < lowest.pct) then lowest = m end
+    end
     local shown = 0
     for i, b in ipairs(bars) do
         local unit = b:GetAttribute("unit")
@@ -1061,7 +1104,8 @@ Update = function()
             pcall(b.bar.SetMinMaxValues, b.bar, 0, UnitHealthMax(unit) or 1)
             pcall(b.bar.SetValue, b.bar, UnitHealth(unit) or 0)
             pcall(NS.DrawIncoming, b, unit)
-            b.bar:SetStatusBarColor(HealthColor(pct))
+            if m then b.bar:SetStatusBarColor(HealthColor(pct))
+            elseif not CurveColorBar(b, unit) then b.bar:SetStatusBarColor(0.45, 0.5, 0.55) end -- unknown: grey
             pcall(DrawPower, b, unit)
             local dead = UnitIsDeadOrGhost(unit)
             b.name:SetText(("%s%s"):format(safe(UnitName(unit)) or unit, dead and " dead" or ""))
@@ -1071,6 +1115,8 @@ Update = function()
             pcall(NS.Arrange, b)
             pcall(NS.DrawHPText, b, unit)
             pcall(NS.DrawAbsorb, b, unit)
+            local lm = LowMark(b)
+            if lowest and lowest.unit == unit and #list > 1 then lm:Show() else lm:Hide() end
             local picked = pick and pick.unit == unit
             if b.SetBackdropBorderColor then
                 if picked then b:SetBackdropBorderColor(0.941, 0.769, 0.361, 1) else b:SetBackdropBorderColor(0.173, 0.192, 0.227, 1) end

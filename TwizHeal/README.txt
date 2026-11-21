@@ -1,4 +1,4 @@
-TwizHeal 1.13.2 - one hotkey heals whoever needs it most
+TwizHeal 1.14.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -7,9 +7,14 @@ WHO GETS HEALED
   threshold), the LOWEST health goes first (1.13.2) - counting the heals
   already ticking on them. Role only breaks near-ties (within 5%): tank,
   then healer, then damage dealer. Anyone in danger (30% or less) first.
-  In combat the game hides health and locks the key: hover the person (a
-  bar in the party window, or their party frame) to heal them; without a
-  hover the key heals whoever was lowest when the fight started.
+  In combat the game hides health and locks the key, so no addon can pick
+  the lowest by itself. TwizHeal shows you instead (1.14.0):
+    - bars are colored by health even when it's hidden (the game turns it
+      into a color): green, orange, red
+    - a pulsing red "LOWEST >" frame marks the lowest bar when health can
+      be read
+  Hover the red / marked bar and press your key - that heals them. Without
+  a hover the key heals whoever was lowest when the fight started.
   Tanks are whoever has the tank role, whoever enemies are attacking, or
   warriors; healers are those with the healer role, or priests.
 
