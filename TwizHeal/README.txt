@@ -1,4 +1,4 @@
-TwizHeal 1.20.0 - one hotkey heals whoever needs it most
+TwizHeal 1.20.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -72,6 +72,10 @@ WHICH SPELL - THE RULES (1.16.0)
                                    nothing more once both are on. With nobody
                                    hurt, the key pre-HoTs everyone in turn: tank,
                                    then healer, then damage. Out of combat only.
+                                   1.20.1: works even when the game hides their
+                                   health or other people's buffs (only YOUR
+                                   HoTs are checked). /th prehot shows, for each
+                                   person, what TwizHeal sees and what it'd cast.
     - your Regrowth on them,    -> Rejuvenation (instant)
       no Rejuvenation yet
     - your HoTs on them, 90% or -> Swiftmend, when it's off cooldown

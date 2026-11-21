@@ -111,5 +111,33 @@ L(("3 under 40%%, moving: %s"):format(NS.OocRule("party1").label))
 NS.moving = false
 C_Spell.GetSpellInfo = info2
 units.player.hp = 1000; units.party1.hp = 2000; units.party2.hp = 1300
+-- 1.20.1: pre-HoT with someone else's hidden buff on them, and with health hidden
+issecretvalue = function(v) return v == "SECRET" end
+local realIdx = C_UnitAuras.GetAuraDataByIndex
+C_UnitAuras.GetAuraDataByIndex = function(u, i, filter)
+  local list = { { name = "SECRET", sourceUnit = "SECRET" } }   -- a priest's buff the game hides
+  for _, h in ipairs(SIM.hots[u] or {}) do list[#list + 1] = { name = h[1], sourceUnit = "player", expirationTime = GetTime() + h[2] } end
+  if filter and filter:find("PLAYER") then table.remove(list, 1) end
+  return list[i]
+end
+SIM.hots.party1 = nil; SIM.hots.party2 = nil; SIM.hots.player = nil
+L("hidden priest buff, all full: " .. who())
+assert(who():find("Tank: Regrowth"))
+SIM.hots.party1 = { { "Regrowth", 21 } }
+L("tank has Regrowth:            " .. who())
+local realH = UnitHealth
+UnitHealth = function(u) return "SECRET" end
+SIM.hots.party1 = nil
+local r = NS.OocRule("party1")
+L("health hidden, nothing on: " .. tostring(r and r.label))
+assert(r and r.label == "Regrowth")
+SIM.hots.party1 = { { "Regrowth", 21 }, { "Rejuvenation", 12 } }
+L("health hidden, both on:    " .. tostring(NS.OocRule("party1") and NS.OocRule("party1").label))
+SIM.hots.party1 = nil
+local p = NS.Pick(NS.Scan())
+L("health hidden, pick: " .. tostring(p and p.name))
+SIM.Fire("PLAYER_ENTERING_WORLD")
+SlashCmdList["TWIZHEAL"]("prehot")
+UnitHealth = realH; C_UnitAuras.GetAuraDataByIndex = realIdx
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

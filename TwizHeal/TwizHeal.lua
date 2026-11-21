@@ -247,13 +247,15 @@ local function MyHoTs(unit)
     local _, class = UnitClass("player")
     local set = SPELLS[class] or {}
     local watch = { [set.hot or "-"] = true, [set.fast or "-"] = true }
+    -- only YOUR buffs (1.20.1): other people's buffs can be hidden by the game, and one hidden
+    -- buff used to make TwizHeal give up on that person (no pre-HoT, no combo)
     for i = 1, 40 do
-        local a, blocked = AuraAt(unit, i, "HELPFUL")
+        local a, blocked = AuraAt(unit, i, "HELPFUL|PLAYER")
         if blocked then hidden = true end
         if not a then break end
         local name, exp, src = safe(a.name), safe(a.expirationTime), safe(a.sourceUnit)
         if not name then hidden = true end
-        if name and watch[name] and (src == "player" or safe(a.isFromPlayerOrPlayerPet)) then
+        if name and watch[name] and (src == nil or src == "player" or safe(a.isFromPlayerOrPlayerPet)) then
             local left = exp and exp > 0 and (exp - GetTime()) or 0
             out[name] = math.max(0, left)
             -- the strongest rank you know of it, scaled by the time left
@@ -262,6 +264,21 @@ local function MyHoTs(unit)
                 if r.name == name and r.hot > 0 and r.dur > 0 then incoming = incoming + r.hot * math.min(1, left / r.dur); break end
             end
         end
+    end
+    -- still unsure: ask the game for each of your HoTs by name
+    if hidden and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
+        local sure = true
+        for name in pairs(watch) do
+            if name ~= "-" and not out[name] then
+                local ok, a = pcall(C_UnitAuras.GetAuraDataBySpellName, unit, name, "HELPFUL|PLAYER")
+                if not ok then sure = false
+                elseif a then
+                    local exp = safe(a.expirationTime)
+                    out[name] = exp and exp > 0 and math.max(0, exp - GetTime()) or 1
+                end
+            end
+        end
+        if sure then hidden = false end
     end
     return out, incoming, hidden
 end
@@ -328,11 +345,19 @@ function NS.Pick(list)
     if not InCombatLockdown() then
         local _, class = UnitClass("player")
         local set = SPELLS[class] or {}
-        local pre = {}
+        local pre, seen = {}, {}
+        local function Missing(hots) return (set.fast and Has("fast") and not hots[set.fast]) or (set.hot and Has("hot") and not hots[set.hot]) end
         for _, m in ipairs(list) do
-            if m.inRange and not m.hotsHidden and m.hots
-                and ((set.fast and Has("fast") and not m.hots[set.fast]) or (set.hot and Has("hot") and not m.hots[set.hot])) then
-                pre[#pre + 1] = m
+            seen[m.unit] = true
+            if m.inRange and not m.hotsHidden and m.hots and Missing(m.hots) then pre[#pre + 1] = m end
+        end
+        -- people whose health the game hides: their buffs may still be readable
+        for _, u in ipairs(Units()) do
+            if not seen[u] and UnitExists(u) and UnitIsConnected(u) and not UnitIsDeadOrGhost(u) and InRange(u, ranks[1] and ranks[1].name) then
+                local hots, _, hid = MyHoTs(u)
+                if not hid and Missing(hots) then
+                    pre[#pre + 1] = { unit = u, name = safe(UnitName(u)) or u, pct = 1, role = Role(u), hots = hots }
+                end
             end
         end
         table.sort(pre, function(a, b)
@@ -495,6 +520,11 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
+    -- health hidden but your buffs readable, out of combat: pre-HoT anyway (1.20.1)
+    if pct == nil and not hidden and not InCombatLockdown() and UnitExists(u) and not UnitIsDeadOrGhost(u) then
+        if fast and not hots[fast.name] and not Moving() then return fast, "pre-HoT" end
+        if hot and not hots[hot.name] then return hot, "pre-HoT" end
+    end
     -- the game hides their health: it could be 95%, so no automatic heal (the instant and
     -- emergency keys still cast on demand)
     if pct == nil then return nil, "hidden" end
@@ -1795,6 +1825,23 @@ SlashCmdList.TWIZHEAL = function(msg)
             tostring(IsInGroup and IsInGroup())))
         Print("combat 90% guard: " .. (NS.GuardCurve() and "whole bar (curve)" or "fallback - only the dark part of a bar under 90%"))
         reported = nil; NS.Update()
+    elseif cmd == "prehot" then
+        -- why each person does or doesn't get a pre-HoT
+        for _, u in ipairs(Units()) do
+            if UnitExists(u) then
+                local hots, _, hid = MyHoTs(u)
+                local hp = safe(UnitHealth(u)); local mx = safe(UnitHealthMax(u))
+                local list = {}
+                for n in pairs(hots) do list[#list + 1] = n end
+                local r, why = OocRule(u)
+                Print(("%s: health %s, your buffs %s, your HoTs on them: %s -> %s (%s)"):format(safe(UnitName(u)) or u,
+                    (hp and mx and mx > 0) and (math.floor(hp / mx * 100 + 0.5) .. "%") or "HIDDEN",
+                    hid and "HIDDEN" or "readable", #list > 0 and table.concat(list, ", ") or "none",
+                    r and r.label or "nothing", tostring(why)))
+            end
+        end
+        local p = NS.Pick(NS.Scan())
+        Print("key goes to: " .. tostring(p and p.name or NS.fallback))
     elseif cmd == "ranks" then
         NS.ReadRanks()
         if #ranks == 0 then Print("no direct heals found in your spellbook.") end
