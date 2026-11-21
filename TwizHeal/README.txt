@@ -1,4 +1,4 @@
-TwizHeal 1.14.4 - one hotkey heals whoever needs it most
+TwizHeal 1.15.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -66,9 +66,14 @@ WHICH SPELL - THE RULES (1.12.0)
     - small gap, no Rejuv on   -> Rejuvenation (cheap, heals over time)
     - small gap, Rejuv on      -> a small Healing Touch for what it won't cover
   In combat the game locks the key and hides health from addons, so:
-    - main key       -> Regrowth, Rejuvenation, then Healing Touch on the
-                        next presses (back to Regrowth after 12 s without a
-                        press). Swiftmend stays on the emergency key in
+    - main key       -> Regrowth, Rejuvenation, then Healing Touch, Healing
+                        Touch on the next presses (back to Regrowth after 12 s
+                        without a press). New in 1.15.0: the Healing Touch
+                        here is a SMALLER rank - about 20% of your group's
+                        biggest health pool, never your top rank (health can't
+                        be read in combat, so a top-rank heal would often be
+                        wasted). Pick it yourself: /th combatrank 3. A press
+                        that fails (e.g. moving) moves on to the next spell. Swiftmend stays on the emergency key in
                         combat - in a sequence, one on cooldown would stall it.
     - instant key    -> Rejuvenation (use while moving)
     - EMERGENCY key  -> Rejuvenation, then Swiftmend on the 2nd press (both

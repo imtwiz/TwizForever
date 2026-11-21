@@ -528,6 +528,67 @@ local function Downranked(r)
 end
 NS.Downranked = Downranked
 
+-- In combat: our own spell cycle (Regrowth, Rejuvenation, Healing Touch, Healing Touch),
+-- run by the game's secure code on each press, so it can cast a smaller Healing Touch rank
+-- (/castsequence only takes names = always your top rank). Each press advances; 12 s
+-- without a press starts over; the target is your mouseover, else friendly target, else
+-- the fallback - decided at the moment you press.
+local secureHeader
+local cycleButtons = {}
+-- the Healing Touch rank used in combat (health can't be read there): /th combatrank N, or
+-- the smallest rank that heals about 20% of the biggest health pool, below your top rank
+local function CombatDirect()
+    local direct = {}
+    for _, r in ipairs(ranks) do if r.kind == "direct" and r.id then direct[#direct + 1] = r end end
+    if #direct == 0 then return nil end
+    table.sort(direct, function(a, b) return a.total < b.total end)
+    if db and db.combatRank then
+        for _, r in ipairs(direct) do if r.rank == db.combatRank and r.name == direct[#direct].name then return r end end
+    end
+    local biggest = 0
+    for _, u in ipairs(Units()) do local m = safe(UnitHealthMax(u)); if m and m > biggest then biggest = m end end
+    -- automatic: about 20% of the biggest health pool, but never your top rank (that one's for
+    -- out of combat, where TwizHeal can see a big gap) - /th combatrank N to choose
+    local pick = direct[math.max(1, math.ceil(#direct / 2))]
+    if biggest > 0 then
+        pick = direct[#direct]
+        for _, r in ipairs(direct) do if r.total >= biggest * 0.2 then pick = r; break end end
+    end
+    if pick == direct[#direct] and #direct > 1 then pick = direct[#direct - 1] end
+    return pick
+end
+NS.CombatDirect = CombatDirect
+local function CycleButton(key, unitopts, ids)
+    if not (SecureHandlerWrapScript and CreateFrame) then return nil end
+    local b = cycleButtons[key]
+    if not b then
+        if not secureHeader then secureHeader = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate") end
+        b = CreateFrame("Button", "TwizHealCycle" .. key, UIParent, "SecureActionButtonTemplate")
+        b:RegisterForClicks("AnyUp", "AnyDown")
+        b:SetAttribute("type", "spell")
+        b:Hide()
+        local ok = pcall(SecureHandlerWrapScript, b, "OnClick", secureHeader, [[
+            local list = self:GetAttribute("cycleids")
+            if not list then return end
+            local ids = newtable(strsplit(",", list))
+            local n = self:GetAttribute("cyclen") or 0
+            local now = GetTime()
+            if now - (self:GetAttribute("cyclet") or 0) > 12 then n = 0 end
+            n = n % #ids + 1
+            self:SetAttribute("cyclen", n)
+            self:SetAttribute("cyclet", now)
+            self:SetAttribute("spell", tonumber(ids[n]))
+            self:SetAttribute("unit", SecureCmdOptionParse(self:GetAttribute("unitopts")))
+        ]])
+        if not ok then return nil end
+        cycleButtons[key] = b
+    end
+    if b:GetAttribute("cycleids") ~= ids then b:SetAttribute("cycleids", ids) end
+    if b:GetAttribute("unitopts") ~= unitopts then b:SetAttribute("unitopts", unitopts) end
+    return b
+end
+NS.CycleButton = CycleButton
+
 local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     local fast, hot = Best("fast"), Best("hot")
     local combat = fast or Best("direct", 1) or Best("direct")
@@ -549,7 +610,19 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     -- next presses; back to Regrowth after 12 s without a press. (Swiftmend stays on the
     -- emergency key: in a sequence, a Swiftmend on cooldown would stall it.)
     local direct = Best("direct")
-    if combat and fast and direct and combat == fast then
+    local cd = CombatDirect()
+    local cyc
+    if combat and fast and fast.id and cd and combat == fast then
+        local ids = { fast.id }
+        if hot and hot.id then ids[#ids + 1] = hot.id end
+        ids[#ids + 1] = cd.id; ids[#ids + 1] = cd.id
+        local opts = only and unit or ("[@mouseover,help,nodead] mouseover; [@target,help,nodead] target; " .. unit)
+        cyc = CycleButton(castKey or "Key", opts, table.concat(ids, ","))
+    end
+    if cyc then
+        local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+        lines[#lines + 1] = "/click [combat] " .. cyc:GetName() .. (keyDown and " LeftButton 1" or "")
+    elseif combat and fast and direct and combat == fast then
         -- Regrowth, then Rejuvenation right after (instant), then Healing Touch
         local seq = { fast.label }
         if hot then seq[#seq + 1] = hot.label end
@@ -1450,6 +1523,11 @@ SlashCmdList.TWIZHEAL = function(msg)
         db.danger = math.max(0.05, math.min(n / 100, 0.9)); Print(("anyone at %d%% or less is healed first, whatever their role"):format(db.danger * 100))
     elseif cmd == "threshold" and n then
         db.threshold = math.max(0.3, math.min(n / 100, 1)); Print(("people below %d%% are worth a heal"):format(db.threshold * 100))
+    elseif cmd == "combatrank" then
+        db.combatRank = n and math.floor(n) or nil
+        local r = CombatDirect()
+        Print(("Healing Touch in combat: %s"):format(r and ("rank " .. tostring(r.rank) .. (db.combatRank and "" or " (automatic: about 20% of the biggest health pool, below your top rank)")) or "?"))
+        NS.Update()
     elseif cmd == "castinfo" then
         db.castInfo = db.castInfo == false
         Print("show which heal rank you cast: " .. (db.castInfo and "on" or "off"))
