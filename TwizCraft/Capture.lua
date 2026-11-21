@@ -239,8 +239,19 @@ local function ReadNext()
     local function Try()
         tries = tries + 1
         local n = NS.Capture and NS.Capture()
-        if (n and n > 0) or tries >= 6 then
+        if (n and n > 0) or tries >= 10 then
             CloseProfession()
+            -- the recipe list didn't load in time: try that profession again later (up to 3 times)
+            if not (n and n > 0) then
+                p.attempts = (p.attempts or 0) + 1
+                if p.attempts < 3 then
+                    C_Timer.After(15, function()
+                        readQueue = readQueue or {}
+                        readQueue[#readQueue + 1] = p
+                        if not reading then reading = true; ReadNext() end
+                    end)
+                end
+            end
             C_Timer.After(0.5, ReadNext)
         else
             C_Timer.After(0.5, Try)
@@ -249,12 +260,16 @@ local function ReadNext()
     C_Timer.After(0.6, Try)
 end
 
-function NS.ReadAllProfessions(force)
-    if reading then return end
+-- onlyLine: read just that profession (a friend asked for it)
+function NS.ReadAllProfessions(force, onlyLine)
+    if reading then
+        if onlyLine then C_Timer.After(10, function() NS.ReadAllProfessions(force, onlyLine) end) end
+        return
+    end
     local c = NS.Char()
     readQueue = {}
     for _, p in ipairs(NS.Professions()) do
-        if p.line and not GATHERING[p.name] then
+        if p.line and not GATHERING[p.name] and (not onlyLine or p.line == onlyLine) then
             local have = c.profs[p.line]
             if force or not have or (have.count or 0) == 0 or (have.skill and have.skill ~= p.skill) then
                 readQueue[#readQueue + 1] = p

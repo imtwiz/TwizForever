@@ -9,7 +9,7 @@
 local ADDON, NS = ...
 
 local PREFIX = "TWZC"
-local VERSION = 2
+local VERSION = 3 -- 3: friends can ask each other to read a profession ("W")
 NS.partyProfs = {}       -- [name] = { profs = { [line] = { name, skill, max, recipes = { [id] = outItemID }, mats = { [id] = { made, {rid, qty}... } } } }, inv = { [itemID] = n }, synced }
 
 local function Ago(t)
@@ -22,6 +22,12 @@ end
 -- offline friends' materials count unless you untick "Count offline friends"
 local function Counts(m) return m.online or not (NS.db and NS.db.friendsOnlineOnly) end
 local function Count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
+local GATHER = { Herbalism = true, Skinning = true, Mining = true, Fishing = true, Archaeology = true }
+-- why a friend's crafting profession shows no recipes
+local function NotReadNote(m)
+    if (m.version or 0) < 3 then return "recipes not read yet - they need to open it once (or update TwizCraft)" end
+    return "recipes not read yet - asked their TwizCraft to read it"
+end
 -- a unit name without its realm ("Bob-SomeRealm" -> "Bob")
 local function Short(name) return name and (name:gsub("%-.*$", "")) or name end
 -- dungeon-finder groups talk on INSTANCE_CHAT, normal parties on PARTY
@@ -252,6 +258,16 @@ local function OnMessage(msg, sender)
         if NS.OnOrderMessage then NS.OnOrderMessage(kind, rest, who) end
         return
     end
+    if kind == "H" or kind == "B" then m.version = tonumber(rest) or m.version end
+    if kind == "W" then
+        -- a friend sees one of your professions with no recipes: read it now and send it
+        local line, target = rest:match("^(%d+)|(.+)$")
+        local me = NS.safe(UnitName("player"))
+        if line and me and (Norm(target) == Norm(me) or Fits(Norm(target), Norm(me))) and NS.ReadAllProfessions then
+            NS.ReadAllProfessions(true, tonumber(line))
+        end
+        return
+    end
     if kind == "H" then
         if GetTime() - lastFull > 3 then lastFull = GetTime(); C_Timer.After(0.5 + math.random(), SendAll) end
     elseif kind == "B" then
@@ -299,6 +315,14 @@ local function OnMessage(msg, sender)
             table.sort(names)
             NS.Print(("%s's professions: %s (/tc party to browse)."):format(who, #names > 0 and table.concat(names, ", ") or "none"))
         end
+        -- a crafting profession they sent with no recipes: ask their TwizCraft to read it
+        m.asked = m.asked or {}
+        for line, p in pairs(m.profs) do
+            if Count(p.recipes) == 0 and not GATHER[p.name] and not m.asked[line] and (m.version or 0) >= 3 then
+                m.asked[line] = true
+                Send(("W|%d|%s"):format(line, who))
+            end
+        end
         if NS.RefreshPartyCrafters then NS.RefreshPartyCrafters() end
         if NS.RefreshUI then NS.RefreshUI() end
     end
@@ -327,6 +351,8 @@ local function RosterChanged()
     end
     members = now
     if joined then
+        -- read any of your professions that still has no recipes, so the new member sees them
+        if NS.ReadAllProfessions then C_Timer.After(4, function() NS.ReadAllProfessions() end) end
         Send("H|" .. VERSION)
         lastFull = GetTime(); C_Timer.After(1, SendAll)
     end
@@ -485,7 +511,7 @@ local function Rows()
             local gathering = (p.name == "Herbalism" or p.name == "Skinning" or p.name == "Mining" or p.name == "Fishing")
             if (f == "" and not makeableOnly) or #list > 0 or (profHit and not makeableOnly) then
                 local note = Count(p.recipes) > 0 and ("%d recipes"):format(Count(p.recipes))
-                    or (gathering and "gathering" or "recipes not read yet")
+                    or (gathering and "gathering" or NotReadNote(m))
                 rows[#rows + 1] = { kind = "prof", key = key, text = ("  %s %s |cff66ff66%d/%d|r |cff999999%s|r"):format(
                     Count(p.recipes) > 0 and (expanded and "-" or "+") or " ", p.name, p.skill, p.max, note) }
                 if expanded then
@@ -648,7 +674,7 @@ function NS.FindFriends(text)
                 found = found + 1
                 print(("|cff66ccff%s|r has %s %d/%d (%s)%s"):format(name, p.name, p.skill or 0, p.max or 0,
                     Count(p.recipes) > 0 and (Count(p.recipes) .. " recipes")
-                        or ((p.name == "Herbalism" or p.name == "Skinning" or p.name == "Mining" or p.name == "Fishing") and "gathering" or "recipes not read yet"),
+                        or ((p.name == "Herbalism" or p.name == "Skinning" or p.name == "Mining" or p.name == "Fishing") and "gathering" or NotReadNote(m)),
                     m.online and "" or (" - offline, synced " .. Ago(m.at))))
             end
             for id, out in pairs(p.recipes or {}) do

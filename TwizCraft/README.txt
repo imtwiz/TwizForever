@@ -1,5 +1,18 @@
 TwizCraft 1.4.0 - the cheapest way to level your professions
 
+NEW IN 1.14.0 - FRIENDS' RECIPES FILL IN BY THEMSELVES
+- "recipes not read yet" meant a friend's TwizCraft had never read that
+  profession (they never opened it, or the automatic read at login didn't
+  get the recipe list in time). Now:
+  - When a friend's crafting profession arrives with no recipes, your
+    TwizCraft asks theirs to read it - it opens and closes the profession
+    by itself and sends the recipes over. Both of you need 1.14.0.
+  - The automatic read waits longer for the recipe list and tries a
+    profession again (up to 3 times) when it comes back empty.
+  - Joining a group re-reads any of your professions still missing recipes.
+  - /tc party says why: "asked their TwizCraft to read it", or "they need
+    to open it once (or update TwizCraft)" for friends on an older version.
+
 NEW IN 1.13.2
 - TomTom is no longer required: TwizCraft loads without it and uses Quest
   Pilot's built-in TomTom (or the game's map pin) for waypoints.
