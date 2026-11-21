@@ -234,13 +234,13 @@ mana = 1400
 TwizHeal.hoverUnit = "party1"; SIM.Advance(0.3)
 local hm = tostring(TwizHealBar2:GetAttribute("healmacro"))
 L("bar2 heal with Read Leyline known: " .. hm:gsub("\n", " || "))
-assert(hm:find("/cast %[combat%] Read Leyline\n/click %[combat%]") or hm:find("/cast %[combat%] Read Leyline\n/castsequence"))
+assert(not hm:find("%[combat%] Read Leyline"), "1.23.3: no Read Leyline in combat heal clicks")
 local base = tostring(TwizHealButton:GetAttribute("basemacro"))
 local barM = tostring(TwizHealBar2:GetAttribute("healmacro")):gsub("TwizHealCycleBar2", "TwizHealCycleKey"):gsub("TwizHealCastBar2", "TwizHealCastKey")
 L("key == the lowest's bar click: " .. tostring(base == barM))
 assert(base == barM, "heal-the-lowest key must match a click on that bar")
 L("key (no hover) at 70% mana: " .. base:gsub("\n", " || "))
-assert(base:find("%[combat%] Read Leyline"), "key gets Read Leyline in combat like a bar click")
+assert(not base:find("%[combat%] Read Leyline"), "1.23.3: no Read Leyline in combat on the key either")
 -- the "not ready" error from Read Leyline is hidden right after a TwizHeal press, others shown
 local shown = {}
 UIErrorsFrame = CreateFrame("Frame", "UIErrorsFrame")

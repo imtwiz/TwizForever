@@ -814,14 +814,8 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey, noCombat)
         local opts = only and unit or ("[@mouseover,help,nodead] mouseover; [@target,help,nodead] target; " .. unit)
         cyc = CycleButton(castKey or "Key", opts, table.concat(ids, ","))
     end
-    -- in combat, Read Leyline first whenever it's off cooldown (1.22.0): the game hides nothing
-    -- here, but the key is locked, so it can't check your mana - at most once per 2 min. On
-    -- cooldown the line is skipped and the heal goes out (its "not ready" error is hidden).
-    -- 1.23.2: only when your mana is 75% or less as the fight starts (the key is locked in combat,
-    -- so this is the last moment it can check)
-    local regen = not noCombat and Regen()
-    if regen and (ManaPct() or 1) > MANA_PCT then regen = nil end
-    if regen and (cyc or combat) then lines[#lines + 1] = "/cast [combat] " .. regen end
+    -- (1.23.3) no Read Leyline in combat heal macros: on cooldown, its failed cast used up the whole
+    -- press, so clicks healed nobody. Out of combat the rules still cast it at 75% mana or less.
     if cyc then
         local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
         lines[#lines + 1] = "/click [combat] " .. cyc:GetName() .. (keyDown and " LeftButton 1" or "")
@@ -1956,7 +1950,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
         if db.version < 5 then if db.threshold == 0.90 then db.threshold = 0.89 end; db.version = 5 end -- above 89%: no heal
         if db.version < 6 then db.width = math.max(110, math.floor((db.width or 220) * 0.6)); db.version = 6 end -- the cross: 3 columns
         NS.db = db
-        pcall(NS.HideNotReady)
+        -- (1.23.3) the "not ready" hider is no longer installed: real errors show again
         return
     end
     if not db then return end
