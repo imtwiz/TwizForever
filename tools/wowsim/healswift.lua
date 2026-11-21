@@ -108,5 +108,16 @@ L("85%, Regrowth on:            " .. rule(1700, { { "Regrowth", 15 } }))
 L("85%, Regrowth on, moving:    " .. rule(1700, { { "Regrowth", 15 } }, true))
 L("92%, Rejuv on:               " .. rule(1840, { { "Rejuvenation", 10 } }))
 NS.moving = false; units.party1.hp = 2000; SIM.hots.party1 = nil
+-- 1.16.0: the combo - Regrowth, Rejuvenation right after, Swiftmend at 90% or under
+L("C 88%, nothing on:              " .. rule(1760, nil))
+L("C 88%, Regrowth on:             " .. rule(1760, { { "Regrowth", 15 } }))
+L("C 88%, Regrowth + Rejuv:        " .. rule(1760, { { "Regrowth", 15 }, { "Rejuvenation", 10 } }))
+L("C 90%, Regrowth + Rejuv:        " .. rule(1800, { { "Regrowth", 15 }, { "Rejuvenation", 10 } }))
+L("C 95%, Regrowth on:             " .. rule(1900, { { "Regrowth", 15 } }))
+C_Spell.GetSpellCooldown = function() return { startTime = GetTime() - 2, duration = 15 } end
+L("C 70%, both on, Swift cd:       " .. rule(1400, { { "Regrowth", 15 }, { "Rejuvenation", 10 } }))
+C_Spell.GetSpellCooldown = function() return { startTime = 0, duration = 0 } end
+L("C 70%, nothing on, moving:      " .. rule(1400, nil, true))
+NS.moving = false; units.party1.hp = 2000; SIM.hots.party1 = nil
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

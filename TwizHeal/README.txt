@@ -1,4 +1,4 @@
-TwizHeal 1.15.0 - one hotkey heals whoever needs it most
+TwizHeal 1.16.0 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -18,56 +18,29 @@ WHO GETS HEALED
   Tanks are whoever has the tank role, whoever enemies are attacking, or
   warriors; healers are those with the healer role, or priests.
 
-SMART HEALING WITH HOTS (new in 1.1.0)
-  Your HoTs count: healing still to come from your Rejuvenation / Renew /
-  Regrowth on someone is taken off what they're missing, so nobody gets a
-  big heal their HoT was about to cover.
-    - small damage and none of your HoTs on them -> Rejuvenation / Renew
-      (the cheapest healing you have)
-    - druids, medium damage and no Regrowth on them -> Regrowth (direct
-      heal plus its own HoT)
-    - a tank with no HoT of yours -> a HoT to keep them ticking, but only
-      when nobody else needs healing
-    - danger -> fast heal; big damage -> the direct heal sized to what's left
-  The bars show your HoTs and seconds left (e.g. "Rejuv 9").
+HOTS COUNT
+  Healing still to come from your Rejuvenation / Regrowth on someone is
+  taken off what they're missing, so nobody gets a big heal their HoT was
+  about to cover. Heals are the smallest rank that covers the rest (/th
+  ranks lists your heals with how much each one heals and costs).
 
-WHICH HEAL
-  The smallest rank of your direct heal that covers what they're missing
-  and that you have the mana for (Lesser Heal / Heal / Greater Heal,
-  Healing Touch, Holy Light, Healing Wave). Someone in danger gets your fast
-  heal (Flash Heal, Regrowth, Flash of Light, Lesser Healing Wave).
-  /th ranks lists your heals with how much each one heals and costs.
-
-WHICH SPELL - THE RULES (1.12.0)
-  Out of combat TwizHeal reads how hurt they are and what's ticking on them,
-  and DOWNRANKS (new in 1.13.0): it casts the smallest rank that still heals
-  everything they're missing - e.g. Healing Touch rank 3 for a 155 HP gap
-  instead of your top rank - to save mana. (Lower ranks are cast by spell
-  ID through a hidden button, since "/cast Healing Touch(Rank 3)" does
-  nothing on this client.) In combat it's always your top rank.
-    - above 89%                -> no heal at all (change it: /th threshold 80)
-    - health hidden by the game -> no heal either: it might be 95%. Your
-                                  instant and emergency keys still cast.
-    - under 31%                -> Swiftmend if your Rejuvenation or Regrowth is on
-                                  them (an instant save). Swiftmend ready but
-                                  nothing on them: Rejuvenation now, Swiftmend on
-                                  the next press. No Swiftmend: Regrowth.
-    - you're moving            -> Rejuvenation (instant)
-    - FIRST: under 90% with    -> Swiftmend (instant, works while moving),
-      your Regrowth or Rejuv      whenever it's off cooldown
-      on them
-    - your Regrowth on them,   -> Rejuvenation right after (instant)
+WHICH SPELL - THE RULES (1.16.0)
+  The combo: REGROWTH, then REJUVENATION right after, then SWIFTMEND once
+  they're at 90% or under. Out of combat (health and buffs readable):
+    - above 90%                 -> nothing (no combo in progress either)
+    - your Regrowth on them,    -> Rejuvenation (instant)
       no Rejuvenation yet
-    - Regrowth and Rejuv on    -> Healing Touch, the rank that covers what's
-                                  still missing after their ticks
-    - big gap (under 60%, or   -> Regrowth (a big heal now plus a HoT); Healing
-      more missing than one       Touch if your Regrowth is already ticking
-      Rejuvenation heals)
-    - small gap, no Rejuv on   -> Rejuvenation (cheap, heals over time)
-    - small gap, Rejuv on      -> a small Healing Touch for what it won't cover
+    - your HoTs on them, 90% or -> Swiftmend, when it's off cooldown
+      under
+    - above 89% and nothing on  -> nothing (/th threshold to change)
+    - moving                    -> Rejuvenation (instant; the combo picks up)
+    - nothing on them           -> Regrowth, the rank sized to the gap
+    - combo done, Swiftmend on  -> Healing Touch, the rank that covers what's
+      cooldown                     still missing after the ticks
+    - health hidden by the game -> nothing (instant / emergency keys still cast)
   In combat the game locks the key and hides health from addons, so:
-    - main key       -> Regrowth, Rejuvenation, then Healing Touch, Healing
-                        Touch on the next presses (back to Regrowth after 12 s
+    - main key       -> Regrowth, Rejuvenation, Swiftmend (once learned),
+                        then Healing Touch on the next presses (back to Regrowth after 12 s
                         without a press). New in 1.15.0: the Healing Touch
                         here is a SMALLER rank - about 20% of your group's
                         biggest health pool, never your top rank (health can't

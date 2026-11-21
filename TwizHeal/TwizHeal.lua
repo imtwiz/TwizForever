@@ -385,7 +385,7 @@ NS.Moving = Moving
 
 -- Swiftmend: instant, eats a Rejuvenation/Regrowth on the target to heal them a lot at once
 local SAVE_PCT = 0.31
-local SWIFT_PCT = 0.90 -- Swiftmend first whenever they're under this and your HoT is on them
+local SWIFT_PCT = 0.90 -- Swiftmend at this or under, once your Regrowth + Rejuvenation are on them
 local SAVER = { DRUID = "Swiftmend" }
 local function KnowsSpell(name)
     if not name then return false end
@@ -433,63 +433,39 @@ local function OocRule(unit)
     local cur, mx = safe(UnitHealth(u)), safe(UnitHealthMax(u))
     local pct = cur and mx and mx > 0 and cur / mx or nil
     local need = pct and (mx - cur) or nil
-    -- above 89% (/th threshold): not worth a heal - the key does nothing out of combat
-    if pct and pct > (db and db.threshold or 0.89) then return nil, "fine" end
     -- the game hides their health: it could be 95%, so no automatic heal (the instant and
     -- emergency keys still cast on demand)
     if pct == nil then return nil, "hidden" end
+    if pct > SWIFT_PCT then return nil, "fine" end
     local moving = Moving()
     local hasHot = not hidden and hot and hots[hot.name]
     local hasFast = not hidden and fast and hots[fast.name]
-
-    -- 0. first priority: Swiftmend whenever your Rejuvenation or Regrowth is on them and they're
-    --    below 90% (instant, so it works while moving too)
-    if pct and pct < SWIFT_PCT and (hasFast or hasHot) then
-        local saver = Saver()
-        if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
-    end
-
-    -- 1. save them
-    if pct and pct < SAVE_PCT then
-        local saver = Saver()
-        if saver and SpellReady(saver.name) then
-            if hasHot or hasFast then return saver, "save" end
-            if hot and not hidden then return hot, "save: Rejuvenation, then Swiftmend" end
-        end
-        if moving and hot then return (need and PickRank(need, "hot")) or hot, "moving" end
-        if fast and not hasFast then return PickRank(need, "fast") or fast, "low" end
-        return PickRank(need, "direct") or Best("direct"), "low"
-    end
-    -- 2. moving: only instants work (a Rejuvenation rank big enough for the gap)
-    if moving and hot then return (need and need > 0 and PickRank(need, "hot")) or hot, "moving" end
-    -- 3. how much is missing after what's already ticking on them
     local left = need and math.max(0, need - (incoming or 0)) or nil
-    local hotTotal = hot and (hot.total or 0) or 0
-    local big = pct and (pct < 0.6 or (hotTotal > 0 and left and left > hotTotal))
-    -- right after your Regrowth: Rejuvenation if it isn't up (instant)
+
+    -- THE COMBO (Alan's rule): Regrowth, then Rejuvenation right after, then Swiftmend at 90% or under
+    -- 1. your Regrowth is on them but Rejuvenation isn't: Rejuvenation (instant)
     if hasFast and hot and not hasHot then
         return (left and left > 0 and PickRank(left, "hot")) or hot, "after Regrowth"
     end
-    -- Regrowth (and Rejuvenation) already on them: the Healing Touch rank that covers the rest
-    if hasFast and left and left > 0 then
+    -- 2. your Rejuvenation (or Regrowth) on them, 90% or under, Swiftmend ready: Swiftmend
+    if pct <= SWIFT_PCT and (hasHot or hasFast) then
+        local saver = Saver()
+        if saver and SpellReady(saver.name) then return saver, "Swiftmend" end
+    end
+    -- above 89% (/th threshold): not worth starting a new heal
+    if pct > (db and db.threshold or 0.89) then return nil, "fine" end
+    -- 3. moving: Regrowth can't be cast - Rejuvenation (the combo picks up from there)
+    if moving and hot then return (need and PickRank(need, "hot")) or hot, "moving" end
+    -- 4. start the combo: Regrowth sized to the gap
+    if fast and not hasFast then
+        return PickRank(left or need, "fast") or fast, pct < SAVE_PCT and "low" or "Regrowth first"
+    end
+    -- 5. combo done (Swiftmend on cooldown or not learned): Healing Touch for what's still missing
+    if left and left > 0 then
         return PickRank(left, "direct") or Best("direct"), "Regrowth on"
     end
-    if big then
-        if fast and not hasFast then return PickRank(left or need, "fast") or fast, "big gap" end
-        return PickRank(left or need, "direct") or Best("direct"), "big gap"
-    end
-    if hot and not hidden and not hasHot then
-        return (need and need > 0 and PickRank(need, "hot")) or hot, "topping off"
-    end
-    if left and left > 0 then
-        return PickRank(left, "direct") or Best("direct", 2) or Best("direct") or hot, "topping off"
-    end
-    -- health hidden or nothing missing
-    if pct == nil then
-        if hot and not hidden and not hasHot then return hot, "topping off" end
-        return Best("direct", 2) or Best("direct") or hot, "topping off"
-    end
-    return hot or Best("direct", 2) or Best("direct"), "full"
+    if hot and not hasHot then return hot, "topping off" end
+    return nil, "fine"
 end
 NS.OocRule = OocRule
 
@@ -613,9 +589,15 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
     local cd = CombatDirect()
     local cyc
     if combat and fast and fast.id and cd and combat == fast then
+        -- the combo: Regrowth, Rejuvenation, Swiftmend (if learned; a press on cooldown just moves
+        -- on), then Healing Touch
         local ids = { fast.id }
         if hot and hot.id then ids[#ids + 1] = hot.id end
-        ids[#ids + 1] = cd.id; ids[#ids + 1] = cd.id
+        local saver = Saver()
+        local sid = saver and C_Spell and C_Spell.GetSpellInfo and (function() local ok, i = pcall(C_Spell.GetSpellInfo, saver.name); return ok and i and i.spellID end)()
+        if sid then ids[#ids + 1] = sid end
+        ids[#ids + 1] = cd.id
+        if not sid then ids[#ids + 1] = cd.id end
         local opts = only and unit or ("[@mouseover,help,nodead] mouseover; [@target,help,nodead] target; " .. unit)
         cyc = CycleButton(castKey or "Key", opts, table.concat(ids, ","))
     end

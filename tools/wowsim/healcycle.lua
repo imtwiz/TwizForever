@@ -22,5 +22,9 @@ now = now + 20; fn()
 L("after 20 s idle: " .. tostring(cyc:GetAttribute("spell")))
 SlashCmdList.TWIZHEAL("combatrank 1"); SIM.Advance(0.3)
 L("/th combatrank 1 -> ids " .. tostring(cyc:GetAttribute("cycleids")))
+local gsi = C_Spell.GetSpellInfo
+C_Spell.GetSpellInfo = function(n) if n == "Swiftmend" then return { name = n, spellID = 18562 } end return gsi and gsi(n) end
+SlashCmdList.TWIZHEAL("combatrank"); SIM.Advance(0.3)
+L("with Swiftmend learned -> ids " .. tostring(cyc:GetAttribute("cycleids")))
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
