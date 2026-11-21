@@ -1,4 +1,4 @@
-TwizHeal 1.16.0 - one hotkey heals whoever needs it most
+TwizHeal 1.16.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -40,8 +40,8 @@ WHICH SPELL - THE RULES (1.16.0)
     - health hidden by the game -> nothing (instant / emergency keys still cast)
   In combat the game locks the key and hides health from addons, so:
     - main key       -> Regrowth, Rejuvenation, Swiftmend (once learned),
-                        then Healing Touch on the next presses (back to Regrowth after 12 s
-                        without a press). New in 1.15.0: the Healing Touch
+                        then Healing Touch on the next presses. A different
+                        target, or a new fight, starts over at Regrowth. New in 1.15.0: the Healing Touch
                         here is a SMALLER rank - about 20% of your group's
                         biggest health pool, never your top rank (health can't
                         be read in combat, so a top-rank heal would often be

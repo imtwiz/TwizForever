@@ -10,16 +10,15 @@ local key = tostring(TwizHealButton:GetAttribute("macrotext1"))
 L("combat line: " .. (key:match("/click %[combat%][^\n]+") or key))
 local cyc = TwizHealCycleKey
 L("cycle ids: " .. tostring(cyc and cyc:GetAttribute("cycleids")) .. " | combat Healing Touch: rank " .. tostring(NS.CombatDirect() and NS.CombatDirect().rank))
--- run the restricted snippet like the game would, 6 presses
-local now = 100
-local env = setmetatable({ self = cyc, newtable = function(...) return { ... } end, strsplit = function(sep, str) local t = {} for p in (str .. sep):gmatch("(.-)" .. sep) do t[#t + 1] = p end return unpack(t) end,
-  GetTime = function() return now end, tonumber = tonumber, SecureCmdOptionParse = function(o) return o:match("([%w]+)$") end }, { __index = _G })
+-- run the restricted snippet like the game would: only secure functions exist (no GetTime, no strsplit)
+local target = "party1"
+local env = setmetatable({ self = cyc, SecureCmdOptionParse = function(o) return target end }, { __index = function(_, k) error("restricted code has no " .. tostring(k)) end })
 local fn = assert(loadstring(cyc.__pre)); setfenv(fn, env)
 local casts = {}
-for i = 1, 6 do fn(); casts[#casts + 1] = tostring(cyc:GetAttribute("spell")) .. "@" .. tostring(cyc:GetAttribute("unit")); now = now + 2 end
-L("6 presses: " .. table.concat(casts, ", "))
-now = now + 20; fn()
-L("after 20 s idle: " .. tostring(cyc:GetAttribute("spell")))
+for i = 1, 5 do fn(); casts[#casts + 1] = tostring(cyc:GetAttribute("spell")) .. "@" .. tostring(cyc:GetAttribute("unit")) end
+L("5 presses on the tank: " .. table.concat(casts, ", "))
+target = "party2"; fn()
+L("new target -> starts over: " .. tostring(cyc:GetAttribute("spell")) .. "@" .. tostring(cyc:GetAttribute("unit")))
 SlashCmdList.TWIZHEAL("combatrank 1"); SIM.Advance(0.3)
 L("/th combatrank 1 -> ids " .. tostring(cyc:GetAttribute("cycleids")))
 local gsi = C_Spell.GetSpellInfo

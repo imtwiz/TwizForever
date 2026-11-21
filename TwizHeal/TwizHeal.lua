@@ -506,9 +506,9 @@ NS.Downranked = Downranked
 
 -- In combat: our own spell cycle (Regrowth, Rejuvenation, Healing Touch, Healing Touch),
 -- run by the game's secure code on each press, so it can cast a smaller Healing Touch rank
--- (/castsequence only takes names = always your top rank). Each press advances; 12 s
--- without a press starts over; the target is your mouseover, else friendly target, else
--- the fallback - decided at the moment you press.
+-- (/castsequence only takes names = always your top rank). Each press advances; a new
+-- target or a new fight starts over at Regrowth; the target is your mouseover, else friendly
+-- target, else the fallback - decided at the moment you press.
 local secureHeader
 local cycleButtons = {}
 -- the Healing Touch rank used in combat (health can't be read there): /th combatrank N, or
@@ -543,23 +543,32 @@ local function CycleButton(key, unitopts, ids)
         b:RegisterForClicks("AnyUp", "AnyDown")
         b:SetAttribute("type", "spell")
         b:Hide()
+        -- restricted code: only the game's secure functions exist here (no GetTime, no string
+        -- splitting), so the spell IDs sit in attributes cycleid1..N
         local ok = pcall(SecureHandlerWrapScript, b, "OnClick", secureHeader, [[
-            local list = self:GetAttribute("cycleids")
-            if not list then return end
-            local ids = newtable(strsplit(",", list))
+            local count = self:GetAttribute("cyclecount") or 0
+            if count < 1 then return end
+            local unit = SecureCmdOptionParse(self:GetAttribute("unitopts"))
             local n = self:GetAttribute("cyclen") or 0
-            local now = GetTime()
-            if now - (self:GetAttribute("cyclet") or 0) > 12 then n = 0 end
-            n = n % #ids + 1
+            -- a different target starts the combo over at Regrowth
+            if unit ~= self:GetAttribute("cycleunit") then n = 0 end
+            n = n % count + 1
             self:SetAttribute("cyclen", n)
-            self:SetAttribute("cyclet", now)
-            self:SetAttribute("spell", tonumber(ids[n]))
-            self:SetAttribute("unit", SecureCmdOptionParse(self:GetAttribute("unitopts")))
+            self:SetAttribute("cycleunit", unit)
+            self:SetAttribute("spell", self:GetAttribute("cycleid" .. n))
+            self:SetAttribute("unit", unit)
         ]])
         if not ok then return nil end
         cycleButtons[key] = b
     end
-    if b:GetAttribute("cycleids") ~= ids then b:SetAttribute("cycleids", ids) end
+    if b:GetAttribute("cycleids") ~= ids then
+        b:SetAttribute("cycleids", ids)
+        local n = 0
+        for id in ids:gmatch("%d+") do n = n + 1; b:SetAttribute("cycleid" .. n, tonumber(id)) end
+        b:SetAttribute("cyclecount", n)
+    end
+    -- out of combat: each fight starts the combo at Regrowth
+    if not InCombatLockdown() and (b:GetAttribute("cyclen") or 0) ~= 0 then b:SetAttribute("cyclen", 0) end
     if b:GetAttribute("unitopts") ~= unitopts then b:SetAttribute("unitopts", unitopts) end
     return b
 end
@@ -583,7 +592,7 @@ local function SmartMacro(unit, ooc, only, oocUnit, castKey)
         lines[#lines + 1] = "/cast " .. Chain("nocombat,", unit, only) .. " " .. ooc.label
     end
     -- in combat (no reading auras or health): Regrowth, Rejuvenation, then Healing Touch on the
-    -- next presses; back to Regrowth after 12 s without a press. (Swiftmend stays on the
+    -- next presses; a new target or new fight starts at Regrowth again. (Swiftmend stays on the
     -- emergency key: in a sequence, a Swiftmend on cooldown would stall it.)
     local direct = Best("direct")
     local cd = CombatDirect()
