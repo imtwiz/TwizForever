@@ -1265,6 +1265,57 @@ fb:SetScript("OnEvent", function(_, event, a1, a2)
         if event == "UNIT_SPELLCAST_FAILED" then press.failed = true else press.done = true end
     end
 end)
+-- "Healing Touch (Rank 3) -> Bob": a line above the party window each time you cast a heal,
+-- so you can see which rank went out (/th castinfo turns it off)
+local castLine, castFade
+local function RankOf(id)
+    for _, r in ipairs(ranks) do if r.id == id then return r.rank end end
+    local _, class = UnitClass("player")
+    for _, ids in pairs(RANK_IDS[class] or {}) do
+        for rk, rid in ipairs(ids) do if rid == id then return rk end end
+    end
+end
+local function HealName(id)
+    local name = C_Spell and C_Spell.GetSpellName and safe(C_Spell.GetSpellName(id))
+    if not name and GetSpellInfo then name = safe((GetSpellInfo(id))) end
+    if not name then return nil end
+    for _, r in ipairs(ranks) do if r.name == name then return name end end
+    if name == "Swiftmend" then return name end
+end
+function NS.ShowCast(id, target)
+    if db and db.castInfo == false then return end
+    id = safe(id)
+    if type(id) ~= "number" then return end
+    local name = HealName(id)
+    if not name then return end
+    local rk = RankOf(id)
+    if not castLine then
+        castLine = UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        local font, size = castLine:GetFont()
+        if font then castLine:SetFont(font, (size or 12) + 1, "OUTLINE") end
+        castFade = CreateFrame("Frame")
+        NS.castLine = castLine
+    end
+    castLine:ClearAllPoints()
+    if frame and frame:IsShown() then castLine:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 4, 4)
+    else castLine:SetPoint("CENTER", UIParent, "CENTER", 0, -140) end
+    target = safe(target)
+    castLine:SetText(("|cff8fe08f%s|r%s%s"):format(name, rk and (" |cfff0c45c(Rank " .. rk .. ")|r") or "",
+        (type(target) == "string" and target ~= "") and (" |cff9aa1ab->|r " .. target) or ""))
+    castLine:SetAlpha(1); castLine:Show()
+    local t = 0
+    castFade:SetScript("OnUpdate", function(self, e)
+        t = t + e
+        if t > 3 then castLine:SetAlpha(math.max(0, 1 - (t - 3))) end
+        if t > 4 then castLine:Hide(); self:SetScript("OnUpdate", nil) end
+    end)
+end
+local castEv = CreateFrame("Frame")
+castEv:RegisterEvent("UNIT_SPELLCAST_SENT")
+castEv:SetScript("OnEvent", function(_, _, unit, target, _, spellID)
+    if unit == "player" then pcall(NS.ShowCast, spellID, target) end
+end)
+
 local fbTick = CreateFrame("Frame")
 fbTick:SetScript("OnUpdate", function()
     if press.at == 0 or press.said or GetTime() - press.at < 0.6 then return end
@@ -1369,6 +1420,9 @@ SlashCmdList.TWIZHEAL = function(msg)
         db.danger = math.max(0.05, math.min(n / 100, 0.9)); Print(("anyone at %d%% or less is healed first, whatever their role"):format(db.danger * 100))
     elseif cmd == "threshold" and n then
         db.threshold = math.max(0.3, math.min(n / 100, 1)); Print(("people below %d%% are worth a heal"):format(db.threshold * 100))
+    elseif cmd == "castinfo" then
+        db.castInfo = db.castInfo == false
+        Print("show which heal rank you cast: " .. (db.castInfo and "on" or "off"))
     elseif cmd == "quiet" then
         db.feedback = db.feedback == false
         Print("messages when a heal doesn't go out: " .. (db.feedback and "on" or "off"))

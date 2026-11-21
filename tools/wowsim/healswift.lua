@@ -73,5 +73,11 @@ SIM.Advance(0.3)
 L(("health hidden: color from the game's curve for %d bars; rogue LOWEST marker now %s"):format(evaluated, tostring(TwizHealBar3.lowMark.__shown)))
 UnitHealth = realHealth; issecretvalue = function() return false end
 units.party2.hp = 1300; units.party1.hp = 2000
+-- 1.14.1: which rank went out
+C_Spell.GetSpellName = function(id) return ({ [5188] = "Healing Touch", [1430] = "Rejuvenation", [8938] = "Regrowth" })[id] end
+SIM.Fire("UNIT_SPELLCAST_SENT", "player", "Tank", "guid", 5188)
+L("cast line: " .. tostring(NS.castLine and NS.castLine:GetText()))
+SIM.Fire("UNIT_SPELLCAST_SENT", "player", "Rogue", "guid", 1430)
+L("cast line: " .. tostring(NS.castLine and NS.castLine:GetText()))
 ]==]
 assert(loadstring(src .. "\n" .. rest))()

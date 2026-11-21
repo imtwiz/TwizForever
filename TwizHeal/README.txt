@@ -1,4 +1,4 @@
-TwizHeal 1.14.0 - one hotkey heals whoever needs it most
+TwizHeal 1.14.1 - one hotkey heals whoever needs it most
 
 Priests, druids, paladins and shamans.
 
@@ -67,6 +67,11 @@ WHICH SPELL - THE RULES (1.12.0)
                         TwizHeal > "Emergency". Middle-click a bar does the same.
   Swiftmend is a Restoration talent - until you have it, the emergency key
   uses Regrowth as the second spell.
+
+WHICH RANK WENT OUT (1.14.1)
+  Each heal you cast shows a line above the party window for a few
+  seconds, e.g. "Healing Touch (Rank 3) -> Bob" (in the middle of the
+  screen when the window is hidden). /th castinfo turns it off or on.
 
 THE PARTY WINDOW (back in 1.5.0, shown by default)
   Hover a bar and press your TwizHeal key: it heals that person, in or out
