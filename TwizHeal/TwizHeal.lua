@@ -1,8 +1,8 @@
 -- TwizHeal: one hotkey heals whoever needs it most, with the right-sized heal.
 --
 -- Who: you, your party (or raid). Among everyone missing enough health to be
--- worth a heal, tanks come first, then healers, then damage dealers; inside a
--- group, the lowest health goes first. Anyone in real danger (30% or less,
+-- worth a heal, the lowest health goes first (role only breaks near-ties: tank,
+-- healer, damage dealer). Anyone in real danger (30% or less,
 -- /tb-style setting below) jumps the queue whatever their role.
 --
 -- What: the smallest rank of your direct heal that covers what they're
@@ -309,10 +309,14 @@ function NS.Pick(list)
     end
     table.sort(danger, function(a, b) return a.pct < b.pct end)
     if danger[1] then return danger[1], true end
+    -- the lowest first (after the HoTs already ticking on them); role only breaks near-ties
+    local function eff(m) return m.max and m.max > 0 and (m.max - m.need) / m.max or m.pct end
     table.sort(need, function(a, b)
+        local ea, eb = eff(a), eff(b)
+        if math.abs(ea - eb) > 0.05 then return ea < eb end
         local ra, rb = ROLE_RANK[a.role] or 3, ROLE_RANK[b.role] or 3
         if ra ~= rb then return ra < rb end
-        return a.pct < b.pct
+        return ea < eb
     end)
     if need[1] then return need[1], false end
     table.sort(upkeep, function(a, b) return a.pct < b.pct end)

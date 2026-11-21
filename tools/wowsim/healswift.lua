@@ -48,5 +48,14 @@ units.party1.hp = 1200; SIM.hots.party1 = nil; NS.moving = true
 local r2 = NS.OocRule("party1")
 L(("moving, tank 60%%: %s rank %s"):format(r2.label, tostring(r2.rank)))
 NS.moving = false; TwizHeal.hoverUnit = nil
+-- 1.13.2: the lowest gets healed, not the tank first
+units.party1.hp = 1600; SIM.hots.party1 = nil   -- tank 80%
+units.party2.hp = 650                             -- rogue 50%
+local p = NS.Pick(NS.Scan())
+L("tank 80%, rogue 50% -> pick: " .. tostring(p and p.name))
+units.party2.hp = 1050                            -- rogue ~81%
+p = NS.Pick(NS.Scan())
+L("tank 80%, rogue 81% (near-tie) -> pick: " .. tostring(p and p.name))
+units.party2.hp = 1300; units.party1.hp = 2000
 ]==]
 assert(loadstring(src .. "\n" .. rest))()
