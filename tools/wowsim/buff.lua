@@ -73,6 +73,13 @@ TwizHealButton = CreateFrame("Button", "TwizHealButton")
 TwizHeal = { pick = nil }
 SIM.Advance(1.5)
 L("with TwizHeal, nobody hurt: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())
-TwizHeal.pick = { unit = "party2", name = "Sue" }
+-- 1.5.2: TwizHeal picks people at full health to pre-HoT them - that must not take the buff key
+TwizHeal.pick = { unit = "party2", name = "Sue", pct = 1 }
+SIM.Advance(1.5)
+local prehot = TwizBuffButton.label:GetText()
+L("pre-HoT pick at 100%: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. prehot)
+assert(not prehot:find("^Heal"), "buff key must still buff")
+TwizHeal.pick = { unit = "party2", name = "Sue", pct = 0.6 }
 SIM.Advance(1.5)
 L("someone hurt: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())
+assert(TwizBuffButton.label:GetText():find("^Heal"))

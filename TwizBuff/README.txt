@@ -1,4 +1,4 @@
-TwizBuff 1.5.1 - cast the buffs your friends (and strangers) are missing
+TwizBuff 1.5.2 - cast the buffs your friends (and strangers) are missing
 
 Shows who is missing the buffs your class can give, and casts the next one
 with one click, key press or mouse-wheel notch.
@@ -86,3 +86,7 @@ COMMANDS (/tb or /twizbuff)
   /tb thorns        leave out / include Thorns (druids)
   /tb pvp           skip PvP-flagged strangers
   /tb group N       use the group version when N or more need it (default 3)
+
+1.5.2: the shared key only hands over to TwizHeal when someone is actually
+hurt (under TwizHeal's threshold, 89%). TwizHeal's pre-HoTs on people at full
+health no longer stop the key from buffing.

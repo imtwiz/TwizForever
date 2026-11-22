@@ -528,7 +528,14 @@ function NS.Update()
     -- One key for buffing and healing: with TwizHeal loaded, the same key heals whoever
     -- needs it most - in combat always, and out of combat when someone is hurt; otherwise it
     -- casts the next missing buff (out of combat only).
+    -- 1.5.2: only someone who's actually hurt (under TwizHeal's threshold, 89%). TwizHeal also
+    -- "picks" people at full health just to pre-HoT them - that used to take over the buff key.
     local heal = TwizHealButton and TwizHeal and TwizHeal.pick
+    if heal then
+        local thr = (TwizHeal.db and TwizHeal.db.threshold) or 0.89
+        local pct = type(heal.pct) == "number" and heal.pct or nil
+        if not pct or pct > thr then heal = nil end
+    end
     local near = NS.NearestTarget(list)
     NS.near = near
     if not inCombat then
