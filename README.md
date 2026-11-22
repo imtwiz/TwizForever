@@ -4,6 +4,7 @@ Custom addons for World of Warcraft: Forever (interface 16001), written by Alan 
 
 | Addon | What it does | Version |
 |---|---|---|
+| **TwizForever** | One menu for all the Twiz addons (`/twiz` or the minimap gear): what each does, turn addons on/off, flip their main settings, one-click actions. | 1.0.0 |
 | **TwizAH** | Auction House profit tool: what to post, for how long and at what price (deposits, AH cut and learned sell speed included), when to vendor instead, deals, low bids, market movers, smelt-or-sell ore, craft-or-sell for every profession, Buy All Supplies for profitable crafts, cheapest missing recipes with Buy All and a max spend, undercut watch with cancel-and-repost, and one-click AH mail collection. | 2.4.9 |
 | **TwizQuest** | Plans which quests to do and in what order for the most XP per hour from where you stand, using Questie's database. Learns your kill speed, rest time, travel speed and real XP rates; counts quest items in your bank; plans around rested XP, groups, sell & repair stops; target key; log cleanup. | 1.17.0 |
 | **TwizCraft** | Cheapest path to level each profession: recipe per skill range, how many, shopping list, cheapest shopping route, buy from vendors/AH, craft straight from the window, and tracks AH purchases waiting in your mailbox. Learns your real skill-up odds. | 1.13.1 |
@@ -38,6 +39,7 @@ Fully restart the game (not just `/reload`) the first time.
 | TwizCraft | `/tc` | `/tc help` |
 | TwizChef | `/chef` | `/chef help` |
 | TwizOpen | `/ao` | `/ao help` |
+| TwizForever | `/twiz` | `/twiz help` |
 | TwizErrors | `/terr` | `/terr help` |
 
 Each addon folder has its own `README.txt` with details.

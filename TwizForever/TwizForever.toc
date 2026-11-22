@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: TwizForever
+## Notes: One menu for all the Twiz addons: what each one does, turn addons on or off, open them, and flip their main settings. /twiz or the minimap button.
+## Author: Alan Sherbourne
+## Version: 1.0.0
+## SavedVariables: TwizForeverDB
+## IconTexture: Interface\Icons\INV_Misc_Gear_01
+## OptionalDeps: TwizAH, TwizQuest, TwizCraft, TwizChef, TwizBuff, TwizHeal, TwizOpen, TwizErrors
+
+Addons.lua
+TwizForever.lua
