@@ -11,6 +11,7 @@ Custom addons for World of Warcraft: Forever (interface 16001), written by Alan 
 | **TwizBuff** | Shows which friendly players - you, your party or raid, and your friendly target - are missing the buffs your class can give (Mark of the Wild, Fortitude, Arcane Intellect, Blessings, Battle Shout...) and casts the next one with one click, key or mouse-wheel notch; group versions when 3+ need it; nearby strangers too; shares its key with TwizHeal. | 1.3.1 |
 | **TwizHeal** | Heals from the game's own party and raid frames: hover a frame and press one key, or Alt+click it (Alt+right = fast heal, Ctrl+Alt = HoT); right-sized ranks, smart HoTs, tanks > healers > dps priority when the game lets addons read health; druids drop forms first. | 1.3.0 |
 | **TwizOpen** | Opens chests, boxes, gifts, clams and other containers in your bags automatically - never in combat, while looting, or at a vendor/bank/mail/trade/AH. | 1.0.0 |
+| **TwizErrors** | Quiets the game's spoken errors ("Not enough mana", "Not enough energy", "I can't do that yet"...); `/terr text` also hides the matching red error text. Off puts your old setting back. | 1.0.0 |
 
 ## Install
 
@@ -37,6 +38,7 @@ Fully restart the game (not just `/reload`) the first time.
 | TwizCraft | `/tc` | `/tc help` |
 | TwizChef | `/chef` | `/chef help` |
 | TwizOpen | `/ao` | `/ao help` |
+| TwizErrors | `/terr` | `/terr help` |
 
 Each addon folder has its own `README.txt` with details.
 

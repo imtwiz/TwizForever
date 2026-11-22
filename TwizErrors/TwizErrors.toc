@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: TwizErrors
+## Notes: Quiets the game's spoken error voice ("Not enough mana", "Not enough energy", "I can't do that yet"...). Optionally hides the matching red error text too. /terr
+## Author: Alan Sherbourne
+## Version: 1.0.0
+## SavedVariables: TwizErrorsDB
+## IconTexture: Interface\Icons\Spell_Holy_Silence
+
+TwizErrors.lua
