@@ -90,3 +90,9 @@ COMMANDS (/tb or /twizbuff)
 1.5.2: the shared key only hands over to TwizHeal when someone is actually
 hurt (under TwizHeal's threshold, 89%). TwizHeal's pre-HoTs on people at full
 health no longer stop the key from buffing.
+
+1.6.0 CAT FORM TRACKING (druids): in Cat Form without Track Humanoids up, the
+key's (and the mouse wheel's) first job is casting Track Humanoids - one
+press or one wheel notch after you shift. Once it's tracking, the key goes
+back to buffs. (The game doesn't let addons cast spells by themselves, so it
+still takes that one press/notch.)

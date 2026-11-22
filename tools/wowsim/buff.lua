@@ -83,3 +83,20 @@ TwizHeal.pick = { unit = "party2", name = "Sue", pct = 0.6 }
 SIM.Advance(1.5)
 L("someone hurt: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())
 assert(TwizBuffButton.label:GetText():find("^Heal"))
+-- 1.6.0: Cat Form without Track Humanoids -> that's the key's first job
+TwizHeal.pick = nil
+SIM.known["Track Humanoids"] = 5225
+UnitClass = function() return "druid", "DRUID" end
+local form, tracking = 0, false
+GetShapeshiftFormID = function() return form == 1 and 1 or nil end
+C_Minimap = { GetNumTrackingTypes = function() return 1 end,
+  GetTrackingInfo = function(i) return { name = "Track Humanoids", active = tracking } end }
+SIM.Advance(1.5)
+L("caster form: " .. TwizBuffButton.label:GetText())
+assert(not TwizBuffButton.label:GetText():find("Track"))
+form = 1; SIM.Fire("UPDATE_SHAPESHIFT_FORM"); SIM.Advance(1.5)
+L("cat form, not tracking: " .. tostring(TwizBuffButton:GetAttribute("macrotext")):gsub("\n", " || ") .. " | " .. TwizBuffButton.label:GetText())
+assert(TwizBuffButton:GetAttribute("macrotext"):find("/cast %[nocombat%] Track Humanoids"))
+tracking = true; SIM.Fire("MINIMAP_UPDATE_TRACKING"); SIM.Advance(1.5)
+L("cat form, tracking: " .. TwizBuffButton.label:GetText())
+assert(not TwizBuffButton.label:GetText():find("Track"))

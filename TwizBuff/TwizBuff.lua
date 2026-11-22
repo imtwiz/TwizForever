@@ -81,6 +81,60 @@ local function Usable(name)
     return true
 end
 
+-- CAT FORM TRACKING (1.6.0): in Cat Form, Track Humanoids if it isn't up. Addons can't cast by
+-- themselves, so it becomes the key's (and the mouse wheel's) first job while you're a cat.
+local TRACK = { DRUID = { formSpell = 768, formID = 1, spell = "Track Humanoids" } }
+local function plainv(v) if issecretvalue and issecretvalue(v) then return nil end return v end
+local function InForm(t)
+    if GetShapeshiftFormID then
+        local ok, id = pcall(GetShapeshiftFormID)
+        id = ok and plainv(id)
+        if id ~= nil then return id == t.formID end
+    end
+    if GetShapeshiftForm and GetShapeshiftFormInfo then
+        local ok, i = pcall(GetShapeshiftForm)
+        i = ok and plainv(i)
+        if i and i > 0 then
+            local _, _, _, sid = GetShapeshiftFormInfo(i)
+            return plainv(sid) == t.formSpell
+        end
+    end
+    return false
+end
+-- true = tracking it, false = not, nil = can't tell
+local function Tracking(spell)
+    if C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo then
+        local ok, n = pcall(C_Minimap.GetNumTrackingTypes)
+        if ok and plainv(n) then
+            local found = false
+            for i = 1, n do
+                local ok2, a, b, c = pcall(C_Minimap.GetTrackingInfo, i)
+                if ok2 then
+                    local name, active
+                    if type(a) == "table" then name, active = plainv(a.name), plainv(a.active)
+                    else name, active = plainv(a), plainv(c) end
+                    if name == spell then found = true; if active then return true end end
+                end
+            end
+            if found then return false end
+        end
+    end
+    if GetTrackingTexture then
+        local ok, tex = pcall(GetTrackingTexture)
+        tex = ok and plainv(tex)
+        local want = C_Spell and C_Spell.GetSpellTexture and select(2, pcall(C_Spell.GetSpellTexture, spell))
+        if tex ~= nil and want ~= nil then return tex == want end
+        if ok and tex == nil then return false end -- tracking nothing
+    end
+    return nil
+end
+function NS.TrackNeeded()
+    local _, class = UnitClass("player")
+    local t = TRACK[class]
+    if not t or not Known(t.spell) or not InForm(t) then return nil end
+    if Tracking(t.spell) == false then return t.spell end
+end
+
 local function InRange(name, unit)
     if unit == "player" then return true end
     local r
@@ -544,7 +598,13 @@ function NS.Update()
         local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
         local target = "TwizHealButton" .. (keyDown and " LeftButton 1" or "")
         if TwizHealButton then lines[#lines + 1] = "/click [combat] " .. target end
-        if cleanse then
+        local track = NS.TrackNeeded()
+        if track then
+            -- in Cat Form without Track Humanoids: that first
+            lines[#lines + 1] = "/cast [nocombat] " .. track
+            btn.label:SetText("Cast " .. track)
+            btn:SetAlpha(1)
+        elseif cleanse then
             -- a debuff you can remove beats a heal or a buff
             lines[#lines + 1] = ("/cast [nocombat,@%s] %s"):format(cleanse.unit, cleanse.spell)
             btn.label:SetText(("%s %s"):format(cleanse.spell, cleanse.unit == "player" and "you" or (cleanse.name or cleanse.unit)))
@@ -576,9 +636,9 @@ function NS.Update()
         if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
         local shown = math.min(#list + #debuffs, ROWS)
         frame:SetHeight(28 + shown * 15 + 42)
-        local want = db.shown and (#list > 0 or #debuffs > 0 or not db.hideWhenDone)
+        local want = db.shown and (track or #list > 0 or #debuffs > 0 or not db.hideWhenDone)
         frame:SetShown(want and true or false)
-        SetWheel(db.wheel and (nextCast ~= nil or heal ~= nil or cleanse ~= nil))
+        SetWheel(db.wheel and (track ~= nil or nextCast ~= nil or heal ~= nil or cleanse ~= nil))
     else
         btn.label:SetText(TwizHealButton and "In combat: heals" or "In combat")
     end
@@ -591,7 +651,8 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA", "PLAYER_TARGET_CHANGED",
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UPDATE_MOUSEOVER_UNIT",
-    "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "SPELLS_CHANGED", "UNIT_CONNECTION", "PLAYER_LEVEL_UP", "BAG_UPDATE_DELAYED" }) do
+    "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "SPELLS_CHANGED", "UNIT_CONNECTION", "PLAYER_LEVEL_UP", "BAG_UPDATE_DELAYED",
+    "UPDATE_SHAPESHIFT_FORM", "MINIMAP_UPDATE_TRACKING" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 local pending
@@ -620,6 +681,10 @@ ev:SetScript("OnEvent", function(_, event, a1)
         Print("spin your mouse wheel (out of combat) to buff whoever is missing your buffs - each notch casts one. The game needs a notch, click or key press per cast; /tb wheel off gives the wheel back to the camera.")
     end
     if not db then return end
+    if event == "UPDATE_SHAPESHIFT_FORM" and not NS.toldTrack and not InCombatLockdown() and NS.TrackNeeded() then
+        NS.toldTrack = true
+        Print("Cat Form without Track Humanoids: press your TwizBuff key or spin the mouse wheel once to track. (The game doesn't let addons cast by themselves.)")
+    end
     if event == "PLAYER_REGEN_DISABLED" then SetWheel(false) end
     if pending then return end
     pending = true
