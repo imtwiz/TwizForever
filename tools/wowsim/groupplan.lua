@@ -78,3 +78,18 @@ fromBob("G|101,100"); SIM.Advance(12)
 L("following: groupPlan from " .. tostring(ns.groupPlan and ns.groupPlan.from) .. ", route: " .. routeIds() .. ", drops " .. drops())
 fromBob("G|"); SIM.Advance(12)
 L("Bob ended it: groupMode " .. tostring(ns.groupMode))
+-- 1.19.1: Solo while Bob runs a plan, then Group again -> back on Bob's plan (no second plan)
+fromBob("G|101,100"); SIM.Advance(12)
+L("Bob's plan arrives while we're on Solo: following " .. tostring(ns.groupPlan and ns.groupPlan.from))
+SIM.sent = {}
+TwizQuestFrame.groupToggle.buttons[2]:Click(); SIM.Advance(12)
+local ours
+for _, m in ipairs(SIM.sent) do if m:match("^G|%d") then ours = m end end
+L("Group again: groupMode " .. tostring(ns.groupMode) .. ", following " .. tostring(ns.groupPlan and ns.groupPlan.from) .. ", sent our own plan " .. tostring(ours))
+assert(ns.groupMode and ns.groupPlan and ns.groupPlan.from == "Bob" and not ours)
+TwizQuestFrame.groupToggle.buttons[1]:Click(); SIM.Advance(12)
+L("Solo again: groupMode " .. tostring(ns.groupMode) .. ", toggle shown " .. tostring(TwizQuestFrame.groupToggle.__shown))
+assert(not ns.groupMode and TwizQuestFrame.groupToggle.__shown)
+TwizQuestFrame.groupToggle.buttons[2]:Click(); SIM.Advance(12)
+L("and Group once more: following " .. tostring(ns.groupPlan and ns.groupPlan.from))
+assert(ns.groupMode)

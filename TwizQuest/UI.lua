@@ -222,7 +222,9 @@ local function Refresh()
     local st = NS.db.party and NS.PartyStatus and NS.PartyStatus() or nil
     local ptext = st and PartyText(st) or nil
     frame.dropAll:SetShown(not synced)
-    local canGroup = NS.groupMode or (IsInGroup() and NS.SyncedCount and NS.SyncedCount() > 0)
+    -- 1.19.1: stays available after Solo even before a full sync (Group syncs, or rejoins their plan)
+    local canGroup = NS.groupMode or (IsInGroup() and ((NS.SyncedCount and NS.SyncedCount() > 0)
+        or NS.otherPlan ~= nil or (NS.party and next(NS.party) ~= nil)))
     frame.groupBtn:SetText(NS.groupMode and "Solo" or "Group")
     frame.groupToggle:SetShown(canGroup and true or false)
     frame.groupToggle:Select(NS.groupMode and "group" or "solo")

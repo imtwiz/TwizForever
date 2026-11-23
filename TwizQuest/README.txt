@@ -264,3 +264,8 @@ Commands (/tq or /questroute)
   /tq way        auto-arrow on/off
   /tq learned    what it has learned
   /tq relearn    reset learning
+
+1.19.1: Solo -> Group works again. The Solo/Group switch stays after you pick
+Solo even if your party hasn't fully synced yet (Group asks them to sync), and
+if a party member is running a group plan, Group puts you back on THEIR plan
+instead of starting a second one that would take over theirs.

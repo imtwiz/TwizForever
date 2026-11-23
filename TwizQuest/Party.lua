@@ -257,18 +257,23 @@ local function OnMessage(msg, sender)
         local ids = {}
         for id in rest:gmatch("%d+") do ids[#ids + 1] = tonumber(id) end
         if #ids == 0 then
+            if NS.otherPlan and NS.otherPlan.from == who then NS.otherPlan = nil end
             if NS.groupPlan and NS.groupPlan.from == who then
                 NS.groupPlan, NS.groupMode = nil, false
                 NS.Print(who .. " ended the group plan - back to your own route.")
                 NS.cache = nil; if NS.Replan then NS.Replan() end
             end
         elseif soloChosen then
-            -- you chose Solo: keep your own route
+            -- you chose Solo: keep your own route, but remember their plan so Group rejoins it
+            local set = {}
+            for i, id in ipairs(ids) do set[id] = i end
+            NS.otherPlan = { from = who, ids = ids, set = set, at = GetTime() }
         else
             local set = {}
             for i, id in ipairs(ids) do set[id] = i end
             local fresh = not (NS.groupPlan and NS.groupPlan.from == who)
             NS.groupPlan = { from = who, ids = ids, set = set, at = GetTime() }
+            NS.otherPlan = NS.groupPlan
             NS.groupMode = true
             if fresh then
                 NS.Print(("%s started a group plan (%d quests) - your route now follows it. Click Solo or /tq solo to leave it."):format(who, #ids))
@@ -309,6 +314,7 @@ local members = {}
 local function RosterChanged()
     if not InGroup() then
         soloChosen = false
+        NS.otherPlan = nil
         if NS.groupMode then NS.EndGroupPlan(true) end
     end
     Prune()
@@ -661,11 +667,22 @@ end
 
 function NS.StartGroupPlan()
     if not InGroup() then NS.Print("join a party first."); return end
-    if NS.SyncedCount() == 0 then
-        NS.Print("no one in your party is syncing TwizQuest yet (/tq party).")
+    soloChosen = false
+    -- 1.19.1: back from Solo onto the plan someone else is running: rejoin it (don't start a
+    -- second plan that would take over theirs)
+    local other = NS.otherPlan
+    if other and NS.party[other.from] then
+        NS.groupPlan, NS.groupMode = other, true
+        NS.Print(("back on %s's group plan."):format(other.from))
+        NS.cache = nil
+        if NS.Replan then NS.Replan() end
         return
     end
-    soloChosen = false
+    if NS.SyncedCount() == 0 then
+        -- not synced (yet): ask for it and plan with what arrives
+        NS.PartyResync()
+        NS.Print("syncing with your party - the group plan fills in as their quests arrive.")
+    end
     NS.groupMode, NS.groupPlan = true, nil
     NS.Print("planning the fastest XP for your group...")
     NS.cache = nil
@@ -674,6 +691,7 @@ end
 
 function NS.EndGroupPlan(quiet)
     if not quiet then soloChosen = true end
+    if NS.groupPlan then NS.otherPlan = NS.groupPlan end -- Group brings you back to it
     local mine = NS.groupMode and not NS.groupPlan
     NS.groupMode, NS.groupPlan = false, nil
     if mine and InGroup() then Send("G|") end
