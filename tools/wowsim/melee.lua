@@ -50,7 +50,7 @@ L("with Slice and Dice: " .. key("TwizRogueButton", 1):match("castsequence.*"))
 
 -- WARRIOR
 UnitClass = function() return "warrior", "WARRIOR" end
-known = { ["Battle Shout"] = 6673, ["Rend"] = 772, ["Heroic Strike"] = 78, ["Execute"] = 5308, ["Victory Rush"] = 34428,
+known = { ["Overpower"] = 7384, ["Battle Shout"] = 6673, ["Rend"] = 772, ["Heroic Strike"] = 78, ["Execute"] = 5308, ["Victory Rush"] = 34428,
   ["Charge"] = 100, ["Intercept"] = 20252, ["Pummel"] = 6552, ["Shield Bash"] = 72 }
 weapons[17] = "item:7003"
 SIM.LoadAddon(REPO .. "/TwizWarrior", "TwizWarrior")
@@ -63,3 +63,8 @@ assert(key("TwizWarriorButton", 1):find("reset=target Rend, null") and key("Twiz
 L("charge: " .. key("TwizWarriorButton", 2))
 L("interrupt with a shield: " .. key("TwizWarriorButton", 3))
 assert(key("TwizWarriorButton", 3):find("Shield Bash"))
+assert(key("TwizWarriorButton", 1):find("/cast %[stance:1,@target,harm,nodead%] Overpower"))
+L("overpower line present")
+SlashCmdList.TWIZWARRIOR("overpower")
+assert(not key("TwizWarriorButton", 1):find("Overpower"))
+L("overpower off: gone")

@@ -117,12 +117,13 @@ NS.ADDONS = {
     },
     {
         name = "TwizWarrior", slash = "TWIZWARRIOR", cmd = "/warrior", icon = "Interface\\Icons\\Ability_Warrior_Charge",
-        blurb = "One-key warrior: auto attack, Battle Shout when missing, Rend once, Heroic Strike, Execute and Victory Rush when usable; Charge/Intercept and interrupt keys.",
+        blurb = "One-key warrior: auto attack, Battle Shout when missing, Rend once, Heroic Strike, Execute, Overpower and Victory Rush when usable; Charge/Intercept and interrupt keys.",
         db = function() return TwizWarriorDB end,
         settings = {
             { "Battle Shout when missing", function(d) return NotFalse(d.shout) end, flip("shout") },
             { "Rend once per target", function(d) return NotFalse(d.rend) end, flip("rend") },
             { "Heroic Strike on every press", function(d) return NotFalse(d.hs) end, flip("hs") },
+            { "Overpower after a dodge", function(d) return NotFalse(d.overpower) end, flip("overpower") },
         },
         actions = { { "Status", "status" } },
     },
