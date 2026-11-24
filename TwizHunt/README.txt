@@ -1,4 +1,4 @@
-TwizHunt 1.0.0 - one-key hunter
+TwizHunt 1.1.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -20,7 +20,10 @@ SHOOT (the one key)
   what happens mid-fight. Out of combat it reads everything.
 
 MELEE
-  Auto attack + pet attack + Raptor Strike; hold Shift for Mongoose Bite.
+  Auto attack + pet attack + Raptor Strike, plus Mongoose Bite (after the
+  target dodges) and Counterattack (after you parry, talent) whenever the
+  game allows them (1.1.0). Kill Command (after a crit) goes on the Shoot
+  key once you know it. /hunt reactives turns these off.
   (The game doesn't let addons check range, so switch keys yourself when
   something reaches you.)
 
@@ -38,5 +41,6 @@ Commands
   /hunt aspects       automatic Aspect of the Hawk on/off
   /hunt cheetah       Aspect of the Cheetah with nothing targeted on/off
   /hunt pet           pet care on the Shoot key on/off
+  /hunt reactives     Mongoose Bite / Counterattack / Kill Command on/off
   /hunt ammo [n]      ammo restock on/off, or keep n stacks
   /hunt food [n]      pet food restock on/off, or keep n

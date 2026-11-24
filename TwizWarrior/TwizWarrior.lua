@@ -3,7 +3,8 @@
 --     auto attack; per target: Battle Shout (only when it was missing as the fight started), then
 --     Rend once; then Heroic Strike on every press (it waits for your next swing, so it doesn't
 --     block the rest), Execute when the target is low enough to allow it, Overpower right after the
---     target dodges (Battle Stance), and Victory Rush when it's up after a kill.
+--     target dodges (Battle Stance), Revenge after you block, dodge or parry (Defensive Stance), and
+--     Victory Rush when it's up after a kill.
 --     /warrior hs turns the Heroic Strike dump off if you're short on rage (Forever's rage is
 --     tighter than Classic's).
 --   Charge key: Charge out of combat, Intercept in combat (once you know it).
@@ -12,7 +13,7 @@
 -- spells that aren't usable right now (Execute, Victory Rush) are simply skipped by the game.
 local ADDON, NS = ...
 local db
-local DEFAULTS = { shout = true, rend = true, hs = true, overpower = true }
+local DEFAULTS = { shout = true, rend = true, hs = true, overpower = true, revenge = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffc79c6eTwizWarrior|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -62,6 +63,8 @@ local function AttackMacro()
     -- 1.1.0: Overpower whenever the target has just dodged (Battle Stance only; the game only
     -- allows it for a few seconds after a dodge, so most presses it's just skipped)
     if db.overpower and Known("Overpower") then lines[#lines + 1] = ("/cast [stance:1,%s] Overpower"):format(T) end
+    -- 1.2.0: Revenge whenever the game allows it (after you block, dodge or parry; Defensive Stance)
+    if db.revenge and Known("Revenge") then lines[#lines + 1] = ("/cast [stance:2,%s] Revenge"):format(T) end
     if Known("Victory Rush") then lines[#lines + 1] = ("/cast [%s] Victory Rush"):format(T) end
     return table.concat(lines, "\n")
 end
@@ -118,7 +121,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
 end)
 
 _G["BINDING_HEADER_TWIZWARRIOR"] = "TwizWarrior"
-_G["BINDING_NAME_CLICK TwizWarriorButton:LeftButton"] = "Attack (shout, Rend, Heroic Strike, Execute, Overpower, Victory Rush)"
+_G["BINDING_NAME_CLICK TwizWarriorButton:LeftButton"] = "Attack (shout, Rend, Heroic Strike, Execute, Overpower, Revenge, Victory Rush)"
 _G["BINDING_NAME_CLICK TwizWarriorButton:RightButton"] = "Charge (Intercept in combat)"
 _G["BINDING_NAME_CLICK TwizWarriorButton:MiddleButton"] = "Interrupt (Pummel / Shield Bash)"
 
@@ -132,11 +135,12 @@ SlashCmdList["TWIZWARRIOR"] = function(msg)
     elseif cmd == "rend" then flip("rend", "Rend once per target")
     elseif cmd == "hs" then flip("hs", "Heroic Strike on every press")
     elseif cmd == "overpower" or cmd == "op" then flip("overpower", "Overpower after a dodge")
+    elseif cmd == "revenge" then flip("revenge", "Revenge after a block, dodge or parry")
     elseif cmd == "status" or cmd == "" then
-        Print(("Battle Shout %s, Rend %s, Heroic Strike %s, Overpower %s."):format(onoff(db.shout), onoff(db.rend), onoff(db.hs), onoff(db.overpower)))
-        if cmd == "" then Print("/warrior shout | rend | hs | overpower | status") end
+        Print(("Battle Shout %s, Rend %s, Heroic Strike %s, Overpower %s, Revenge %s."):format(onoff(db.shout), onoff(db.rend), onoff(db.hs), onoff(db.overpower), onoff(db.revenge)))
+        if cmd == "" then Print("/warrior shout | rend | hs | overpower | revenge | status") end
     else
-        Print("/warrior shout | rend | hs | overpower | status")
+        Print("/warrior shout | rend | hs | overpower | revenge | status")
     end
 end
 TwizWarrior = NS

@@ -1,4 +1,4 @@
-TwizRogue 1.0.0 - one-key rogue
+TwizRogue 1.1.0 - one-key rogue
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizRogue.
@@ -20,6 +20,11 @@ ATTACK (the one key)
   can't count combo points, so a crit that gives 2 still waits for the third
   builder.
 
+  REACTIVES (1.1.0): Riposte (after you parry, talent) and Surprise Attack
+  (after the target dodges) go off by themselves on the next press the game
+  allows them; the rest of the time the game skips them. /rogue reactives
+  turns that off.
+
 INTERRUPT
   Kick; hold Shift for Gouge.
 
@@ -28,4 +33,4 @@ VENDOR RESTOCK
   sells that you already carry, up to 10 each.
 
 Commands: /rogue (status), /rogue opener <auto|ambush|cheap|garrote>,
-/rogue stealth, /rogue poisons, /rogue snd, /rogue restock
+/rogue stealth, /rogue poisons, /rogue snd, /rogue reactives, /rogue restock

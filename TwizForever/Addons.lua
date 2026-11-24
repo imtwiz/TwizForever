@@ -92,12 +92,13 @@ NS.ADDONS = {
     },
     {
         name = "TwizHunt", slash = "TWIZHUNT", cmd = "/hunt", icon = "Interface\\Icons\\Ability_Hunter_SniperShot",
-        blurb = "One-key hunter: Auto Shot, pet attack, Hunter's Mark, Summon Hawk, Serpent Sting and Arcane Shot on one key; a melee key; the right aspect and pet care out of combat; ammo and pet food restock at vendors.",
+        blurb = "One-key hunter: Auto Shot, pet attack, Hunter's Mark, Summon Hawk, Serpent Sting and Arcane Shot on one key; a melee key with Mongoose Bite / Counterattack when allowed; the right aspect and pet care out of combat; ammo and pet food restock at vendors.",
         db = function() return TwizHuntDB end,
         settings = {
             { "Aspect of the Hawk automatically", function(d) return NotFalse(d.aspects) end, flip("aspects") },
             { "Aspect of the Cheetah, no target", function(d) return T(d.cheetah) end, flip("cheetah") },
             { "Pet care on the Shoot key", function(d) return NotFalse(d.petCare) end, flip("pet") },
+            { "Mongoose Bite / Counterattack / Kill Command", function(d) return NotFalse(d.reactives) end, flip("reactives") },
             { "Restock ammo at vendors", function(d) return NotFalse(d.ammo) end, flip("ammo") },
             { "Restock pet food at vendors", function(d) return NotFalse(d.petFood) end, flip("food") },
         },
@@ -105,25 +106,27 @@ NS.ADDONS = {
     },
     {
         name = "TwizRogue", slash = "TWIZROGUE", cmd = "/rogue", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate",
-        blurb = "One-key rogue: opener from Stealth, then Sinister Strike (or Mutilate) x3 -> Eviscerate; poisons on your weapons out of combat; Kick/Gouge key; Flash Powder and poison restock.",
+        blurb = "One-key rogue: opener from Stealth, then Sinister Strike (or Mutilate) x3 -> Eviscerate, Riposte when allowed; poisons on your weapons out of combat; Kick/Gouge key; Flash Powder and poison restock.",
         db = function() return TwizRogueDB end,
         settings = {
             { "Poisons on weapons (out of combat)", function(d) return NotFalse(d.poisons) end, flip("poisons") },
             { "Stealth first on an enemy", function(d) return T(d.stealth) end, flip("stealth") },
             { "Slice and Dice in the sequence", function(d) return T(d.snd) end, flip("snd") },
+            { "Riposte / Surprise Attack when allowed", function(d) return NotFalse(d.reactives) end, flip("reactives") },
             { "Restock at vendors", function(d) return NotFalse(d.restock) end, flip("restock") },
         },
         actions = { { "Status", "status" } },
     },
     {
         name = "TwizWarrior", slash = "TWIZWARRIOR", cmd = "/warrior", icon = "Interface\\Icons\\Ability_Warrior_Charge",
-        blurb = "One-key warrior: auto attack, Battle Shout when missing, Rend once, Heroic Strike, Execute, Overpower and Victory Rush when usable; Charge/Intercept and interrupt keys.",
+        blurb = "One-key warrior: auto attack, Battle Shout when missing, Rend once, Heroic Strike, Execute, Overpower, Revenge and Victory Rush when usable; Charge/Intercept and interrupt keys.",
         db = function() return TwizWarriorDB end,
         settings = {
             { "Battle Shout when missing", function(d) return NotFalse(d.shout) end, flip("shout") },
             { "Rend once per target", function(d) return NotFalse(d.rend) end, flip("rend") },
             { "Heroic Strike on every press", function(d) return NotFalse(d.hs) end, flip("hs") },
             { "Overpower after a dodge", function(d) return NotFalse(d.overpower) end, flip("overpower") },
+            { "Revenge after a block, dodge or parry", function(d) return NotFalse(d.revenge) end, flip("revenge") },
         },
         actions = { { "Status", "status" } },
     },
@@ -136,6 +139,18 @@ NS.ADDONS = {
             { "\"Opened\" chat messages", function(d) return NotFalse(d.announce) end, flip("quiet") },
         },
         actions = { { "Status", "status" }, { "Ignored items", "ignored" }, { "Try again", "retry" } },
+    },
+    {
+        name = "TwizInterrupt", slash = "TWIZINTERRUPT", cmd = "/interrupt", icon = "Interface\\Icons\\Ability_Kick",
+        blurb = "Interrupts for every class: one key interrupts the enemy under your mouse (else your target), and a big alert with a sound shows the moment your target or a nearby enemy starts a cast you can interrupt.",
+        db = function() return TwizInterruptDB end,
+        settings = {
+            { "Cast alert", function(d) return NotFalse(d.alert) end, flip("alert") },
+            { "Alert sound", function(d) return NotFalse(d.sound) end, flip("sound") },
+            { "Nearby enemies too (in a fight)", function(d) return NotFalse(d.nearby) end, flip("nearby") },
+            { "Enemy under the mouse first", function(d) return NotFalse(d.hover) end, flip("hover") },
+        },
+        actions = { { "Test alert", "test" }, { "Move alert", "unlock" }, { "Lock alert", "lock" }, { "Status", "status" } },
     },
     {
         name = "TwizErrors", slash = "TWIZERRORS", cmd = "/terr", icon = "Interface\\Icons\\Spell_Holy_Silence",

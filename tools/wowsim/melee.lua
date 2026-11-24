@@ -29,7 +29,7 @@ GetWeaponEnchantInfo = function() return enchants[1], 0, 0, 0, enchants[2] end
 
 -- ROGUE
 UnitClass = function() return "rogue", "ROGUE" end
-for n, id in pairs({ ["Stealth"] = 1784, ["Sinister Strike"] = 1752, ["Eviscerate"] = 2098, ["Ambush"] = 8676,
+for n, id in pairs({ ["Riposte"] = 14251, ["Stealth"] = 1784, ["Sinister Strike"] = 1752, ["Eviscerate"] = 2098, ["Ambush"] = 8676,
   ["Cheap Shot"] = 1833, ["Kick"] = 1766, ["Gouge"] = 1776, ["Slice and Dice"] = 5171 }) do known[n] = id end
 bag[0] = { 6947, 6949, 2892 }
 SIM.LoadAddon(REPO .. "/TwizRogue", "TwizRogue")
@@ -50,7 +50,7 @@ L("with Slice and Dice: " .. key("TwizRogueButton", 1):match("castsequence.*"))
 
 -- WARRIOR
 UnitClass = function() return "warrior", "WARRIOR" end
-known = { ["Overpower"] = 7384, ["Battle Shout"] = 6673, ["Rend"] = 772, ["Heroic Strike"] = 78, ["Execute"] = 5308, ["Victory Rush"] = 34428,
+known = { ["Revenge"] = 6572, ["Overpower"] = 7384, ["Battle Shout"] = 6673, ["Rend"] = 772, ["Heroic Strike"] = 78, ["Execute"] = 5308, ["Victory Rush"] = 34428,
   ["Charge"] = 100, ["Intercept"] = 20252, ["Pummel"] = 6552, ["Shield Bash"] = 72 }
 weapons[17] = "item:7003"
 SIM.LoadAddon(REPO .. "/TwizWarrior", "TwizWarrior")
@@ -68,3 +68,11 @@ L("overpower line present")
 SlashCmdList.TWIZWARRIOR("overpower")
 assert(not key("TwizWarriorButton", 1):find("Overpower"))
 L("overpower off: gone")
+-- reactives
+assert(key("TwizRogueButton", 1):find("/startattack %[@target,harm,nodead%] || /cast %[@target,harm,nodead%] Riposte || /castsequence"), "DBG " .. key("TwizRogueButton", 1))
+L("rogue Riposte before the builder sequence")
+SlashCmdList.TWIZROGUE("reactives"); assert(not key("TwizRogueButton", 1):find("Riposte")); SlashCmdList.TWIZROGUE("reactives")
+assert(key("TwizWarriorButton", 1):find("/cast %[stance:2,@target,harm,nodead%] Revenge"))
+L("warrior: " .. key("TwizWarriorButton", 1))
+SlashCmdList.TWIZWARRIOR("revenge"); assert(not key("TwizWarriorButton", 1):find("Revenge"))
+L("revenge off: gone")

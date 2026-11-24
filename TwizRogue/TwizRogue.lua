@@ -7,13 +7,15 @@
 --     garrote|cheap|ambush to choose) - without breaking Stealth by auto attacking;
 --     then auto attack and, per target: builder x3 -> Eviscerate (builder = Mutilate once you
 --     know it and hold daggers, else Sinister Strike; /rogue snd adds Slice and Dice after the first).
+--     Riposte (after you parry) and Surprise Attack (after the target dodges) go off by themselves
+--     whenever the game allows them (/rogue reactives turns that off).
 --   Interrupt key: Kick (Shift: Gouge).
 --   At vendors: tops up Flash Powder (once you know Vanish) and poisons the vendor sells.
 -- The game locks keys in combat and hides combo points' effect on macros, so the order is fixed: a
 -- sequence only moves on when a cast actually goes off (not enough energy = it waits).
 local ADDON, NS = ...
 local db
-local DEFAULTS = { poisons = true, stealth = false, opener = "auto", snd = false, restock = true, powder = 10, poisonCount = 10 }
+local DEFAULTS = { poisons = true, stealth = false, opener = "auto", snd = false, reactives = true, restock = true, powder = 10, poisonCount = 10 }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cfffff569TwizRogue|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -127,6 +129,14 @@ local function AttackMacro()
         lines[#lines + 1] = "/stopmacro [stealth]"
     end
     lines[#lines + 1] = ("/startattack [%s]"):format(T)
+    -- 1.1.0: reactives first - the builder below always takes the global cooldown, so anything after it
+    -- would never fire. The game only allows these right after a parry/dodge and skips them otherwise;
+    -- a sequence step doesn't advance on a press where a reactive went off instead.
+    if db.reactives then
+        for _, r in ipairs({ "Riposte", "Surprise Attack" }) do
+            if Known(r) then lines[#lines + 1] = ("/cast [%s] %s"):format(T, r) end
+        end
+    end
     local b = Builder()
     -- three builders, then the finisher (with Slice and Dice: right after the first builder)
     local seq = { b }
@@ -218,7 +228,7 @@ end)
 C_Timer.NewTicker(5, function() if db and not InCombatLockdown() and select(2, UnitClass("player")) == "ROGUE" then NS.Update() end end)
 
 _G["BINDING_HEADER_TWIZROGUE"] = "TwizRogue"
-_G["BINDING_NAME_CLICK TwizRogueButton:LeftButton"] = "Attack (Stealth, opener, builder -> Eviscerate; poisons out of combat)"
+_G["BINDING_NAME_CLICK TwizRogueButton:LeftButton"] = "Attack (Stealth, opener, Riposte, builder -> Eviscerate; poisons out of combat)"
 _G["BINDING_NAME_CLICK TwizRogueButton:RightButton"] = "Interrupt (Kick; Shift: Gouge)"
 
 local function onoff(v) return v and "on" or "off" end
@@ -230,17 +240,18 @@ SlashCmdList["TWIZROGUE"] = function(msg)
     if cmd == "poisons" then flip("poisons", "poisons on the Attack key")
     elseif cmd == "stealth" then flip("stealth", "Stealth first on the Attack key")
     elseif cmd == "snd" then flip("snd", "Slice and Dice in the sequence")
+    elseif cmd == "reactives" or cmd == "riposte" then flip("reactives", "Riposte / Surprise Attack when allowed")
     elseif cmd == "restock" then flip("restock", "Flash Powder / poison restock at vendors")
     elseif cmd == "opener" then
         if rest == "ambush" or rest == "cheap" or rest == "garrote" or rest == "auto" then
             db.opener = rest; Print("opener: " .. rest); NS.Update()
         else Print("/rogue opener auto|ambush|cheap|garrote  (auto: Ambush with a dagger, else Cheap Shot)") end
     elseif cmd == "status" or cmd == "" then
-        Print(("opener %s, Stealth first %s, poisons %s, Slice and Dice %s, restock %s. Next out-of-combat fix: %s.")
-            :format(db.opener, onoff(db.stealth), onoff(db.poisons), onoff(db.snd), onoff(db.restock), NS.next or "none"))
-        if cmd == "" then Print("/rogue opener <auto|ambush|cheap|garrote> | stealth | poisons | snd | restock | status") end
+        Print(("opener %s, Stealth first %s, poisons %s, Slice and Dice %s, reactives %s, restock %s. Next out-of-combat fix: %s.")
+            :format(db.opener, onoff(db.stealth), onoff(db.poisons), onoff(db.snd), onoff(db.reactives), onoff(db.restock), NS.next or "none"))
+        if cmd == "" then Print("/rogue opener <auto|ambush|cheap|garrote> | stealth | poisons | snd | reactives | restock | status") end
     else
-        Print("/rogue opener <auto|ambush|cheap|garrote> | stealth | poisons | snd | restock | status")
+        Print("/rogue opener <auto|ambush|cheap|garrote> | stealth | poisons | snd | reactives | restock | status")
     end
 end
 TwizRogue = NS

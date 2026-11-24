@@ -2,7 +2,7 @@
 local L = function(s) SIM.log[#SIM.log + 1] = s end
 SIM.class = "HUNTER"
 UnitClass = function() return "hunter", "HUNTER" end
-local known = { ["Auto Shot"] = 75, ["Hunter's Mark"] = 1130, ["Serpent Sting"] = 1978, ["Arcane Shot"] = 3044,
+local known = { ["Mongoose Bite"] = 1495, ["Counterattack"] = 19306, ["Kill Command"] = 34026, ["Auto Shot"] = 75, ["Hunter's Mark"] = 1130, ["Serpent Sting"] = 1978, ["Arcane Shot"] = 3044,
   ["Summon Hawk"] = 9001, ["Raptor Strike"] = 2973, ["Aspect of the Hawk"] = 13165, ["Mend Pet"] = 136,
   ["Revive Pet"] = 982, ["Call Pet"] = 883, ["Feed Pet"] = 6991, ["Aspect of the Cheetah"] = 5118 }
 C_Spell = C_Spell or {}
@@ -69,3 +69,8 @@ L("pet key: " .. key(3))
 SIM.Fire("MERCHANT_SHOW")
 L("vendor bought: " .. table.concat(bought, ", "))
 assert(bought[1] == "2515x200" and bought[#bought]:find("^2287x"), "Sharp Arrow topped up, Haunch of Meat for the pet")
+assert(key(2):find("/cast %[@target,harm,nodead%] Counterattack || /cast %[@target,harm,nodead%] Mongoose Bite || /cast %[@target,harm,nodead%] Raptor Strike"), "DBG " .. key(2))
+assert(key(1):find("Arcane Shot || /cast %[@target,harm,nodead%] Kill Command"), "DBG " .. key(1))
+L("hunter reactives in")
+SlashCmdList.TWIZHUNT("reactives"); assert(not key(2):find("Mongoose") and not key(1):find("Kill Command"))
+L("hunter reactives off")

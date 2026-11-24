@@ -5,7 +5,9 @@
 --     targeted (Aspect of the Cheetah with nothing targeted, if you turn that on);
 --     then on an enemy: Auto Shot + pet attack, and on each new target Hunter's Mark ->
 --     Summon Hawk -> Serpent Sting, then Arcane Shot whenever it's ready.
---   Melee key: Raptor Strike + auto attack + pet attack (Shift: Mongoose Bite).
+--   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
+--   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
+--   is added to the Shoot key once you know it. /hunt reactives turns those off.
 --   Pet key: mend / revive / call / feed, whenever.
 --   At any vendor: tops up ammo for your ranged weapon and food your pet eats.
 -- The game locks keys in combat and hides health and buffs from addons, so in a fight it runs
@@ -13,7 +15,7 @@
 local ADDON, NS = ...
 local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
-    petFood = true, petFoodCount = 20, mendAt = 0.6 }
+    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -156,16 +158,21 @@ local function ShootLines()
         lines[#lines + 1] = "/castsequence [@target,harm,nodead] reset=target " .. table.concat(seq, ", ") .. ", null"
     end
     if Known("Arcane Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Arcane Shot" end
+    -- 1.1.0: Kill Command is off the global cooldown, so after Arcane Shot it still goes off when allowed
+    if db.reactives and Known("Kill Command") then lines[#lines + 1] = "/cast [@target,harm,nodead] Kill Command" end
     return lines
 end
 
 local function MeleeMacro()
     local lines = { "/startattack [@target,harm,nodead]", "/petattack [@target,harm,nodead]" }
-    if Known("Mongoose Bite") and Known("Raptor Strike") then
-        lines[#lines + 1] = "/cast [mod:shift,@target,harm,nodead] Mongoose Bite; [@target,harm,nodead] Raptor Strike"
-    elseif Known("Raptor Strike") then
-        lines[#lines + 1] = "/cast [@target,harm,nodead] Raptor Strike"
+    -- 1.1.0: reactives first (the game only allows them right after a dodge/parry and skips them
+    -- otherwise); Raptor Strike waits for your next swing, so it still goes off on the same press
+    if db.reactives then
+        for _, r in ipairs({ "Counterattack", "Mongoose Bite" }) do
+            if Known(r) then lines[#lines + 1] = "/cast [@target,harm,nodead] " .. r end
+        end
     end
+    if Known("Raptor Strike") then lines[#lines + 1] = "/cast [@target,harm,nodead] Raptor Strike" end
     return table.concat(lines, "\n")
 end
 
@@ -310,7 +317,7 @@ end)
 
 _G["BINDING_HEADER_TWIZHUNT"] = "TwizHunt"
 _G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Arcane; fixes pet/aspect out of combat)"
-_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike; Shift: Mongoose Bite)"
+_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack)"
 _G["BINDING_NAME_CLICK TwizHuntButton:MiddleButton"] = "Pet care (mend / revive / call / feed)"
 
 local function onoff(v) return v and "on" or "off" end
@@ -322,6 +329,7 @@ SlashCmdList["TWIZHUNT"] = function(msg)
     if cmd == "aspects" then flip("aspects", "automatic Aspect of the Hawk")
     elseif cmd == "cheetah" then flip("cheetah", "Aspect of the Cheetah when nothing's targeted")
     elseif cmd == "pet" then flip("petCare", "pet care on the Shoot key")
+    elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")
     elseif cmd == "ammo" then
         local n = tonumber(rest)
         if n then db.ammoStacks = math.max(0, math.floor(n)); Print(("keeping %d stacks of ammo."):format(db.ammoStacks))
@@ -331,12 +339,12 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         if n then db.petFoodCount = math.max(0, math.floor(n)); Print(("keeping %d pet food."):format(db.petFoodCount))
         else flip("petFood", "pet food restock at vendors") end
     elseif cmd == "status" or cmd == "" then
-        Print(("aspects %s (cheetah %s), pet care %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
-            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.ammo), db.ammoStacks or 5,
+        Print(("aspects %s (cheetah %s), pet care %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
+            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
             onoff(db.petFood), db.petFoodCount or 20, NS.next or "none"))
-        if cmd == "" then Print("/hunt aspects | cheetah | pet | ammo [stacks] | food [count] | status") end
+        if cmd == "" then Print("/hunt aspects | cheetah | pet | reactives | ammo [stacks] | food [count] | status") end
     else
-        Print("/hunt aspects | cheetah | pet | ammo [stacks] | food [count] | status")
+        Print("/hunt aspects | cheetah | pet | reactives | ammo [stacks] | food [count] | status")
     end
 end
 TwizHunt = NS
