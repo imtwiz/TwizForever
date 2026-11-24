@@ -4,6 +4,7 @@ TwizQuest = NS
 BINDING_HEADER_TWIZQUEST = "TwizQuest"
 BINDING_NAME_TWIZQUEST_NEXT = "Waypoint to step 1"
 _G["BINDING_NAME_CLICK TwizQuestTargetButton:LeftButton"] = "Target step 1's mob or NPC"
+_G["BINDING_NAME_CLICK TwizQuestItemButton:LeftButton"] = "Use step 1's quest item"
 
 NS.DEFAULTS = {
     horizon   = 60,    -- minutes of play to plan
@@ -24,6 +25,8 @@ NS.DEFAULTS = {
     autoAccept = true, -- accept every quest offered (hold Shift to skip)
     talkKeys  = true,  -- keyboard dialogue: Space = next step, 1-9 = pick a line (/tq talk)
     flightBar = true,  -- flight timer bar while flying (/tq flights)
+    miniLine  = true,  -- dotted minimap line to step 1 (/tq line)
+    trainer   = true,  -- class trainer stop after an even level (/tq trainer)
     minimap   = true,  -- minimap button
     minimapAngle = 200, -- where it sits around the minimap (degrees)
     shown     = true,

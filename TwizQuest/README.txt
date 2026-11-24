@@ -283,3 +283,27 @@ remembered per route. While flying, a bar at the top counts down to landing
 (the first time on a route it counts up while timing it). Hovering a
 destination on the flight map shows its time. Drag the bar to move it.
 /tq flights turns the bar on/off; /tq flights list shows every timed flight.
+
+1.21.0
+  HEARTHSTONE IN THE PLAN - TwizQuest learns where your hearth is (when you set
+  it at an innkeeper, or the first time you hearth there). When it's off
+  cooldown and hearthing then walking beats walking, the first step shows
+  "hearth to <inn>". At an innkeeper whose inn is close to your next steps
+  (and your hearth is far from them) it suggests setting your hearth there.
+  /tq hearth shows what it knows.
+  REAL TRAVEL TIMES - flight masters' spots are learned when you open a flight
+  map; with the flight times TwizQuest has recorded, a leg that's faster by air
+  shows "fly <here> to <there>" and the plan's times count the flight.
+  QUEST ITEM BUTTON - when one of the next steps' quests has an item you use,
+  it appears in a button beside the TwizQuest window and on a key (Options >
+  Keybindings > AddOns > TwizQuest: "Use step 1's quest item").
+  BEST REWARD - on a reward screen with a choice, TwizQuest names the best one:
+  a real upgrade for your class (armor you'd actually wear, higher item level
+  than what you have in that slot), otherwise the one that sells for the most.
+  Space takes it; 1-9 still picks by hand.
+  CLASS TRAINER STOP - after you ding an even level, the route gets a "Train new
+  ranks" stop at your nearest class trainer on this continent, where it costs
+  the least time. Visiting the trainer clears it; right-click it to put it off
+  30 minutes. /tq trainer turns it on/off.
+  MINIMAP LINE - a dotted line on the minimap from you toward step 1, redrawn
+  as you move (uses HereBeDragons, which comes with Questie). /tq line.

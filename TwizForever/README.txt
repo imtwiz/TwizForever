@@ -1,9 +1,9 @@
-TwizForever 1.1.0 - one menu for all the Twiz addons
+TwizForever 1.2.0 - one menu for all the Twiz addons
 =====================================================
 
 /twiz (or click the gear on the minimap) opens a window listing every Twiz
-addon: TwizAH, TwizQuest, TwizCraft, TwizChef, TwizBuff, TwizHeal, TwizOpen
-and TwizErrors.
+addon: TwizAH, TwizQuest, TwizCraft, TwizChef, TwizBuff, TwizHeal, TwizHunt,
+TwizOpen and TwizErrors.
 
 Left: each addon with its icon and state - on (with its version), off,
 "on/off after reload", or not installed.
@@ -26,3 +26,5 @@ Commands
 1.1.0: each addon's row shows how many Lua errors it threw this session (from
 TwizErrors' error catcher), plus the new settings: TwizQuest keyboard dialogue
 and flight timer, TwizErrors error catching, and a "Caught errors" button.
+
+1.2.0: TwizHunt added; TwizQuest's minimap line, trainer stops and hearth info.

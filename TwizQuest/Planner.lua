@@ -576,7 +576,10 @@ end
 -- Routing
 ------------------------------------------------------------------------
 local function Leg(a, b)
-    return NS.TravelTime(NS.Dist(a.x, a.y, b.x, b.y))
+    local walk = NS.TravelTime(NS.Dist(a.x, a.y, b.x, b.y))
+    -- 1.21.0: your hearthstone (first leg) or a flight you've timed, when faster
+    if NS.TravelVia then return (NS.TravelVia(a, b, walk)) end
+    return walk
 end
 
 -- Rested XP doubles kill XP until the rested pool runs out, so while you're
@@ -761,7 +764,8 @@ function NS.Plan(full)
             if NS.OnPlan then NS.OnPlan(nil, "can't tell where you are here") end
             return
         end
-        local start = { x = px, y = py }
+        local start = { x = px, y = py, isStart = true }
+        if NS.PrepTravel then NS.PrepTravel(inst) end
         NS.restPool = (GetXPExhaustion and GetXPExhaustion()) or 0
         local cache = NS.cache
         local cands, free
@@ -773,11 +777,13 @@ function NS.Plan(full)
         end
         local route = BuildRoute(cands, free, start)
         local service = NS.AddServiceStop and NS.AddServiceStop(route, start, inst, Leg)
+        if NS.AddTrainerStop then NS.AddTrainerStop(route, start, inst, Leg) end
         local t, prev, xp = 0, start, 0
         local rest = NS.restPool or 0
         for _, s in ipairs(route) do
             s.dist = NS.Dist(prev.x, prev.y, s.x, s.y)
             s.travel = Leg(prev, s)
+            s.via = NS.TravelVia and select(2, NS.TravelVia(prev, s, NS.TravelTime(s.dist))) or nil
             t = t + s.travel + s.work
             local k = s.kxp or 0
             s.restBonus = math.min(k, rest)

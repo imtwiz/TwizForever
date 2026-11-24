@@ -36,8 +36,10 @@ NS.ADDONS = {
             { "Minimap button", function(d) return NotFalse(d.minimap) end, flip("minimap") },
             { "Keyboard dialogue (Space / 1-9)", function(d) return NotFalse(d.talkKeys) end, flip("talk") },
             { "Flight timer bar", function(d) return NotFalse(d.flightBar) end, flip("flights") },
+            { "Minimap line to step 1", function(d) return NotFalse(d.miniLine) end, flip("line") },
+            { "Class trainer stops", function(d) return NotFalse(d.trainer) end, flip("trainer") },
         },
-        actions = { { "Open", "" }, { "Share missing", "share" }, { "Share this zone", "sharezone" }, { "Clean up log", "cleanup" }, { "Flight times", "flights list" } },
+        actions = { { "Open", "" }, { "Share missing", "share" }, { "Share this zone", "sharezone" }, { "Clean up log", "cleanup" }, { "Flight times", "flights list" }, { "Hearth info", "hearth" } },
     },
     {
         name = "TwizCraft", slash = "CRAFTROUTE", cmd = "/tc", icon = "Interface\\Icons\\Trade_BlackSmithing",
@@ -87,6 +89,19 @@ NS.ADDONS = {
             { "Chat messages", function(d) return NotFalse(d.feedback) end, flip("quiet") },
         },
         actions = { { "Pre-HoT report", "prehot" }, { "Your ranks", "ranks" }, { "Debug", "debug" } },
+    },
+    {
+        name = "TwizHunt", slash = "TWIZHUNT", cmd = "/hunt", icon = "Interface\\Icons\\Ability_Hunter_SniperShot",
+        blurb = "One-key hunter: Auto Shot, pet attack, Hunter's Mark, Summon Hawk, Serpent Sting and Arcane Shot on one key; a melee key; the right aspect and pet care out of combat; ammo and pet food restock at vendors.",
+        db = function() return TwizHuntDB end,
+        settings = {
+            { "Aspect of the Hawk automatically", function(d) return NotFalse(d.aspects) end, flip("aspects") },
+            { "Aspect of the Cheetah, no target", function(d) return T(d.cheetah) end, flip("cheetah") },
+            { "Pet care on the Shoot key", function(d) return NotFalse(d.petCare) end, flip("pet") },
+            { "Restock ammo at vendors", function(d) return NotFalse(d.ammo) end, flip("ammo") },
+            { "Restock pet food at vendors", function(d) return NotFalse(d.petFood) end, flip("food") },
+        },
+        actions = { { "Status", "status" } },
     },
     {
         name = "TwizOpen", slash = "AUTOOPEN", cmd = "/ao", icon = "Interface\\Icons\\INV_Box_02",

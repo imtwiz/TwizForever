@@ -1,6 +1,8 @@
 <Bindings>
     <Binding name="CLICK TwizQuestTargetButton:LeftButton" header="TWIZQUEST" category="ADDONS">
     </Binding>
+    <Binding name="CLICK TwizQuestItemButton:LeftButton" category="ADDONS">
+    </Binding>
     <Binding name="TWIZQUEST_NEXT" category="ADDONS">
         if SlashCmdList and SlashCmdList.QUESTROUTE then SlashCmdList.QUESTROUTE("next") end
     </Binding>

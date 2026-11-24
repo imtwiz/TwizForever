@@ -22,7 +22,14 @@ local function Short(n)
 end
 
 -- what a step looks like: glyph, glyph color, title, subtitle, right-hand note
+local StepParts0
 local function StepParts(s)
+    local g, c, t, sub, note = StepParts0(s)
+    -- 1.21.0: how to get there when it's not on foot
+    if s.via then sub = (sub and sub ~= "" and (sub .. " · ") or "") .. "|cff66ddff" .. s.via .. "|r" end
+    return g, c, t, sub, note
+end
+function StepParts0(s)
     local q = s.q
     local dist = s.dist and (s.dist > 0 and ("%d yd"):format(s.dist) or (s.mobNames and s.role == 2 and "here")) or nil
     local function join(...)
@@ -32,6 +39,8 @@ local function StepParts(s)
     end
     if s.kind == "service" then
         return "$", "orange", (s.repair and "Sell & repair" or "Sell junk"), join(s.who, s.why, dist), s.why or ""
+    elseif s.kind == "trainer" then
+        return "T", "gold", "Train new ranks", join(s.who, dist), ""
     elseif s.kind == "bank" then
         return "B", "blue", ("Bank: %d %s"):format(s.need or 0, s.name or "items"), join(q.name, dist), ""
     elseif s.kind == "useitem" or s.kind == "bankstart" then
@@ -96,7 +105,7 @@ local function StepTooltip(owner, s)
     GameTooltip:AddDoubleLine("Work", NS.FormatTime(s.work or 0), 0.7, 0.7, 0.7, 1, 1, 1)
     if (s.kxp or 0) > 0 then GameTooltip:AddDoubleLine("Kill XP", NS.FormatNum(s.kxp), 0.7, 0.7, 0.7, 1, 1, 1) end
     if s.role == 3 then GameTooltip:AddDoubleLine("Quest XP", NS.FormatNum(s.q.xp), 0.7, 0.7, 0.7, 1, 1, 1) end
-    GameTooltip:AddLine(s.kind == "service" and "Click: do this next.  Right-click: skip selling for 20 minutes."
+    GameTooltip:AddLine((s.kind == "service" or s.kind == "trainer") and (s.kind == "trainer" and "Click: do this next.  Right-click: put off training for 30 minutes." or "Click: do this next.  Right-click: skip selling for 20 minutes.")
         or "Click: do this next.  Right-click: skip this quest.", 0.5, 0.8, 1)
     GameTooltip:Show()
 end
@@ -396,6 +405,7 @@ local function Build()
     card:SetScript("OnClick", function(self, button)
         -- right-click the sell/repair stop to skip it
         if button == "RightButton" and self.step and self.step.kind == "service" then NS.DismissService(); return end
+        if button == "RightButton" and self.step and self.step.kind == "trainer" then NS.DismissTrainer(); return end
         SetWaypoint(self.step)
     end)
     card:SetScript("OnEnter", function(self) StepTooltip(self, self.step) end)
@@ -434,6 +444,7 @@ local function Build()
         row:SetScript("OnClick", function(self, button)
             -- right-click: skip that quest (e.g. the game won't give it to you), or the sell/repair stop
             if button == "RightButton" and self.step and self.step.kind == "service" then NS.DismissService(); return end
+            if button == "RightButton" and self.step and self.step.kind == "trainer" then NS.DismissTrainer(); return end
             if button == "RightButton" and self.step and self.step.q and self.step.q.id and self.step.kind ~= "service" then
                 NS.Print(("skipping %s - /tq unskip brings it back."):format(self.step.q.name or "that quest"))
                 NS.SkipQuest(self.step.q.id, "manual")
@@ -508,6 +519,8 @@ local function Build()
             { "Auto-accept: " .. (NS.db.autoAccept and "on" or "off"), function() SlashCmdList.QUESTROUTE("accept") end },
             { "Keyboard dialogue: " .. (NS.db.talkKeys ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("talk") end },
             { "Flight timer: " .. (NS.db.flightBar ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("flights") end },
+            { "Minimap line: " .. (NS.db.miniLine ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("line") end },
+            { "Trainer stops: " .. (NS.db.trainer ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("trainer") end },
             { "Help (/tq help)", function() SlashCmdList.QUESTROUTE("help") end },
         }
     end, 30)
@@ -562,6 +575,7 @@ function NS.UpdateTargetButton()
     targetButton:SetAttribute("macrotext", name and ("/targetexact " .. name) or "")
     targetButton.name = name
     if targetButton.label then targetButton:SetAlpha(name and 1 or 0.4) end
+    if NS.UpdateItemButton then pcall(NS.UpdateItemButton) end -- 1.21.0: step 1's quest item
 end
 
 -- the gold "Target" button on the Next card is the secure button itself, so it
@@ -716,6 +730,17 @@ local function Done(questID, role)
     Refresh()
 end
 
+-- 1.21.0: put off the class trainer stop for 30 minutes
+function NS.DismissTrainer()
+    NS.SnoozeTrainer(30)
+    if plan and plan.route then
+        for i = #plan.route, 1, -1 do if plan.route[i].kind == "trainer" then table.remove(plan.route, i) end end
+        if NS.db.autoWay and plan.route[1] and not InCombatLockdown() then SetWaypoint(plan.route[1], true) end
+        NS.UpdateTargetButton()
+    end
+    NS.Print("trainer visit put off for 30 minutes.")
+    Refresh()
+end
 -- dismiss the sell/repair stop: gone now, and not suggested again for 20 minutes
 function NS.DismissService()
     NS.SnoozeService(20)
@@ -1037,6 +1062,9 @@ local function Help()
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
     print("  /tq talk         - keyboard dialogue on/off: Space = next step (accept, complete, reward), 1-9 = pick a line; hold Shift to type")
     print("  /tq flights      - flight timer bar on/off; /tq flights list = every flight timed so far")
+    print("  /tq line         - dotted minimap line to step 1 on/off")
+    print("  /tq trainer      - class trainer stop after even levels on/off")
+    print("  /tq hearth       - where TwizQuest thinks your hearth is (used in the plan when faster)")
     print("  /tq minimap      - show/hide the minimap button")
     print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
     print("  /tq solo         - back to your own route")
@@ -1091,6 +1119,17 @@ SlashCmdList.QUESTROUTE = function(msg)
         NS.TalkCmd(); return
     elseif cmd == "flights" or cmd == "flight" then
         NS.FlightsCmd(rest); return
+    elseif cmd == "line" then
+        NS.LineCmd(); return
+    elseif cmd == "trainer" then
+        NS.db.trainer = NS.db.trainer == false
+        NS.Print("class trainer stop after even levels " .. (NS.db.trainer and "on" or "off"))
+        NS.MarkDirty(); NS.Replan(); return
+    elseif cmd == "hearth" then
+        local b = NS.Bind and NS.Bind()
+        NS.Print(b and ("hearth: %s - %s. The plan uses it for the first leg when it's faster."):format(b.name or "?", NS.HearthReady() and "ready" or "on cooldown")
+            or "hearth spot not learned yet - set your hearth at an innkeeper, or hearth once, and TwizQuest remembers it.")
+        return
     elseif cmd == "accept" then
         NS.db.autoAccept = not NS.db.autoAccept
         NS.Print("auto-accept quests " .. (NS.db.autoAccept and "on (hold Shift when talking to an NPC to skip)" or "off"))

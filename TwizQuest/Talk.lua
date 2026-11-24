@@ -61,6 +61,9 @@ local function Next()
     if open == "complete" then
         local choices = GetNumQuestChoices and GetNumQuestChoices() or 0
         if choices <= 1 then GetQuestReward(choices == 1 and 1 or nil); return true end
+        -- 1.21.0: the best one (an upgrade for your class, else the best seller)
+        local best = NS.BestReward and NS.BestReward()
+        if best then GetQuestReward(best); return true end
         NS.Print(("pick a reward: press 1-%d."):format(choices))
         return true
     end

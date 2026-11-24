@@ -39,8 +39,30 @@ L("gossip 1 / 3 / W: " .. did[#did - 1] .. ", " .. did[#did] .. ", W passed thro
 assert(did[#did - 1] == "available 501" and did[#did] == "option 77")
 SIM.Fire("QUEST_DETAIL"); press("SPACE"); L("quest text Space: " .. did[#did]); assert(did[#did] == "accept" or did[#did - 1] == "accept")
 SIM.Fire("QUEST_PROGRESS"); press("SPACE"); L("turn-in Space: " .. did[#did]); assert(did[#did] == "complete")
-choices = 3; SIM.Fire("QUEST_COMPLETE"); local n0 = #did; press("SPACE"); press("2")
-L("reward screen (3 choices): Space picks nothing, 2 -> " .. did[#did]); assert(#did == n0 + 1 and did[#did] == "reward 2")
+-- 1.21.0: Space takes the best reward: a real upgrade for a druid (leather), else the best seller
+UnitClass = function() return "druid", "DRUID" end
+UnitLevel = function() return 25 end
+local rewards = { "item:5001", "item:5002", "item:5003" }
+GetQuestItemLink = function(kind, i) return rewards[i] end
+local realGII2 = GetItemInfo
+GetItemInfo = function(x)
+  if x == "item:5001" then return "Cloth Robe", nil, nil, 24, 20, "Armor", "Cloth", 1, "INVTYPE_CHEST", nil, 80 end
+  if x == "item:5002" then return "Leather Vest", nil, nil, 22, 20, "Armor", "Leather", 1, "INVTYPE_CHEST", nil, 30 end
+  if x == "item:5003" then return "Fancy Plate", nil, nil, 30, 20, "Armor", "Plate", 1, "INVTYPE_CHEST", nil, 900 end
+  if x == "item:4000" then return "Old Vest", nil, nil, 15, 10, "Armor", "Leather", 1, "INVTYPE_CHEST", nil, 5 end
+  return realGII2 and realGII2(x)
+end
+GetInventoryItemLink = function(u, slot) return slot == 5 and "item:4000" or nil end
+choices = 3; SIM.Fire("QUEST_COMPLETE"); local n0 = #did; press("SPACE")
+L("reward screen: Space -> " .. did[#did] .. "  (Leather Vest: the upgrade a druid can wear)")
+assert(did[#did] == "reward 2")
+GetInventoryItemLink = function() return nil end
+rewards = { "item:5001", "item:5003" }; choices = 2
+GetInventoryItemLink = function(u, slot) return slot == 5 and "item:5002" or nil end -- wearing better already
+local best, why = ns.BestReward()
+L("no upgrade: best = " .. tostring(best) .. " (" .. tostring(why) .. ")")
+assert(best == 2 and why == "sells best")
+press("2"); assert(did[#did] == "reward 2")
 SIM.Fire("QUEST_FINISHED"); local n1 = #did; press("SPACE"); assert(#did == n1, "closed: keys do nothing")
 ns.db.talkKeys = false; SIM.Fire("GOSSIP_SHOW"); press("SPACE"); assert(#did == n1, "/tq talk off")
 ns.db.talkKeys = true
