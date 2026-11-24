@@ -2,7 +2,7 @@
 --   /terr          on / off (off puts your old voice setting back)
 --   /terr text     also hide the matching red error text (off by default)
 --   /terr status   what's on
-local ADDON = ...
+local ADDON, NS = ...
 local DB_DEFAULTS = { enabled = true, hideText = false }
 local db
 
@@ -81,8 +81,10 @@ SlashCmdList["TWIZERRORS"] = function(msg)
         if db.hideText then db.enabled = true end
         Apply(); Status()
     elseif cmd == "status" then Status()
+    elseif NS.BugsCmd and NS.BugsCmd(cmd) then return
     elseif cmd == "help" or cmd == "?" then
         Print("/terr - silence the error voice on/off   /terr text - also hide the red text for those errors   /terr status")
+        Print("/terr bugs - caught Lua errors (copyable)   /terr clear - forget them   /terr catch - catching on/off   /terr quietbugs - no chat line when one is caught")
     elseif cmd == "on" then db.enabled = true; Apply(); Status()
     elseif cmd == "off" then db.enabled = false; Apply(); Status()
     else db.enabled = not db.enabled; Apply(); Status() end
@@ -102,4 +104,6 @@ ev:SetScript("OnEvent", function(_, event, name)
     end
 end)
 
-TwizErrors = { IsSpam = IsSpam, Apply = Apply }
+TwizErrors = { IsSpam = IsSpam, Apply = Apply,
+    BugCount = function(a) return NS.BugCount and NS.BugCount(a) or 0 end,
+    ToggleBugs = function() if NS.ToggleBugs then NS.ToggleBugs() end end }

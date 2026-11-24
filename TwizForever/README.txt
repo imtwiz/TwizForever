@@ -1,4 +1,4 @@
-TwizForever 1.0.0 - one menu for all the Twiz addons
+TwizForever 1.1.0 - one menu for all the Twiz addons
 =====================================================
 
 /twiz (or click the gear on the minimap) opens a window listing every Twiz
@@ -22,3 +22,7 @@ Esc closes the window. Drag the minimap gear around the minimap to move it.
 Commands
   /twiz            open / close the menu
   /twiz minimap    show / hide the minimap button
+
+1.1.0: each addon's row shows how many Lua errors it threw this session (from
+TwizErrors' error catcher), plus the new settings: TwizQuest keyboard dialogue
+and flight timer, TwizErrors error catching, and a "Caught errors" button.

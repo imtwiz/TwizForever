@@ -506,6 +506,8 @@ local function Build()
             { "Drop All incl. dungeon/class", function() NS.DropAllCmd(true) end, nil, synced },
             { "Party: " .. (NS.db.party and "sync on" or "sync off"), function() SlashCmdList.QUESTROUTE(NS.db.party and "party off" or "party on") end },
             { "Auto-accept: " .. (NS.db.autoAccept and "on" or "off"), function() SlashCmdList.QUESTROUTE("accept") end },
+            { "Keyboard dialogue: " .. (NS.db.talkKeys ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("talk") end },
+            { "Flight timer: " .. (NS.db.flightBar ~= false and "on" or "off"), function() SlashCmdList.QUESTROUTE("flights") end },
             { "Help (/tq help)", function() SlashCmdList.QUESTROUTE("help") end },
         }
     end, 30)
@@ -1033,6 +1035,8 @@ local function Help()
     print("  /tq party        - party sync status; /tq party on|off, /tq party sync (resend), /tq party xp (XP bars), /tq party auto (group plan on sync, on), /tq party pickup (share quests you pick up, on), /tq party share (share your log on join, off), /tq party help (stay to help)")
     print("  /tq share        - share your quests that party members don't have")
     print("  /tq accept       - auto-accept every quest offered, on/off (hold Shift to skip one NPC)")
+    print("  /tq talk         - keyboard dialogue on/off: Space = next step (accept, complete, reward), 1-9 = pick a line; hold Shift to type")
+    print("  /tq flights      - flight timer bar on/off; /tq flights list = every flight timed so far")
     print("  /tq minimap      - show/hide the minimap button")
     print("  /tq group        - plan the fastest XP for the whole group and send it to your party (Group button)")
     print("  /tq solo         - back to your own route")
@@ -1083,6 +1087,10 @@ SlashCmdList.QUESTROUTE = function(msg)
             StaticPopup_Show("TWIZQUEST_ABANDON", #drop, nil, drop)
         end
         return
+    elseif cmd == "talk" then
+        NS.TalkCmd(); return
+    elseif cmd == "flights" or cmd == "flight" then
+        NS.FlightsCmd(rest); return
     elseif cmd == "accept" then
         NS.db.autoAccept = not NS.db.autoAccept
         NS.Print("auto-accept quests " .. (NS.db.autoAccept and "on (hold Shift when talking to an NPC to skip)" or "off"))

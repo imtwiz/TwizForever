@@ -177,7 +177,11 @@ function NS.Refresh()
     if not frame or not frame:IsShown() then return end
     for i, info in ipairs(NS.ADDONS) do
         local r = rows[i]
-        r.state:SetText((StateText(info)))
+        local st = StateText(info)
+        -- errors caught this session (TwizErrors)
+        local nb = TwizErrors and TwizErrors.BugCount and TwizErrors.BugCount(info.name) or 0
+        if nb > 0 then st = st .. ("  |cffff6060%d error%s|r"):format(nb, nb == 1 and "" or "s") end
+        r.state:SetText(st)
         local sel = i == selected
         if r.SetBackdropColor then r:SetBackdropColor(sel and 0.20 or 0.13, sel and 0.26 or 0.14, sel and 0.20 or 0.18, 1) end
         if r.icon.SetDesaturated then r.icon:SetDesaturated(not Loaded(info.name)) end

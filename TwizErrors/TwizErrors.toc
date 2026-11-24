@@ -1,9 +1,10 @@
 ## Interface: 16001
 ## Title: TwizErrors
-## Notes: Quiets the game's spoken error voice ("Not enough mana", "Not enough energy", "I can't do that yet"...). Optionally hides the matching red error text too. /terr
+## Notes: Quiets the game's spoken error voice ("Not enough mana", "Not enough energy", "I can't do that yet"...). Optionally hides the matching red error text too. Also catches every addon's Lua errors in a copyable window (/terr bugs) - no BugSack needed. /terr
 ## Author: Alan Sherbourne
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariables: TwizErrorsDB
 ## IconTexture: Interface\Icons\Spell_Holy_Silence
 
+Bugs.lua
 TwizErrors.lua

@@ -25,7 +25,7 @@ NS.ADDONS = {
     },
     {
         name = "TwizQuest", slash = "QUESTROUTE", cmd = "/tq", icon = "Interface\\Icons\\INV_Misc_Map_01",
-        blurb = "Plans which quests to do and in what order for the most XP per hour, with waypoints, sell & repair stops, party sharing and log cleanup. Needs Questie.",
+        blurb = "Plans which quests to do and in what order for the most XP per hour, with waypoints, sell & repair stops, party sharing, log cleanup, keyboard dialogue (Space / 1-9) and flight times. Needs Questie.",
         db = function() return QuestRouteDB end,
         settings = {
             { "Update the plan automatically", function(d) return T(d.auto) end, flip("auto") },
@@ -34,8 +34,10 @@ NS.ADDONS = {
             { "Include elite quests", function(d) return T(d.elites) end, flip("elites") },
             { "Sell & repair stops", function(d) return T(d.service) end, flip("service") },
             { "Minimap button", function(d) return NotFalse(d.minimap) end, flip("minimap") },
+            { "Keyboard dialogue (Space / 1-9)", function(d) return NotFalse(d.talkKeys) end, flip("talk") },
+            { "Flight timer bar", function(d) return NotFalse(d.flightBar) end, flip("flights") },
         },
-        actions = { { "Open", "" }, { "Share missing", "share" }, { "Share this zone", "sharezone" }, { "Clean up log", "cleanup" } },
+        actions = { { "Open", "" }, { "Share missing", "share" }, { "Share this zone", "sharezone" }, { "Clean up log", "cleanup" }, { "Flight times", "flights list" } },
     },
     {
         name = "TwizCraft", slash = "CRAFTROUTE", cmd = "/tc", icon = "Interface\\Icons\\Trade_BlackSmithing",
@@ -98,12 +100,14 @@ NS.ADDONS = {
     },
     {
         name = "TwizErrors", slash = "TWIZERRORS", cmd = "/terr", icon = "Interface\\Icons\\Spell_Holy_Silence",
-        blurb = "Quiets the spoken errors (\"Not enough mana\", \"I can't do that yet\"...); can also hide the matching red error text.",
+        blurb = "Quiets the spoken errors (\"Not enough mana\", \"I can't do that yet\"...), can hide the matching red text, and catches every addon's Lua errors in a copyable window (no BugSack needed).",
         db = function() return TwizErrorsDB end,
         settings = {
             { "Silence the error voice", function(d) return NotFalse(d.enabled) end, function(on) return on and "on" or "off" end },
             { "Hide the red text for those errors", function(d) return T(d.hideText) end, flip("text") },
+            { "Catch Lua errors from all addons", function(d) return NotFalse(d.catch) end, flip("catch") },
+            { "Chat line when an error is caught", function(d) return not d.quietBugs end, flip("quietbugs") },
         },
-        actions = { { "Status", "status" } },
+        actions = { { "Caught errors", "bugs" }, { "Clear errors", "clear" }, { "Status", "status" } },
     },
 }

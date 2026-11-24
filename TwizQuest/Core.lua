@@ -22,6 +22,8 @@ NS.DEFAULTS = {
     partyHelp = true,  -- stay to help party members finish kills on shared quests
     partyXP   = true,  -- show XP bars for you and party members who run TwizQuest
     autoAccept = true, -- accept every quest offered (hold Shift to skip)
+    talkKeys  = true,  -- keyboard dialogue: Space = next step, 1-9 = pick a line (/tq talk)
+    flightBar = true,  -- flight timer bar while flying (/tq flights)
     minimap   = true,  -- minimap button
     minimapAngle = 200, -- where it sits around the minimap (degrees)
     shown     = true,

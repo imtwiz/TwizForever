@@ -269,3 +269,17 @@ Commands (/tq or /questroute)
 Solo even if your party hasn't fully synced yet (Group asks them to sync), and
 if a party member is running a group plan, Group puts you back on THEIR plan
 instead of starting a second one that would take over theirs.
+
+1.20.0 KEYBOARD DIALOGUE (DialogKey built in) - while an NPC's dialogue is open,
+out of combat: Space = the obvious next step (accept the quest, continue,
+complete it, take the only reward; in a gossip menu: turn in a finished quest
+first, else take a new one, else the first line). 1-9 = pick that line (gossip:
+new quests, then quests in progress, then talk options; reward screen: that
+reward). Every other key works as usual; hold Shift to type normally.
+/tq talk turns it on/off.
+
+1.20.0 FLIGHT TIMER (Forever Flight Times built in) - every flight is timed and
+remembered per route. While flying, a bar at the top counts down to landing
+(the first time on a route it counts up while timing it). Hovering a
+destination on the flight map shows its time. Drag the bar to move it.
+/tq flights turns the bar on/off; /tq flights list shows every timed flight.
