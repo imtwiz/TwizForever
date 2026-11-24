@@ -134,3 +134,12 @@ SlashCmdList.TWIZINTERRUPT("attack")
 assert(wkey():find("Pummel"))
 cls = "ROGUE"; known = { Kick = 1766, Gouge = 1776 }
 L("rogue attack lines: " .. NS.AttackLines():gsub("\n", " || ")); assert(not NS.AttackLines():find("Gouge"))
+-- mage attack key gets Counterspell from TwizInterrupt
+cls = "MAGE"; known = { Counterspell = 2139, Frostbolt = 116 }
+SIM.LoadAddon(REPO .. "/TwizMage", "TwizMage")
+SIM.Fire("ADDON_LOADED", "TwizMage"); SIM.Fire("SPELLS_CHANGED"); SIM.Advance(0.5)
+local mkey = tostring(TwizMageButton:GetAttribute("macrotext1")):gsub("\n", " || ")
+L("mage attack key: " .. mkey); assert(mkey == "/cast [combat,@target,harm,nodead] Counterspell || /cast [@target,harm,nodead] Frostbolt")
+binds["CLICK TwizMageButton:LeftButton"] = "2"; assert(NS.KeyText() == "2 (attack key)")
+SlashCmdList.TWIZINTERRUPT("attack")
+assert(not tostring(TwizMageButton:GetAttribute("macrotext1")):find("Counterspell")); L("mage: attack off removes Counterspell")

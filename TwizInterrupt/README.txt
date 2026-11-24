@@ -1,4 +1,4 @@
-TwizInterrupt 1.1.0 - interrupts for every class
+TwizInterrupt 1.2.0 - interrupts for every class
 ================================================
 
 Bind the key in Options > Keybindings > AddOns > TwizInterrupt.
@@ -19,7 +19,8 @@ INTERRUPT KEY
   goes off. /interrupt hover off = target only.
 
 ON THE ATTACK KEYS (1.1.0)
-  In a fight, the TwizRogue / TwizWarrior / TwizHunt attack keys also fire
+  In a fight, the TwizRogue / TwizWarrior / TwizHunt / TwizMage attack keys
+  (TwizMage: 1.2.0) also fire
   your interrupt on your target - no second key needed. A macro can't see
   whether the enemy is casting, so it goes off the moment it's off cooldown
   (often at the start of a fight, then again each time it's ready). Gouge

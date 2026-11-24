@@ -7,7 +7,7 @@
 --   Alert: the moment your target - or, in a fight, an enemy near you - starts casting something
 --   you can interrupt, a big INTERRUPT alert shows who is casting what, whether your interrupt is
 --   ready and in range, and which key to press (with a warning sound).
---   Attack keys (1.1.0): in a fight, the TwizRogue / TwizWarrior / TwizHunt attack keys also fire
+--   Attack keys (1.1.0): in a fight, the TwizRogue / TwizWarrior / TwizHunt / TwizMage (1.2.0) attack keys also fire
 --   your interrupt on the target whenever it's ready, so you don't need a second key.
 -- The game only lets a key press cast a spell, and a macro can't see whether the enemy is casting,
 -- so the attack key fires the interrupt as soon as it's off cooldown; /interrupt attack turns that off.
@@ -100,7 +100,7 @@ function NS.AttackLines()
 end
 
 local function UpdateClassKeys()
-    for _, name in ipairs({ "TwizRogue", "TwizWarrior", "TwizHunt" }) do
+    for _, name in ipairs({ "TwizRogue", "TwizWarrior", "TwizHunt", "TwizMage" }) do
         local a = _G[name]
         if type(a) == "table" and a.Update then pcall(a.Update) end
     end
@@ -160,7 +160,7 @@ function NS.Pick(unit)
 end
 
 local ATTACK = { ROGUE = { "TwizRogueButton:LeftButton" }, WARRIOR = { "TwizWarriorButton:LeftButton" },
-    HUNTER = { "TwizHuntButton:LeftButton", "TwizHuntButton:RightButton" } }
+    HUNTER = { "TwizHuntButton:LeftButton", "TwizHuntButton:RightButton" }, MAGE = { "TwizMageButton:LeftButton" } }
 local function KeyText()
     if not GetBindingKey then return nil end
     if db and db.attackKeys and AttackLinesCount and AttackLinesCount() > 0 then

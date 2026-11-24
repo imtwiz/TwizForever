@@ -1,0 +1,7 @@
+<Bindings>
+    <Binding name="CLICK TwizMageButton:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK TwizMageButton:RightButton" category="ADDONS"/>
+    <Binding name="CLICK TwizMageButton:MiddleButton" category="ADDONS"/>
+    <Binding name="CLICK TwizMageButton:Button4" category="ADDONS"/>
+    <Binding name="CLICK TwizMageButton:Button5" category="ADDONS"/>
+</Bindings>

@@ -141,6 +141,18 @@ NS.ADDONS = {
         actions = { { "Status", "status" }, { "Ignored items", "ignored" }, { "Try again", "retry" } },
     },
     {
+        name = "TwizMage", slash = "TWIZMAGE", cmd = "/mage", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02",
+        blurb = "One-key mage: Counterspell (in a fight, when ready), Fire Blast and Frostbolt; armor and conjured water, food and mana gem out of combat; Frost Nova, Polymorph, Blink and Mana keys; rune restock.",
+        db = function() return TwizMageDB end,
+        settings = {
+            { "Fire Blast whenever it's ready", function(d) return NotFalse(d.fireblast) end, flip("fireblast") },
+            { "Conjure water / food / gem out of combat", function(d) return NotFalse(d.conjure) end, flip("conjure") },
+            { "Conjure a mana gem", function(d) return NotFalse(d.gem) end, flip("gem") },
+            { "Rune restock at reagent vendors", function(d) return NotFalse(d.restock) end, flip("restock") },
+        },
+        actions = { { "Main nuke: Frostbolt", "main frostbolt" }, { "Main nuke: Fireball", "main fireball" }, { "Status", "status" } },
+    },
+    {
         name = "TwizInterrupt", slash = "TWIZINTERRUPT", cmd = "/interrupt", icon = "Interface\\Icons\\Ability_Kick",
         blurb = "Interrupts for every class: one key interrupts the enemy under your mouse (else your target), and a big alert with a sound shows the moment your target or a nearby enemy starts a cast you can interrupt.",
         db = function() return TwizInterruptDB end,
