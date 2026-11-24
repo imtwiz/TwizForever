@@ -117,3 +117,20 @@ shield = false; assert(NS.Pick("target") == nil); L("battle, no shield: nothing 
 SlashCmdList.TWIZINTERRUPT("hover"); assert(not key():find("mouseover")); L("hover off: " .. key())
 SlashCmdList.TWIZINTERRUPT("test"); assert(f:IsShown())
 SlashCmdList.TWIZINTERRUPT("")
+-- attack keys: TwizInterrupt's list goes on top of the class key; /interrupt attack takes it off
+SlashCmdList.TWIZINTERRUPT("hover")
+GetInventoryItemLink = function() return nil end
+cls = "WARRIOR"; stance = 3
+SIM.LoadAddon(REPO .. "/TwizWarrior", "TwizWarrior")
+SIM.Fire("ADDON_LOADED", "TwizWarrior"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(0.5)
+local function wkey() return tostring(TwizWarriorButton:GetAttribute("macrotext1")):gsub("\n", " || ") end
+L("warrior attack key: " .. wkey())
+assert(wkey():find("^/cast %[combat,@target,harm,nodead,stance:3%] Pummel || /cast %[combat,@target,harm,nodead,equipped:Shields,nostance:3%] Shield Bash || /startattack"))
+binds["CLICK TwizWarriorButton:LeftButton"] = "1"
+L("alert key: " .. tostring(NS.KeyText())); assert(NS.KeyText() == "1 (attack key)")
+SlashCmdList.TWIZINTERRUPT("attack")
+assert(not wkey():find("Pummel"), "DBG1 " .. wkey()); L("attack off: " .. wkey()); assert(NS.KeyText() == "F", "DBG2 " .. tostring(NS.KeyText()))
+SlashCmdList.TWIZINTERRUPT("attack")
+assert(wkey():find("Pummel"))
+cls = "ROGUE"; known = { Kick = 1766, Gouge = 1776 }
+L("rogue attack lines: " .. NS.AttackLines():gsub("\n", " || ")); assert(not NS.AttackLines():find("Gouge"))

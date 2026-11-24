@@ -9,6 +9,7 @@
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
 --   Pet key: mend / revive / call / feed, whenever.
+--   In a fight the Shoot and Melee keys also fire your interrupt (Intimidation / Silencing Shot) when ready.
 --   At any vendor: tops up ammo for your ranged weapon and food your pet eats.
 -- The game locks keys in combat and hides health and buffs from addons, so in a fight it runs
 -- that fixed order (a new target starts it over) - it can't react to what happens mid-fight.
@@ -147,6 +148,27 @@ local function AspectFix()
 end
 
 -- the shooting part, the same in and out of combat
+
+-- 1.2.0: in a fight the attack key also fires your interrupt on the target whenever it's off
+-- cooldown (the game can't tell a macro whether the enemy is casting, so it goes off as soon as
+-- it's ready). TwizInterrupt's list and on/off setting when it's installed, else this class's
+-- own interrupt. Crowd control that breaks on damage (Gouge, Scatter Shot) is left out.
+local FALLBACK_KICKS = { { "Counter Shot" }, { "Silencing Shot" }, { "Intimidation" } }
+local function AutoKick()
+    local TI = TwizInterrupt
+    if TI and TI.AttackLines then return TI.AttackLines() end
+    local lines = {}
+    for _, e in ipairs(FALLBACK_KICKS) do
+        if Known(e[1]) then
+            local c = "combat,@target,harm,nodead" .. (e[2] and ("," .. e[2]) or "")
+            lines[#lines + 1] = ("/cast [%s] %s"):format(c, e[1])
+        end
+    end
+    if #lines == 0 then return "" end
+    return table.concat(lines, "\n") .. "\n"
+end
+NS.AutoKick = AutoKick
+
 local function ShootLines()
     local lines = {}
     if Known("Auto Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] !Auto Shot" end
@@ -186,6 +208,8 @@ end
 function NS.Update()
     if not db or InCombatLockdown() then return end
     local lines = {}
+    local kick = AutoKick()
+    if kick ~= "" then lines[1] = kick:gsub("\n$", "") end
     local fix, why = PetFix()
     if not fix then fix, why = AspectFix() end
     if fix then
@@ -201,7 +225,7 @@ function NS.Update()
     for _, l in ipairs(ShootLines()) do lines[#lines + 1] = l end
     local m1 = table.concat(lines, "\n")
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
-    local m2 = MeleeMacro()
+    local m2 = AutoKick() .. MeleeMacro()
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
     local m3 = PetMacro()
     if btn:GetAttribute("macrotext3") ~= m3 then btn:SetAttribute("macrotext3", m3) end
@@ -316,8 +340,8 @@ ev:SetScript("OnEvent", function(_, event, a1)
 end)
 
 _G["BINDING_HEADER_TWIZHUNT"] = "TwizHunt"
-_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Arcane; fixes pet/aspect out of combat)"
-_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack)"
+_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Arcane + interrupt)"
+_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack + interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:MiddleButton"] = "Pet care (mend / revive / call / feed)"
 
 local function onoff(v) return v and "on" or "off" end

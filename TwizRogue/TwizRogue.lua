@@ -9,7 +9,7 @@
 --     know it and hold daggers, else Sinister Strike; /rogue snd adds Slice and Dice after the first).
 --     Riposte (after you parry) and Surprise Attack (after the target dodges) go off by themselves
 --     whenever the game allows them (/rogue reactives turns that off).
---   Interrupt key: Kick (Shift: Gouge).
+--   Interrupt key: Kick (Shift: Gouge). The Attack key also Kicks in a fight whenever Kick is ready.
 --   At vendors: tops up Flash Powder (once you know Vanish) and poisons the vendor sells.
 -- The game locks keys in combat and hides combo points' effect on macros, so the order is fixed: a
 -- sequence only moves on when a cast actually goes off (not enough energy = it waits).
@@ -112,6 +112,27 @@ local function Builder()
     return "Sinister Strike"
 end
 
+
+-- 1.2.0: in a fight the attack key also fires your interrupt on the target whenever it's off
+-- cooldown (the game can't tell a macro whether the enemy is casting, so it goes off as soon as
+-- it's ready). TwizInterrupt's list and on/off setting when it's installed, else this class's
+-- own interrupt. Crowd control that breaks on damage (Gouge, Scatter Shot) is left out.
+local FALLBACK_KICKS = { { "Kick" } }
+local function AutoKick()
+    local TI = TwizInterrupt
+    if TI and TI.AttackLines then return TI.AttackLines() end
+    local lines = {}
+    for _, e in ipairs(FALLBACK_KICKS) do
+        if Known(e[1]) then
+            local c = "combat,@target,harm,nodead" .. (e[2] and ("," .. e[2]) or "")
+            lines[#lines + 1] = ("/cast [%s] %s"):format(c, e[1])
+        end
+    end
+    if #lines == 0 then return "" end
+    return table.concat(lines, "\n") .. "\n"
+end
+NS.AutoKick = AutoKick
+
 local function AttackMacro()
     local lines = {}
     local fix, why = PoisonFix()
@@ -157,6 +178,7 @@ end
 function NS.Update()
     if not db or InCombatLockdown() then return end
     local m1, why = AttackMacro()
+    m1 = AutoKick() .. m1
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
     local m2 = InterruptMacro()
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
@@ -228,7 +250,7 @@ end)
 C_Timer.NewTicker(5, function() if db and not InCombatLockdown() and select(2, UnitClass("player")) == "ROGUE" then NS.Update() end end)
 
 _G["BINDING_HEADER_TWIZROGUE"] = "TwizRogue"
-_G["BINDING_NAME_CLICK TwizRogueButton:LeftButton"] = "Attack (Stealth, opener, Riposte, builder -> Eviscerate; poisons out of combat)"
+_G["BINDING_NAME_CLICK TwizRogueButton:LeftButton"] = "Attack (Stealth, opener, Riposte, builder -> Eviscerate + interrupt)"
 _G["BINDING_NAME_CLICK TwizRogueButton:RightButton"] = "Interrupt (Kick; Shift: Gouge)"
 
 local function onoff(v) return v and "on" or "off" end

@@ -1,4 +1,4 @@
-TwizHunt 1.1.0 - one-key hunter
+TwizHunt 1.2.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -26,6 +26,12 @@ MELEE
   key once you know it. /hunt reactives turns these off.
   (The game doesn't let addons check range, so switch keys yourself when
   something reaches you.)
+
+INTERRUPT (1.2.0)
+  In a fight the Shoot and Melee keys also fire Intimidation / Silencing
+  Shot / Counter Shot (whichever you know) whenever it's ready. Scatter Shot
+  is left out (damage breaks it). TwizInterrupt's /interrupt attack turns
+  that off.
 
 PET CARE
   Mend / revive / call / feed, whenever you press it.

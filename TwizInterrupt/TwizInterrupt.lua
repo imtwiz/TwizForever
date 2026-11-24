@@ -7,11 +7,13 @@
 --   Alert: the moment your target - or, in a fight, an enemy near you - starts casting something
 --   you can interrupt, a big INTERRUPT alert shows who is casting what, whether your interrupt is
 --   ready and in range, and which key to press (with a warning sound).
--- The game only lets a key press cast a spell, so the alert tells you when and the key does it -
--- an addon can't press it for you.
+--   Attack keys (1.1.0): in a fight, the TwizRogue / TwizWarrior / TwizHunt attack keys also fire
+--   your interrupt on the target whenever it's ready, so you don't need a second key.
+-- The game only lets a key press cast a spell, and a macro can't see whether the enemy is casting,
+-- so the attack key fires the interrupt as soon as it's off cooldown; /interrupt attack turns that off.
 local ADDON, NS = ...
 local db
-local DEFAULTS = { alert = true, sound = true, nearby = true, hover = true, locked = true }
+local DEFAULTS = { alert = true, sound = true, nearby = true, hover = true, locked = true, attackKeys = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffff7f3fTwizInterrupt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -35,16 +37,17 @@ local function Known(name, pet)
 end
 NS.Known = Known
 
--- { spell, extra macro conditions, pet spell }; first known one that's ready goes off
+-- { spell, extra macro conditions, pet spell, not on the attack key }; first known one that's ready
+-- goes off. Crowd control that breaks on damage is kept off the attack keys.
 NS.SPELLS = {
     WARRIOR = { { "Pummel", "stance:3" }, { "Shield Bash", "equipped:Shields,nostance:3" } },
-    ROGUE = { { "Kick" }, { "Gouge" } },
+    ROGUE = { { "Kick" }, { "Gouge", nil, nil, true } },
     MAGE = { { "Counterspell" } },
     SHAMAN = { { "Wind Shear" }, { "Earth Shock" } },
     PRIEST = { { "Silence" } },
     WARLOCK = { { "Spell Lock", nil, true } },
     PALADIN = { { "Rebuke" }, { "Hammer of Justice" } },
-    HUNTER = { { "Counter Shot" }, { "Silencing Shot" }, { "Scatter Shot" }, { "Intimidation" } },
+    HUNTER = { { "Counter Shot" }, { "Silencing Shot" }, { "Scatter Shot", nil, nil, true }, { "Intimidation" } },
     DRUID = { { "Skull Bash", "form:1/3" }, { "Bash", "form:1" }, { "Feral Charge - Bear", "form:1" }, { "Feral Charge", "form:1" } },
     DEATHKNIGHT = { { "Mind Freeze" } },
 }
@@ -64,6 +67,7 @@ function NS.List()
     return out
 end
 
+local AttackLinesCount
 local function Cond(unit, extra) return ("@%s,harm,nodead%s"):format(unit, extra and ("," .. extra) or "") end
 
 function NS.Macro()
@@ -76,6 +80,30 @@ function NS.Macro()
         end
     end
     return table.concat(lines, "\n")
+end
+
+AttackLinesCount = function()
+    local n = 0
+    for _, e in ipairs(NS.List()) do if not e[4] then n = n + 1 end end
+    return n
+end
+
+-- lines the class addons put at the top of their attack keys (empty when turned off)
+function NS.AttackLines()
+    if not db or not db.attackKeys then return "" end
+    local lines = {}
+    for _, e in ipairs(NS.List()) do
+        if not e[4] then lines[#lines + 1] = ("/cast [combat,%s] %s"):format(Cond("target", e[2]), e[1]) end
+    end
+    if #lines == 0 then return "" end
+    return table.concat(lines, "\n") .. "\n"
+end
+
+local function UpdateClassKeys()
+    for _, name in ipairs({ "TwizRogue", "TwizWarrior", "TwizHunt" }) do
+        local a = _G[name]
+        if type(a) == "table" and a.Update then pcall(a.Update) end
+    end
 end
 
 local btn = CreateFrame("Button", "TwizInterruptButton", UIParent, "SecureActionButtonTemplate")
@@ -131,7 +159,16 @@ function NS.Pick(unit)
     return first, firstLeft
 end
 
+local ATTACK = { ROGUE = { "TwizRogueButton:LeftButton" }, WARRIOR = { "TwizWarriorButton:LeftButton" },
+    HUNTER = { "TwizHuntButton:LeftButton", "TwizHuntButton:RightButton" } }
 local function KeyText()
+    if not GetBindingKey then return nil end
+    if db and db.attackKeys and AttackLinesCount and AttackLinesCount() > 0 then
+        for _, b in ipairs(ATTACK[select(2, UnitClass("player"))] or {}) do
+            local k = _G[b:match("^[^:]+")] and GetBindingKey("CLICK " .. b)
+            if k then return (GetBindingText and GetBindingText(k) or k) .. " (attack key)" end
+        end
+    end
     local key = GetBindingKey and (GetBindingKey("CLICK TwizInterruptButton:LeftButton")
         or GetBindingKey("CLICK TwizRogueButton:RightButton") or GetBindingKey("CLICK TwizWarriorButton:MiddleButton"))
     if not key then return nil end
@@ -265,7 +302,7 @@ function Refresh(fresh)
         f.how:SetText("no interrupt usable right now")
     elseif ready then
         f.title:SetText("|cffff4040INTERRUPT!|r")
-        local where = unit == "target" and "" or "hover it, "
+        local where = unit == "target" and "" or ((key and key:find("attack key", 1, true)) and "target it, " or "hover it, ")
         f.how:SetText(key and (where .. "press " .. key .. " (" .. spell .. ")") or (spell .. " - bind a key: Keybindings > AddOns > TwizInterrupt"))
     elseif range == false then
         f.title:SetText("|cffffd040Enemy casting|r")
@@ -363,20 +400,23 @@ SLASH_TWIZINTERRUPT2 = "/tint"
 SlashCmdList["TWIZINTERRUPT"] = function(msg)
     local cmd = (msg or ""):lower():match("^%s*(%S*)")
     local function flip(k, label) db[k] = not db[k]; Print(label .. " " .. onoff(db[k])); NS.Update(); Refresh() end
-    local usage = "/interrupt alert | sound | nearby | hover | unlock | lock | test | status"
+    local usage = "/interrupt alert | sound | nearby | hover | attack | unlock | lock | test | status"
     if cmd == "alert" then flip("alert", "cast alert")
     elseif cmd == "sound" then flip("sound", "alert sound")
     elseif cmd == "nearby" then flip("nearby", "alerts for nearby enemies in a fight (not just your target)")
     elseif cmd == "hover" then flip("hover", "interrupt the enemy under the mouse first")
+    elseif cmd == "attack" then
+        flip("attackKeys", "interrupt on the attack keys in a fight (fires whenever it's ready)")
+        UpdateClassKeys()
     elseif cmd == "unlock" then db.locked = false; Place(); NS.Test(); Print("drag the alert where you want it, then /interrupt lock")
     elseif cmd == "lock" then db.locked = true; Place(); Print("alert locked")
     elseif cmd == "test" then NS.Test()
     elseif cmd == "status" or cmd == "" then
         local names = {}
         for _, e in ipairs(NS.List()) do names[#names + 1] = e[1] end
-        Print(("interrupts known: %s. Key: %s. Alert %s, sound %s, nearby enemies %s, mouse-over first %s.")
+        Print(("interrupts known: %s. Key: %s. Alert %s, sound %s, nearby enemies %s, mouse-over first %s, on the attack keys %s.")
             :format(#names > 0 and table.concat(names, ", ") or "none yet", KeyText() or "not bound",
-            onoff(db.alert), onoff(db.sound), onoff(db.nearby), onoff(db.hover)))
+            onoff(db.alert), onoff(db.sound), onoff(db.nearby), onoff(db.hover), onoff(db.attackKeys)))
         if cmd == "" then Print(usage) end
     else
         Print(usage)

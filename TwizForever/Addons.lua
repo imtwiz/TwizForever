@@ -149,6 +149,7 @@ NS.ADDONS = {
             { "Alert sound", function(d) return NotFalse(d.sound) end, flip("sound") },
             { "Nearby enemies too (in a fight)", function(d) return NotFalse(d.nearby) end, flip("nearby") },
             { "Enemy under the mouse first", function(d) return NotFalse(d.hover) end, flip("hover") },
+            { "Interrupt on the class attack keys", function(d) return NotFalse(d.attackKeys) end, flip("attack") },
         },
         actions = { { "Test alert", "test" }, { "Move alert", "unlock" }, { "Lock alert", "lock" }, { "Status", "status" } },
     },

@@ -8,7 +8,7 @@
 --     /warrior hs turns the Heroic Strike dump off if you're short on rage (Forever's rage is
 --     tighter than Classic's).
 --   Charge key: Charge out of combat, Intercept in combat (once you know it).
---   Interrupt key: Pummel, or Shield Bash with a shield on.
+--   Interrupt key: Pummel, or Shield Bash with a shield on. The Attack key also interrupts in a fight whenever it is ready.
 -- The game locks keys in combat and hides health and buffs from addons, so the order is fixed;
 -- spells that aren't usable right now (Execute, Victory Rush) are simply skipped by the game.
 local ADDON, NS = ...
@@ -49,6 +49,27 @@ btn:Hide()
 
 local T = "@target,harm,nodead"
 
+
+-- 1.3.0: in a fight the attack key also fires your interrupt on the target whenever it's off
+-- cooldown (the game can't tell a macro whether the enemy is casting, so it goes off as soon as
+-- it's ready). TwizInterrupt's list and on/off setting when it's installed, else this class's
+-- own interrupt. Crowd control that breaks on damage (Gouge, Scatter Shot) is left out.
+local FALLBACK_KICKS = { { "Pummel", "stance:3" }, { "Shield Bash", "equipped:Shields,nostance:3" } }
+local function AutoKick()
+    local TI = TwizInterrupt
+    if TI and TI.AttackLines then return TI.AttackLines() end
+    local lines = {}
+    for _, e in ipairs(FALLBACK_KICKS) do
+        if Known(e[1]) then
+            local c = "combat,@target,harm,nodead" .. (e[2] and ("," .. e[2]) or "")
+            lines[#lines + 1] = ("/cast [%s] %s"):format(c, e[1])
+        end
+    end
+    if #lines == 0 then return "" end
+    return table.concat(lines, "\n") .. "\n"
+end
+NS.AutoKick = AutoKick
+
 local function AttackMacro()
     local lines = { ("/startattack [%s]"):format(T) }
     local seq = {}
@@ -86,7 +107,7 @@ end
 
 function NS.Update()
     if not db or InCombatLockdown() then return end
-    local m1 = AttackMacro()
+    local m1 = AutoKick() .. AttackMacro()
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
     local m2 = ChargeMacro()
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
@@ -121,7 +142,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
 end)
 
 _G["BINDING_HEADER_TWIZWARRIOR"] = "TwizWarrior"
-_G["BINDING_NAME_CLICK TwizWarriorButton:LeftButton"] = "Attack (shout, Rend, Heroic Strike, Execute, Overpower, Revenge, Victory Rush)"
+_G["BINDING_NAME_CLICK TwizWarriorButton:LeftButton"] = "Attack (shout, Rend, Heroic Strike, Execute, Overpower, Revenge, Victory Rush + interrupt)"
 _G["BINDING_NAME_CLICK TwizWarriorButton:RightButton"] = "Charge (Intercept in combat)"
 _G["BINDING_NAME_CLICK TwizWarriorButton:MiddleButton"] = "Interrupt (Pummel / Shield Bash)"
 

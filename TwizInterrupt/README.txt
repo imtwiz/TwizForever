@@ -1,4 +1,4 @@
-TwizInterrupt 1.0.0 - interrupts for every class
+TwizInterrupt 1.1.0 - interrupts for every class
 ================================================
 
 Bind the key in Options > Keybindings > AddOns > TwizInterrupt.
@@ -17,6 +17,15 @@ INTERRUPT KEY
     Racials  War Stomp, Arcane Torrent
   Only spells you know are used; when the first is on cooldown the next one
   goes off. /interrupt hover off = target only.
+
+ON THE ATTACK KEYS (1.1.0)
+  In a fight, the TwizRogue / TwizWarrior / TwizHunt attack keys also fire
+  your interrupt on your target - no second key needed. A macro can't see
+  whether the enemy is casting, so it goes off the moment it's off cooldown
+  (often at the start of a fight, then again each time it's ready). Gouge
+  and Scatter Shot are kept off (damage breaks them). /interrupt attack
+  turns this off. Without TwizInterrupt installed the class addons still do
+  it with their own interrupt.
 
 ALERT
   The moment your target (or focus) starts casting something you can
@@ -37,5 +46,6 @@ Commands
   /interrupt sound    alert sound on/off
   /interrupt nearby   alerts for nearby enemies, not just your target
   /interrupt hover    interrupt the enemy under the mouse first on/off
+  /interrupt attack   interrupt on the class attack keys on/off
   /interrupt unlock   move the alert (then /interrupt lock)
   /interrupt test     show a sample alert

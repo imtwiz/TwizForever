@@ -1,4 +1,4 @@
-TwizRogue 1.1.0 - one-key rogue
+TwizRogue 1.2.0 - one-key rogue
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizRogue.
@@ -26,7 +26,10 @@ ATTACK (the one key)
   turns that off.
 
 INTERRUPT
-  Kick; hold Shift for Gouge.
+  Kick; hold Shift for Gouge. 1.2.0: in a fight the Attack key also Kicks
+  your target whenever Kick is ready (the game can't tell a macro whether
+  the enemy is casting, so it goes as soon as it's off cooldown).
+  TwizInterrupt's /interrupt attack turns that off.
 
 VENDOR RESTOCK
   Flash Powder (once you know Vanish) up to 10, and the poisons the vendor

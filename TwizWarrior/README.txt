@@ -1,4 +1,4 @@
-TwizWarrior 1.2.0 - one-key warrior
+TwizWarrior 1.3.0 - one-key warrior
 ====================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizWarrior.
@@ -22,7 +22,11 @@ CHARGE
   Charge out of combat, Intercept in combat (once you know it).
 
 INTERRUPT
-  Shield Bash with a shield on, else Pummel.
+  Shield Bash with a shield on, else Pummel. 1.3.0: in a fight the Attack
+  key also fires Pummel (Berserker Stance) / Shield Bash (shield, other
+  stances) whenever it's ready - the game can't tell a macro whether the
+  enemy is casting, so it goes as soon as it's off cooldown. TwizInterrupt's
+  /interrupt attack turns that off.
 
 Commands: /warrior (status), /warrior shout, /warrior rend, /warrior hs,
 /warrior overpower, /warrior revenge
