@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="CLICK TwizWarriorButton:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK TwizWarriorButton:RightButton" category="ADDONS"/>
+    <Binding name="CLICK TwizWarriorButton:MiddleButton" category="ADDONS"/>
+</Bindings>

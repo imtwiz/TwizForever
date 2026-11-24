@@ -1,0 +1,4 @@
+<Bindings>
+    <Binding name="CLICK TwizRogueButton:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK TwizRogueButton:RightButton" category="ADDONS"/>
+</Bindings>

@@ -104,6 +104,29 @@ NS.ADDONS = {
         actions = { { "Status", "status" } },
     },
     {
+        name = "TwizRogue", slash = "TWIZROGUE", cmd = "/rogue", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate",
+        blurb = "One-key rogue: opener from Stealth, then Sinister Strike (or Mutilate) x3 -> Eviscerate; poisons on your weapons out of combat; Kick/Gouge key; Flash Powder and poison restock.",
+        db = function() return TwizRogueDB end,
+        settings = {
+            { "Poisons on weapons (out of combat)", function(d) return NotFalse(d.poisons) end, flip("poisons") },
+            { "Stealth first on an enemy", function(d) return T(d.stealth) end, flip("stealth") },
+            { "Slice and Dice in the sequence", function(d) return T(d.snd) end, flip("snd") },
+            { "Restock at vendors", function(d) return NotFalse(d.restock) end, flip("restock") },
+        },
+        actions = { { "Status", "status" } },
+    },
+    {
+        name = "TwizWarrior", slash = "TWIZWARRIOR", cmd = "/warrior", icon = "Interface\\Icons\\Ability_Warrior_Charge",
+        blurb = "One-key warrior: auto attack, Battle Shout when missing, Rend once, Heroic Strike, Execute and Victory Rush when usable; Charge/Intercept and interrupt keys.",
+        db = function() return TwizWarriorDB end,
+        settings = {
+            { "Battle Shout when missing", function(d) return NotFalse(d.shout) end, flip("shout") },
+            { "Rend once per target", function(d) return NotFalse(d.rend) end, flip("rend") },
+            { "Heroic Strike on every press", function(d) return NotFalse(d.hs) end, flip("hs") },
+        },
+        actions = { { "Status", "status" } },
+    },
+    {
         name = "TwizOpen", slash = "AUTOOPEN", cmd = "/ao", icon = "Interface\\Icons\\INV_Box_02",
         blurb = "Opens chests, boxes, gifts, clams and other containers in your bags - never in combat, while looting, or at a vendor, bank, mailbox, trade or AH.",
         db = function() return AutoOpenDB end,

@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: TwizWarrior
+## Notes: Warrior helper: one key for auto attack, Battle Shout when it's missing, Rend once per target, Heroic Strike, Execute and Victory Rush when they're usable; a Charge/Intercept key and an interrupt key. /warrior
+## Author: Alan Sherbourne
+## Version: 1.0.0
+## SavedVariables: TwizWarriorDB
+## IconTexture: Interface\Icons\Ability_Warrior_Charge
+
+Bindings.xml
+TwizWarrior.lua
