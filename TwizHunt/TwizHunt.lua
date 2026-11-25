@@ -5,7 +5,9 @@
 --     targeted (Aspect of the Cheetah with nothing targeted, if you turn that on);
 --     then on an enemy: Auto Shot + pet attack, and on each new target Hunter's Mark ->
 --     Summon Hawk -> Serpent Sting, then Concussive Shot whenever it's ready (1.3.0: slows the target
---     so it can't close the distance; /hunt concussive turns it off), then Arcane Shot.
+--     so it can't close the distance; /hunt concussive turns it off), then Arcane Shot - and when
+--     the target is in melee range, Raptor Strike (+ Mongoose Bite / Counterattack when allowed)
+--     on the same key (1.4.0; each half is simply refused by the game at the wrong range).
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -17,7 +19,7 @@
 local ADDON, NS = ...
 local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
-    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true }
+    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -129,22 +131,24 @@ btn:Hide()
 local function PetFix()
     if not (db and db.petCare) then return nil end
     local st = PetState()
-    if st == "dead" and Known("Revive Pet") then return "/cast Revive Pet", "Revive Pet" end
-    if st == "missing" and Known("Call Pet") then return "/cast Call Pet", "Call Pet" end
-    if st == "hurt" and Known("Mend Pet") then return "/cast [@pet] Mend Pet", "Mend Pet" end
+    -- returns: lines, label, the conditions under which the press stops there
+    if st == "dead" and Known("Revive Pet") then return "/cast Revive Pet", "Revive Pet", "nocombat" end
+    if st == "missing" and Known("Call Pet") then return "/cast Call Pet", "Call Pet", "nocombat" end
+    -- 1.4.0: mending / feeding only with no enemy targeted, so targeting one always shoots
+    if st == "hurt" and Known("Mend Pet") then return "/cast [@pet] Mend Pet", "Mend Pet", "nocombat,noharm" end
     if st == "unhappy" and Known("Feed Pet") then
         local food = BagFood()
-        if food then return "/cast Feed Pet\n/use " .. food, "Feed Pet (" .. food .. ")" end
+        if food then return "/cast Feed Pet\n/use " .. food, "Feed Pet (" .. food .. ")", "nocombat,noharm" end
     end
 end
 local function AspectFix()
     if not (db and db.aspects) or IsMounted and IsMounted() then return nil end
     local enemy = UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDeadOrGhost("target")
     if enemy and Known("Aspect of the Hawk") and not HasBuff("player", "Aspect of the Hawk") then
-        return "/cast Aspect of the Hawk", "Aspect of the Hawk"
+        return "/cast !Aspect of the Hawk", "Aspect of the Hawk"
     end
     if not enemy and db.cheetah and Known("Aspect of the Cheetah") and not HasBuff("player", "Aspect of the Cheetah") then
-        return "/cast Aspect of the Cheetah", "Aspect of the Cheetah"
+        return "/cast !Aspect of the Cheetah", "Aspect of the Cheetah"
     end
 end
 
@@ -185,6 +189,17 @@ local function ShootLines()
     if Known("Arcane Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Arcane Shot" end
     -- 1.1.0: Kill Command is off the global cooldown, so after Arcane Shot it still goes off when allowed
     if db.reactives and Known("Kill Command") then lines[#lines + 1] = "/cast [@target,harm,nodead] Kill Command" end
+    -- 1.4.0: melee on the same key - out of melee range the game refuses these (and in melee range
+    -- it refuses the shots), so the one key works at any distance. Raptor Strike starts your
+    -- melee swings when it goes off.
+    if db.meleeMerge then
+        if db.reactives then
+            for _, r in ipairs({ "Counterattack", "Mongoose Bite" }) do
+                if Known(r) then lines[#lines + 1] = "/cast [@target,harm,nodead] " .. r end
+            end
+        end
+        if Known("Raptor Strike") then lines[#lines + 1] = "/cast [@target,harm,nodead] Raptor Strike" end
+    end
     return lines
 end
 
@@ -211,24 +226,33 @@ end
 function NS.Update()
     if not db or InCombatLockdown() then return end
     local lines = {}
-    local kick = AutoKick()
-    if kick ~= "" then lines[1] = kick:gsub("\n$", "") end
-    local fix, why = PetFix()
-    if not fix then fix, why = AspectFix() end
-    if fix then
-        -- one fix per press, and only out of combat
+    local function addFix(fix, cond)
         for l in fix:gmatch("[^\n]+") do
-            -- add "nocombat" to the line's own [conditions] (or give it some)
-            l = l:gsub("^(/%a+) %[", "%1 [nocombat,", 1)
-            if not l:find("%[nocombat") then l = l:gsub("^(/%a+) ", "%1 [nocombat] ", 1) end
+            -- add the conditions to the line's own [conditions] (or give it some)
+            l = l:gsub("^(/%a+) %[", "%1 [" .. cond .. ",", 1)
+            if not l:find("%[" .. cond) then l = l:gsub("^(/%a+) ", "%1 [" .. cond .. "] ", 1) end
             lines[#lines + 1] = l
         end
-        lines[#lines + 1] = "/stopmacro [nocombat]"
+    end
+    local fix, why, stop = PetFix()
+    if fix then
+        -- one pet fix per press, out of combat; the press stops there (it takes a cast)
+        addFix(fix, stop)
+        lines[#lines + 1] = "/stopmacro [" .. stop .. "]"
+    else
+        -- 1.4.0: the aspect goes up on the same press and the shooting carries on ("!" = never
+        -- switches it off if it's already up)
+        local afix, awhy = AspectFix()
+        if afix then addFix(afix, "nocombat"); why = awhy end
     end
     for _, l in ipairs(ShootLines()) do lines[#lines + 1] = l end
+    -- 1.4.0: the interrupt goes last - it's off the global cooldown, and a shot on cooldown
+    -- in front of the rest can't hold anything up this way
+    local kick = AutoKick()
+    if kick ~= "" then lines[#lines + 1] = kick:gsub("\n$", "") end
     local m1 = table.concat(lines, "\n")
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
-    local m2 = AutoKick() .. MeleeMacro()
+    local m2 = MeleeMacro() .. (AutoKick() ~= "" and ("\n" .. AutoKick():gsub("\n$", "")) or "")
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
     local m3 = PetMacro()
     if btn:GetAttribute("macrotext3") ~= m3 then btn:SetAttribute("macrotext3", m3) end
@@ -343,7 +367,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
 end)
 
 _G["BINDING_HEADER_TWIZHUNT"] = "TwizHunt"
-_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Concussive, Arcane + interrupt)"
+_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Concussive, Arcane; Raptor Strike in melee range; interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack + interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:MiddleButton"] = "Pet care (mend / revive / call / feed)"
 
@@ -356,6 +380,7 @@ SlashCmdList["TWIZHUNT"] = function(msg)
     if cmd == "aspects" then flip("aspects", "automatic Aspect of the Hawk")
     elseif cmd == "cheetah" then flip("cheetah", "Aspect of the Cheetah when nothing's targeted")
     elseif cmd == "pet" then flip("petCare", "pet care on the Shoot key")
+    elseif cmd == "melee" then flip("meleeMerge", "Raptor Strike on the Shoot key in melee range")
     elseif cmd == "concussive" then flip("concussive", "Concussive Shot whenever it's ready")
     elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")
     elseif cmd == "ammo" then
@@ -367,12 +392,12 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         if n then db.petFoodCount = math.max(0, math.floor(n)); Print(("keeping %d pet food."):format(db.petFoodCount))
         else flip("petFood", "pet food restock at vendors") end
     elseif cmd == "status" or cmd == "" then
-        Print(("aspects %s (cheetah %s), pet care %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
-            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
+        Print(("aspects %s (cheetah %s), pet care %s, melee on Shoot %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
+            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.meleeMerge), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
             onoff(db.petFood), db.petFoodCount or 20, NS.next or "none"))
-        if cmd == "" then Print("/hunt aspects | cheetah | pet | concussive | reactives | ammo [stacks] | food [count] | status") end
+        if cmd == "" then Print("/hunt aspects | cheetah | pet | melee | concussive | reactives | ammo [stacks] | food [count] | status") end
     else
-        Print("/hunt aspects | cheetah | pet | concussive | reactives | ammo [stacks] | food [count] | status")
+        Print("/hunt aspects | cheetah | pet | melee | concussive | reactives | ammo [stacks] | food [count] | status")
     end
 end
 TwizHunt = NS

@@ -1,4 +1,4 @@
-TwizHunt 1.3.0 - one-key hunter
+TwizHunt 1.4.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -14,6 +14,13 @@ SHOOT (the one key)
   every time it's ready (1.3.0 - slows the target so it can't reach you;
   /hunt concussive turns it off), and Arcane Shot every time it's ready
   (spam the key; Auto Shot keeps going in between).
+  1.4.0: when the target is in melee range the same key does Raptor Strike
+  (plus Mongoose Bite / Counterattack when allowed) - the game refuses the
+  shots up close and the melee hits at range, so one key works at any
+  distance (/hunt melee turns it off). The aspect now goes up on the same
+  press and never switches off, mending / feeding your pet only happens
+  with no enemy targeted (targeting one always shoots), and the interrupt
+  moved to the end of the key.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
@@ -50,6 +57,7 @@ Commands
   /hunt cheetah       Aspect of the Cheetah with nothing targeted on/off
   /hunt pet           pet care on the Shoot key on/off
   /hunt concussive    Concussive Shot on the Shoot key on/off
+  /hunt melee         Raptor Strike on the Shoot key in melee range on/off
   /hunt reactives     Mongoose Bite / Counterattack / Kill Command on/off
   /hunt ammo [n]      ammo restock on/off, or keep n stacks
   /hunt food [n]      pet food restock on/off, or keep n
