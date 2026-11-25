@@ -64,19 +64,19 @@ end
 L("no target, all fine: " .. key(1))
 target = "enemy"; SIM.Fire("PLAYER_TARGET_CHANGED"); SIM.Advance(0.5)
 L("enemy targeted, no Hawk: " .. key(1))
-assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /castsequence [@target,harm,nodead] reset=target/combat !Auto Shot, null || /petattack [@target,harm,nodead] || /castsequence [@target,harm,nodead] reset=target Hunter's Mark, Summon Hawk, null || CYCLE{SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | Mongoose Bite | Counterattack | Kill Command | /cast [combat,@target,harm,nodead] Intimidation}", "DBG " .. key(1))
+assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /cast [nocombat,@target,harm,nodead] !Auto Shot || /petattack [@target,harm,nodead] || CYCLE{SEQ:Hunter's Mark, Summon Hawk, null | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | Mongoose Bite | Counterattack | Kill Command | /cast [combat,@target,harm,nodead] !Auto Shot | /cast [combat,@target,harm,nodead] Intimidation}", "DBG " .. key(1))
 assert(raw(1):find("\n/click %[@target,harm,nodead%] TwizHuntShootCycle$"), "DBG " .. raw(1))
 -- each press casts the next spell in the list
 local cyc = TwizHuntShootCycle
 local got = {}
-for i = 1, 11 do got[i] = press(cyc) end
+for i = 1, 13 do got[i] = press(cyc) end
 L("presses: " .. table.concat(got, ", "))
-assert(got[1]:find("Concussive Shot, Serpent Sting$") and got[2] == "/cast [@target,harm,nodead] Arcane Shot" and got[3]:find("Raptor Strike") and got[11] == got[1], "DBG " .. table.concat(got, " | "))
+assert(got[1]:find("Hunter's Mark") and got[2]:find("Concussive Shot, Serpent Sting$") and got[3] == "/cast [@target,harm,nodead] Arcane Shot" and got[13] == got[1], "DBG " .. table.concat(got, " | "))
 
 
 buffs["playerAspect of the Hawk"] = true; SIM.Fire("UNIT_AURA", "player"); SIM.Advance(0.5)
 L("with Hawk: " .. key(1))
-assert(key(1):find("castsequence %[@target,harm,nodead%] reset=target Hunter's Mark, Summon Hawk, null || CYCLE{SEQ:Concussive Shot, Serpent Sting"))
+assert(key(1):find("CYCLE{SEQ:Hunter's Mark, Summon Hawk, null | SEQ:Concussive Shot, Serpent Sting"))
 pet.hp = 400; SIM.Fire("UNIT_HEALTH", "pet"); SIM.Advance(0.5)
 L("pet at 40%: " .. key(1))
 assert(key(1):find("%[nocombat,noharm,@pet%] Mend Pet || /stopmacro %[nocombat,noharm%]"), "DBG " .. key(1))
@@ -92,13 +92,13 @@ SIM.Fire("MERCHANT_SHOW")
 L("vendor bought: " .. table.concat(bought, ", "))
 assert(bought[1] == "2515x200" and bought[#bought]:find("^2287x"), "Sharp Arrow topped up, Haunch of Meat for the pet")
 assert(key(2) == "/startattack [@target,harm,nodead] || /petattack [@target,harm,nodead] || CYCLE{Raptor Strike | Mongoose Bite | Counterattack | /cast [combat,@target,harm,nodead] Intimidation}", "DBG " .. key(2))
-assert(key(1):find("Counterattack | Kill Command | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
+assert(key(1):find("Counterattack | Kill Command | /cast %[combat,@target,harm,nodead%] !Auto Shot | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
 L("hunter reactives in")
 SlashCmdList.TWIZHUNT("reactives"); assert(not key(2):find("Mongoose") and not key(1):find("Kill Command"))
 L("hunter reactives off")
 assert(key(2):find("CYCLE{Raptor Strike | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(2))
 assert(not key(1):find("Scatter"))
 L("merged: " .. key(1))
-assert(key(1):find("CYCLE{SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
+assert(key(1):find("CYCLE{SEQ:Hunter's Mark, Summon Hawk, null | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | /cast %[combat,@target,harm,nodead%] !Auto Shot | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
 SlashCmdList.TWIZHUNT("melee"); assert(not key(1):find("Raptor")); L("melee off: " .. key(1)); SlashCmdList.TWIZHUNT("melee"); assert(key(1):find("Raptor"))
 SlashCmdList.TWIZHUNT("concussive"); assert(not key(1):find("Concussive") and key(1):find("SEQ:Arcane Shot, Arcane Shot, Serpent Sting")); L("concussive off: " .. key(1))

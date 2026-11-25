@@ -247,26 +247,26 @@ end
 
 local function ShootLines()
     local lines = {}
-    -- 1.5.0: Auto Shot is asked for ONCE per target (and again after a fight). Asking for it on
-    -- every press while it's already shooting makes the game retry it and delays your shots -
-    -- that was the stutter. "!" = never switches it off. Once it's shooting the sequence sits at
-    -- "null" and is skipped, so it never holds anything up.
-    if Known("Auto Shot") then
-        lines[#lines + 1] = "/castsequence " .. T .. " reset=target/combat !Auto Shot, null"
-    end
+    -- 1.7.1: Auto Shot out of a fight on every press (that's the pull); in a fight only now and
+    -- then, as one of the rotating steps below - asking for it on every press while it's shooting
+    -- makes the game retry it and delays the shots (the stutter). "!" = never switches it off.
+    -- (1.5.0-1.7.0 asked from a /castsequence: this game refuses Auto Shot in a sequence, and a
+    -- refused line ends the whole press - so nothing else ever went off.)
+    local auto = Known("Auto Shot")
+    if auto then lines[#lines + 1] = "/cast [nocombat,@target,harm,nodead] !Auto Shot" end
     lines[#lines + 1] = "/petattack " .. T
-    -- Hunter's Mark (and Summon Hawk) once per target; Serpent Sting is on the timer step now
+    -- Hunter's Mark (and Summon Hawk) once per target - as a rotating step (1.7.1), so a step
+    -- the game refuses can only cost one press; Serpent Sting is on the timer step
     local seq = {}
     for _, s in ipairs({ "Hunter's Mark", "Summon Hawk" }) do if Known(s) then seq[#seq + 1] = s end end
-    if #seq > 0 then
-        lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
-    end
+    local opener = #seq > 0 and ("/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null")
     -- then the rest take turns: the Serpent Sting timer (with Concussive Shot), Arcane Shot most
     -- often, Raptor Strike (in melee range), the reactives when allowed, Kill Command, interrupt
     local list = {}
     local arcane = Known("Arcane Shot") and Cast("Arcane Shot")
     local raptor = db.meleeMerge and Known("Raptor Strike") and Cast("Raptor Strike")
     local serpent = SerpentStep()
+    if opener then list[#list + 1] = opener end
     if serpent then list[#list + 1] = serpent end
     if arcane then list[#list + 1] = arcane end
     if raptor then list[#list + 1] = raptor end
@@ -278,6 +278,8 @@ local function ShootLines()
         for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = Cast(r) end end
     end
     if db.reactives and Known("Kill Command") then list[#list + 1] = Cast("Kill Command") end
+    -- once a round in a fight: Auto Shot again (after a new target or a stretch of melee)
+    if auto then list[#list + 1] = "/cast [combat,@target,harm,nodead] !Auto Shot" end
     KickSteps(list)
     local b = #list > 0 and CycleButton("TwizHuntShootCycle", list)
     if b then lines[#lines + 1] = ClickLine(b) end

@@ -1,4 +1,4 @@
-TwizHunt 1.7.0 - one-key hunter
+TwizHunt 1.7.1 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -53,6 +53,13 @@ SHOOT (the one key)
   the key up. (The rotating steps are small macros now - the 1.5.0 "key did
   nothing" came from the first refused spell ending the press, not from the
   macros.)
+  1.7.1: the real culprit since 1.5.0 was the once-per-target Auto Shot
+  sequence - the game refuses Auto Shot inside a /castsequence, and that
+  refusal ended every press before anything else could run. Now: out of a
+  fight each press starts Auto Shot (the pull); in a fight Auto Shot is one
+  of the rotating steps, asked for about once a round instead of every
+  press (no stutter). Hunter's Mark / Summon Hawk moved into the rotating
+  steps too, so nothing can freeze the key.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
