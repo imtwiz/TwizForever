@@ -9,8 +9,8 @@
 --     the target is in melee range, Raptor Strike (+ Mongoose Bite / Counterattack when allowed)
 --     on the same key (1.4.0; each half is simply refused by the game at the wrong range).
 --     1.5.0: Auto Shot is asked for once per target instead of on every press (re-asking while
---     it's shooting delays the shots), and every spell that can be refused runs from its own
---     small button, so a refused one can't stop the rest of the key.
+--     it's shooting delays the shots); 1.5.1: every spell that can be refused is cast by its own
+--     small spell button, so a refused one can't stop the rest of the key.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -177,28 +177,36 @@ local function AutoKick()
 end
 NS.AutoKick = AutoKick
 
--- 1.5.0: every spell that the game may refuse (on cooldown, out of range, too close) runs from
--- its own small button through /click, so one refused spell can't hold up the rest of the key.
+-- 1.5.1: every spell that the game may refuse (on cooldown, out of range, too close) is cast by
+-- its own small spell button through /click, so one refused spell can't hold up the rest of the
+-- key (a refused /cast line ends the whole press in this game). Spell buttons, not macros: the
+-- game won't run a macro from inside a macro.
 local steps = {}
 local function Clicker()
     local n = 0
     local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
-    return function(text)
+    -- line: "/cast [conditions] Spell" -> "/click [conditions] TwizHuntStepN"
+    return function(line)
+        local cond, spell = line:match("^/cast (%b[]) (.+)$")
+        if not spell then cond, spell = "", line:match("^/cast (.+)$") end
+        if not spell then return line end
         n = n + 1
         local b = steps[n]
         if not b then
             b = CreateFrame("Button", "TwizHuntStep" .. n, UIParent, "SecureActionButtonTemplate")
             b:RegisterForClicks("AnyUp", "AnyDown")
-            b:SetAttribute("type", "macro")
+            b:SetAttribute("type", "spell")
             b:Hide()
             steps[n] = b
         end
-        if b:GetAttribute("macrotext1") ~= text then b:SetAttribute("macrotext1", text) end
+        if b:GetAttribute("spell") ~= spell then b:SetAttribute("spell", spell) end
+        local unit = (cond:find("@pet") and "pet") or "target"
+        if b:GetAttribute("unit") ~= unit then b:SetAttribute("unit", unit) end
         -- /click must match the "cast on key down" option, or the button ignores it
-        return "/click TwizHuntStep" .. n .. (keyDown and " LeftButton 1" or "")
+        return "/click " .. (cond ~= "" and (cond .. " ") or "") .. "TwizHuntStep" .. n .. (keyDown and " LeftButton 1" or "")
     end, function()
         for i = n + 1, #steps do
-            if steps[i]:GetAttribute("macrotext1") ~= "" then steps[i]:SetAttribute("macrotext1", "") end
+            if steps[i]:GetAttribute("spell") then steps[i]:SetAttribute("spell", nil) end
         end
     end
 end
@@ -222,28 +230,30 @@ end
 
 local function ShootLines(C)
     local lines = {}
-    -- 1.4.0: melee on the same key; 1.5.0: first, each on its own, so being out of melee range
-    -- can't stop the shots (and being too close can't stop these)
-    if db.meleeMerge then MeleeSteps(C, lines) end
     -- 1.5.0: Auto Shot is asked for ONCE per target (and again after a fight). Asking for it on
     -- every press while it's already shooting makes the game retry it and delays your shots -
-    -- that was the stutter. "!" = never switches it off.
+    -- that was the stutter. "!" = never switches it off. First in the key: once it's shooting
+    -- the sequence sits at "null" and is skipped, so it never holds anything up.
     if Known("Auto Shot") then
-        lines[#lines + 1] = C("/castsequence " .. T .. " reset=target/combat !Auto Shot, null")
+        lines[#lines + 1] = "/castsequence " .. T .. " reset=target/combat !Auto Shot, null"
     end
     lines[#lines + 1] = "/petattack " .. T
-    local seq = {}
-    for _, s in ipairs({ "Hunter's Mark", "Summon Hawk", "Serpent Sting" }) do if Known(s) then seq[#seq + 1] = s end end
-    -- the openers once per target ("null" stops the sequence there until the target changes)
-    if #seq > 0 then
-        lines[#lines + 1] = C("/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null")
-    end
+    -- 1.4.0: melee on the same key; each spell on its own button, so being out of melee range
+    -- can't stop the shots (and being too close can't stop these)
+    if db.meleeMerge then MeleeSteps(C, lines) end
     -- 1.3.0: Concussive Shot whenever it's ready, to keep the target from reaching you
     if db.concussive and Known("Concussive Shot") then lines[#lines + 1] = C("/cast " .. T .. " Concussive Shot") end
     if Known("Arcane Shot") then lines[#lines + 1] = C("/cast " .. T .. " Arcane Shot") end
     if db.reactives and Known("Kill Command") then lines[#lines + 1] = C("/cast " .. T .. " Kill Command") end
-    -- the interrupt last (Intimidation is a pet ability, off the global cooldown)
+    -- the interrupt (Intimidation is a pet ability, off the global cooldown)
     KickSteps(C, lines)
+    -- the opener sequence stays in the key itself (a button can't hold a sequence), last
+    local seq = {}
+    for _, s in ipairs({ "Hunter's Mark", "Summon Hawk", "Serpent Sting" }) do if Known(s) then seq[#seq + 1] = s end end
+    -- the openers once per target ("null" stops the sequence there until the target changes)
+    if #seq > 0 then
+        lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
+    end
     return lines
 end
 

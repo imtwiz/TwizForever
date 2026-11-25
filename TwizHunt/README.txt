@@ -1,4 +1,4 @@
-TwizHunt 1.5.0 - one-key hunter
+TwizHunt 1.5.1 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -27,6 +27,9 @@ SHOOT (the one key)
   game may refuse (cooldown, out of range, too close) now runs from its own
   small button, so a refused one can't stop the rest of the key; Raptor
   Strike comes first and starts your melee swings when you're in range.
+  1.5.1: those small buttons now cast their spell directly (1.5.0 used
+  small macros, which the game won't run from inside a macro, so the key
+  did nothing). The once-per-target Auto Shot is the first line of the key.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
