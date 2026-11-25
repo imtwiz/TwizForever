@@ -15,7 +15,8 @@
 --     press, from a rotating button - a refused one costs one press, not the whole key.
 --     1.8.0: back to single-spell rotating steps (1.7.x's step macros never ran in this game);
 --     /hunt debug + /hunt log record what each press does. 1.8.1: Serpent Sting follows
---     Concussive Shot each time it's off its 12 s cooldown (the key's last line).
+--     Concussive Shot each time it's off its 12 s cooldown (the key's last line). 1.8.2: no
+--     "null" in sequences - this game's sequence code errors on it and aborts the press.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -243,12 +244,9 @@ local function ShootLines()
     -- line ends the whole press.)
     if Known("Auto Shot") then lines[#lines + 1] = "/cast [nocombat,@target,harm,nodead] !Auto Shot" end
     lines[#lines + 1] = "/petattack " .. T
-    -- Hunter's Mark (and Summon Hawk) once per target
-    local seq = {}
-    for _, s in ipairs({ "Hunter's Mark", "Summon Hawk" }) do if Known(s) then seq[#seq + 1] = s end end
-    if #seq > 0 then
-        lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
-    end
+    -- (1.8.2: no more "/castsequence ..., null" here - this game's sequence code treats "null" as
+    -- a spell name, throws a Lua error and aborts the whole press. Hunter's Mark moved into the
+    -- timer sequence on the key's last line.)
     -- then the rest take turns, one per press: Arcane Shot, Raptor Strike (in melee range),
     -- reactives, Kill Command, the interrupt
     local list = {}
@@ -267,14 +265,22 @@ local function ShootLines()
     -- can't keep time, but cooldowns keep running while you spam: Concussive Shot (12 s cooldown)
     -- goes out whenever it's ready and Serpent Sting (15 s) follows - so it's put back on about
     -- every 12 s. A sequence can't live in a rotating button here, so it's the key's last line.
+    -- 1.8.2: Hunter's Mark (and Summon Hawk) lead it on each new target, then the
+    -- Concussive -> Serpent pairs repeat five times (about a minute) before Mark comes round again.
+    -- No "null" and no "!" in a sequence: this game errors on both.
+    local seq = {}
+    for _, s in ipairs({ "Hunter's Mark", "Summon Hawk" }) do if Known(s) then seq[#seq + 1] = s end end
+    local pair
     if Known("Serpent Sting") then
-        if db.concussive and Known("Concussive Shot") then
-            lines[#lines + 1] = "/castsequence " .. T .. " reset=target Concussive Shot, Serpent Sting"
-        else
-            lines[#lines + 1] = "/castsequence " .. T .. " reset=target Serpent Sting, Arcane Shot, Arcane Shot"
-        end
+        if db.concussive and Known("Concussive Shot") then pair = { "Concussive Shot", "Serpent Sting" }
+        elseif Known("Arcane Shot") then pair = { "Serpent Sting", "Arcane Shot", "Arcane Shot" }
+        else pair = { "Serpent Sting" } end
     elseif db.concussive and Known("Concussive Shot") then
-        lines[#lines + 1] = "/cast " .. T .. " Concussive Shot"
+        pair = { "Concussive Shot" }
+    end
+    if pair then for _ = 1, 5 do for _, sp in ipairs(pair) do seq[#seq + 1] = sp end end end
+    if #seq > 0 then
+        lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ")
     end
     return lines, list
 end

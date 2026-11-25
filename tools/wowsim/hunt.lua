@@ -64,7 +64,7 @@ end
 L("no target, all fine: " .. key(1))
 target = "enemy"; SIM.Fire("PLAYER_TARGET_CHANGED"); SIM.Advance(0.5)
 L("enemy targeted, no Hawk: " .. key(1))
-assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /cast [nocombat,@target,harm,nodead] !Auto Shot || /petattack [@target,harm,nodead] || /castsequence [@target,harm,nodead] reset=target Hunter's Mark, Summon Hawk, null || CYCLE{Arcane Shot | Raptor Strike | Mongoose Bite | Counterattack | Kill Command | Intimidation} || /castsequence [@target,harm,nodead] reset=target Concussive Shot, Serpent Sting", "DBG " .. key(1))
+assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /cast [nocombat,@target,harm,nodead] !Auto Shot || /petattack [@target,harm,nodead] || CYCLE{Arcane Shot | Raptor Strike | Mongoose Bite | Counterattack | Kill Command | Intimidation} || /castsequence [@target,harm,nodead] reset=target Hunter's Mark, Summon Hawk, Concussive Shot, Serpent Sting, Concussive Shot, Serpent Sting, Concussive Shot, Serpent Sting, Concussive Shot, Serpent Sting, Concussive Shot, Serpent Sting", "DBG " .. key(1))
 assert(raw(1):find("\n/click %[@target,harm,nodead%] TwizHuntShootCycle\n/castsequence"), "DBG " .. raw(1))
 -- each press casts the next spell in the list
 local cyc = TwizHuntShootCycle
@@ -76,7 +76,7 @@ assert(got[1] == "Arcane Shot" and got[2] == "Raptor Strike" and got[7] == got[1
 
 buffs["playerAspect of the Hawk"] = true; SIM.Fire("UNIT_AURA", "player"); SIM.Advance(0.5)
 L("with Hawk: " .. key(1))
-assert(key(1):find("Hunter's Mark, Summon Hawk, null || CYCLE{Arcane Shot"), "DBG " .. key(1))
+assert(key(1):find("/petattack %[@target,harm,nodead%] || CYCLE{Arcane Shot"), "DBG " .. key(1))
 pet.hp = 400; SIM.Fire("UNIT_HEALTH", "pet"); SIM.Advance(0.5)
 L("pet at 40%: " .. key(1))
 assert(key(1):find("%[nocombat,noharm,@pet%] Mend Pet || /stopmacro %[nocombat,noharm%]"), "DBG " .. key(1))
@@ -99,9 +99,11 @@ L("hunter reactives off")
 assert(key(2):find("CYCLE{Raptor Strike | Intimidation}$"), "DBG " .. key(2))
 assert(not key(1):find("Scatter"))
 L("merged: " .. key(1))
-assert(key(1):find("CYCLE{Arcane Shot | Raptor Strike | Intimidation} || /castsequence %[@target,harm,nodead%] reset=target Concussive Shot, Serpent Sting$"), "DBG " .. key(1))
+assert(key(1):find("CYCLE{Arcane Shot | Raptor Strike | Intimidation} || /castsequence %[@target,harm,nodead%] reset=target Hunter's Mark, Summon Hawk, Concussive Shot, Serpent Sting, Concussive Shot"), "DBG " .. key(1))
 SlashCmdList.TWIZHUNT("melee"); assert(not key(1):find("Raptor")); L("melee off: " .. key(1)); SlashCmdList.TWIZHUNT("melee"); assert(key(1):find("Raptor"))
-SlashCmdList.TWIZHUNT("concussive"); assert(key(1):find("reset=target Serpent Sting, Arcane Shot, Arcane Shot$")); L("concussive off: " .. key(1))
+SlashCmdList.TWIZHUNT("concussive"); assert(key(1):find("Summon Hawk, Serpent Sting, Arcane Shot, Arcane Shot, Serpent Sting")); L("concussive off: " .. key(1))
 
 SIM.Fire("UNIT_SPELLCAST_SENT", "player", "x", "y", 3044); SIM.Fire("UI_ERROR_MESSAGE", 1, "Out of range.")
 SlashCmdList.TWIZHUNT("log"); assert(#TwizHuntDB.log >= 2); L("log entries: " .. #TwizHuntDB.log .. " last: " .. TwizHuntDB.log[#TwizHuntDB.log])
+
+for i = 1, 2 do assert(not key(i):find("null") and not key(i):find("castsequence[^|]*!")) end; L("no null / no ! in any sequence")

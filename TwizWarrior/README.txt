@@ -1,4 +1,4 @@
-TwizWarrior 1.3.1 - one-key warrior
+TwizWarrior 1.3.2 - one-key warrior
 ====================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizWarrior.
@@ -30,3 +30,8 @@ INTERRUPT
 
 Commands: /warrior (status), /warrior shout, /warrior rend, /warrior hs,
 /warrior overpower, /warrior revenge
+
+1.3.2: no "null" at the end of the Battle Shout / Rend sequence anymore -
+this game's sequence code errors on it ("Usage: CastSpellByName") and the
+error aborts the whole press. Six Heroic Strikes fill the sequence instead,
+then Rend comes round again.

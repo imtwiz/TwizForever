@@ -76,8 +76,14 @@ local function AttackMacro()
     -- Battle Shout only when it's missing now (out of combat is when this is decided)
     if db.shout and Known("Battle Shout") and not HasBuff("player", "Battle Shout") then seq[#seq + 1] = "Battle Shout" end
     if db.rend and Known("Rend") then seq[#seq + 1] = "Rend" end
+    -- 1.3.2: no "null" at the end - this game's sequence code treats it as a spell name, throws a
+    -- Lua error and aborts the whole press. Heroic Strikes fill the sequence instead (they wait
+    -- for your next swing), so Rend comes round again after six of them.
     if #seq > 0 then
-        lines[#lines + 1] = ("/castsequence [%s] reset=target %s, null"):format(T, table.concat(seq, ", "))
+        if db.hs and Known("Heroic Strike") then
+            for _ = 1, 6 do seq[#seq + 1] = "Heroic Strike" end
+        end
+        lines[#lines + 1] = ("/castsequence [%s] reset=target %s"):format(T, table.concat(seq, ", "))
     end
     if db.hs and Known("Heroic Strike") then lines[#lines + 1] = ("/cast [%s] Heroic Strike"):format(T) end
     if Known("Execute") then lines[#lines + 1] = ("/cast [%s] Execute"):format(T) end

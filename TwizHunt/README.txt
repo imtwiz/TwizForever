@@ -1,4 +1,4 @@
-TwizHunt 1.8.1 - one-key hunter
+TwizHunt 1.8.2 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -77,6 +77,13 @@ SHOOT (the one key)
   then two Arcane Shots (6 s cooldown each) before the next one. The
   rotating steps are Arcane Shot and Raptor Strike (+ reactives, Kill
   Command, interrupt).
+  1.8.2: found the bug behind most of the trouble since 1.0: this game's
+  sequence code treats "null" (and "!") as a spell name, throws a Lua error
+  ("Usage: CastSpellByName") and aborts the whole press. Hunter's Mark's
+  "..., null" opener did that on every press once Mark was out. Now there's
+  no "null" or "!" in any sequence: the key's last line is Hunter's Mark
+  (and Summon Hawk) on each new target, then Concussive Shot -> Serpent
+  Sting five times over (about a minute) before Mark comes round again.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
