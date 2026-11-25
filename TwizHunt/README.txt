@@ -1,4 +1,4 @@
-TwizHunt 1.8.0 - one-key hunter
+TwizHunt 1.8.1 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -69,6 +69,14 @@ SHOOT (the one key)
   only (the pull). New press log: /hunt debug (on by default for now),
   /hunt log shows the last 30 lines, /hunt clearlog empties it; it's kept
   in your saved settings so a fight can be checked after a /reload.
+  1.8.1: "once a round" was only a few seconds when spamming, so Serpent
+  Sting is on a real timer now: the key's last line is the sequence
+  Concussive Shot -> Serpent Sting, so it goes back on each time Concussive
+  Shot comes off its 12-second cooldown (cooldowns keep counting while you
+  spam; Serpent Sting lasts 15). With /hunt concussive off: Serpent Sting,
+  then two Arcane Shots (6 s cooldown each) before the next one. The
+  rotating steps are Arcane Shot and Raptor Strike (+ reactives, Kill
+  Command, interrupt).
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 

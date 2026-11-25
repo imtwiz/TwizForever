@@ -14,7 +14,8 @@
 --     so Arcane Shot / Raptor Strike / Concussive Shot / reactives / interrupt take turns, one per
 --     press, from a rotating button - a refused one costs one press, not the whole key.
 --     1.8.0: back to single-spell rotating steps (1.7.x's step macros never ran in this game);
---     Serpent Sting once a round; /hunt debug + /hunt log record what each press does.
+--     /hunt debug + /hunt log record what each press does. 1.8.1: Serpent Sting follows
+--     Concussive Shot each time it's off its 12 s cooldown (the key's last line).
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -248,17 +249,12 @@ local function ShootLines()
     if #seq > 0 then
         lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
     end
-    -- then the rest take turns, one per press: Arcane Shot most, Raptor Strike (in melee range),
-    -- Concussive Shot, Serpent Sting once a round, reactives, Kill Command, the interrupt.
-    -- The game hides debuffs in a fight, so Serpent Sting can't be checked; once a round keeps it up.
+    -- then the rest take turns, one per press: Arcane Shot, Raptor Strike (in melee range),
+    -- reactives, Kill Command, the interrupt
     local list = {}
     local arcane = Known("Arcane Shot") and "Arcane Shot"
     local raptor = db.meleeMerge and Known("Raptor Strike") and "Raptor Strike"
     local function add(x) if x then list[#list + 1] = x end end
-    add(arcane); add(raptor)
-    if db.concussive and Known("Concussive Shot") then add("Concussive Shot") end
-    add(arcane); add(raptor)
-    if Known("Serpent Sting") then add("Serpent Sting") end
     add(arcane); add(raptor)
     if db.meleeMerge and db.reactives then
         for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then add(r) end end
@@ -267,6 +263,19 @@ local function ShootLines()
     KickSpells(list)
     local b = #list > 0 and CycleButton("TwizHuntShootCycle", list)
     if b then lines[#lines + 1] = ClickLine(b) end
+    -- 1.8.1: Serpent Sting on a timer. The game hides debuffs in a fight and a press-counting list
+    -- can't keep time, but cooldowns keep running while you spam: Concussive Shot (12 s cooldown)
+    -- goes out whenever it's ready and Serpent Sting (15 s) follows - so it's put back on about
+    -- every 12 s. A sequence can't live in a rotating button here, so it's the key's last line.
+    if Known("Serpent Sting") then
+        if db.concussive and Known("Concussive Shot") then
+            lines[#lines + 1] = "/castsequence " .. T .. " reset=target Concussive Shot, Serpent Sting"
+        else
+            lines[#lines + 1] = "/castsequence " .. T .. " reset=target Serpent Sting, Arcane Shot, Arcane Shot"
+        end
+    elseif db.concussive and Known("Concussive Shot") then
+        lines[#lines + 1] = "/cast " .. T .. " Concussive Shot"
+    end
     return lines, list
 end
 
