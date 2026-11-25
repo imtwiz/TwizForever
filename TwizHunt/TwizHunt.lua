@@ -8,6 +8,9 @@
 --     so it can't close the distance; /hunt concussive turns it off), then Arcane Shot - and when
 --     the target is in melee range, Raptor Strike (+ Mongoose Bite / Counterattack when allowed)
 --     on the same key (1.4.0; each half is simply refused by the game at the wrong range).
+--     1.5.0: Auto Shot is asked for once per target instead of on every press (re-asking while
+--     it's shooting delays the shots), and every spell that can be refused runs from its own
+--     small button, so a refused one can't stop the rest of the key.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -174,45 +177,80 @@ local function AutoKick()
 end
 NS.AutoKick = AutoKick
 
-local function ShootLines()
+-- 1.5.0: every spell that the game may refuse (on cooldown, out of range, too close) runs from
+-- its own small button through /click, so one refused spell can't hold up the rest of the key.
+local steps = {}
+local function Clicker()
+    local n = 0
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    return function(text)
+        n = n + 1
+        local b = steps[n]
+        if not b then
+            b = CreateFrame("Button", "TwizHuntStep" .. n, UIParent, "SecureActionButtonTemplate")
+            b:RegisterForClicks("AnyUp", "AnyDown")
+            b:SetAttribute("type", "macro")
+            b:Hide()
+            steps[n] = b
+        end
+        if b:GetAttribute("macrotext1") ~= text then b:SetAttribute("macrotext1", text) end
+        -- /click must match the "cast on key down" option, or the button ignores it
+        return "/click TwizHuntStep" .. n .. (keyDown and " LeftButton 1" or "")
+    end, function()
+        for i = n + 1, #steps do
+            if steps[i]:GetAttribute("macrotext1") ~= "" then steps[i]:SetAttribute("macrotext1", "") end
+        end
+    end
+end
+
+local T = "[@target,harm,nodead]"
+
+local function MeleeSteps(C, lines)
+    -- Raptor Strike first: it waits for your next swing (off the global cooldown) and starts your
+    -- melee swings; Mongoose Bite / Counterattack only when the game allows them
+    if Known("Raptor Strike") then lines[#lines + 1] = C("/cast " .. T .. " Raptor Strike") end
+    if db.reactives then
+        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do
+            if Known(r) then lines[#lines + 1] = C("/cast " .. T .. " " .. r) end
+        end
+    end
+end
+
+local function KickSteps(C, lines)
+    for l in AutoKick():gmatch("[^\n]+") do lines[#lines + 1] = C(l) end
+end
+
+local function ShootLines(C)
     local lines = {}
-    if Known("Auto Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] !Auto Shot" end
-    lines[#lines + 1] = "/petattack [@target,harm,nodead]"
+    -- 1.4.0: melee on the same key; 1.5.0: first, each on its own, so being out of melee range
+    -- can't stop the shots (and being too close can't stop these)
+    if db.meleeMerge then MeleeSteps(C, lines) end
+    -- 1.5.0: Auto Shot is asked for ONCE per target (and again after a fight). Asking for it on
+    -- every press while it's already shooting makes the game retry it and delays your shots -
+    -- that was the stutter. "!" = never switches it off.
+    if Known("Auto Shot") then
+        lines[#lines + 1] = C("/castsequence " .. T .. " reset=target/combat !Auto Shot, null")
+    end
+    lines[#lines + 1] = "/petattack " .. T
     local seq = {}
     for _, s in ipairs({ "Hunter's Mark", "Summon Hawk", "Serpent Sting" }) do if Known(s) then seq[#seq + 1] = s end end
     -- the openers once per target ("null" stops the sequence there until the target changes)
     if #seq > 0 then
-        lines[#lines + 1] = "/castsequence [@target,harm,nodead] reset=target " .. table.concat(seq, ", ") .. ", null"
+        lines[#lines + 1] = C("/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null")
     end
     -- 1.3.0: Concussive Shot whenever it's ready, to keep the target from reaching you
-    if db.concussive and Known("Concussive Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Concussive Shot" end
-    if Known("Arcane Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Arcane Shot" end
-    -- 1.1.0: Kill Command is off the global cooldown, so after Arcane Shot it still goes off when allowed
-    if db.reactives and Known("Kill Command") then lines[#lines + 1] = "/cast [@target,harm,nodead] Kill Command" end
-    -- 1.4.0: melee on the same key - out of melee range the game refuses these (and in melee range
-    -- it refuses the shots), so the one key works at any distance. Raptor Strike starts your
-    -- melee swings when it goes off.
-    if db.meleeMerge then
-        if db.reactives then
-            for _, r in ipairs({ "Counterattack", "Mongoose Bite" }) do
-                if Known(r) then lines[#lines + 1] = "/cast [@target,harm,nodead] " .. r end
-            end
-        end
-        if Known("Raptor Strike") then lines[#lines + 1] = "/cast [@target,harm,nodead] Raptor Strike" end
-    end
+    if db.concussive and Known("Concussive Shot") then lines[#lines + 1] = C("/cast " .. T .. " Concussive Shot") end
+    if Known("Arcane Shot") then lines[#lines + 1] = C("/cast " .. T .. " Arcane Shot") end
+    if db.reactives and Known("Kill Command") then lines[#lines + 1] = C("/cast " .. T .. " Kill Command") end
+    -- the interrupt last (Intimidation is a pet ability, off the global cooldown)
+    KickSteps(C, lines)
     return lines
 end
 
-local function MeleeMacro()
-    local lines = { "/startattack [@target,harm,nodead]", "/petattack [@target,harm,nodead]" }
-    -- 1.1.0: reactives first (the game only allows them right after a dodge/parry and skips them
-    -- otherwise); Raptor Strike waits for your next swing, so it still goes off on the same press
-    if db.reactives then
-        for _, r in ipairs({ "Counterattack", "Mongoose Bite" }) do
-            if Known(r) then lines[#lines + 1] = "/cast [@target,harm,nodead] " .. r end
-        end
-    end
-    if Known("Raptor Strike") then lines[#lines + 1] = "/cast [@target,harm,nodead] Raptor Strike" end
+local function MeleeMacro(C)
+    local lines = { "/startattack " .. T, "/petattack " .. T }
+    MeleeSteps(C, lines)
+    KickSteps(C, lines)
     return table.concat(lines, "\n")
 end
 
@@ -225,6 +263,7 @@ end
 
 function NS.Update()
     if not db or InCombatLockdown() then return end
+    local C, finish = Clicker()
     local lines = {}
     local function addFix(fix, cond)
         for l in fix:gmatch("[^\n]+") do
@@ -245,14 +284,11 @@ function NS.Update()
         local afix, awhy = AspectFix()
         if afix then addFix(afix, "nocombat"); why = awhy end
     end
-    for _, l in ipairs(ShootLines()) do lines[#lines + 1] = l end
-    -- 1.4.0: the interrupt goes last - it's off the global cooldown, and a shot on cooldown
-    -- in front of the rest can't hold anything up this way
-    local kick = AutoKick()
-    if kick ~= "" then lines[#lines + 1] = kick:gsub("\n$", "") end
+    for _, l in ipairs(ShootLines(C)) do lines[#lines + 1] = l end
     local m1 = table.concat(lines, "\n")
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
-    local m2 = MeleeMacro() .. (AutoKick() ~= "" and ("\n" .. AutoKick():gsub("\n$", "")) or "")
+    local m2 = MeleeMacro(C)
+    finish()
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
     local m3 = PetMacro()
     if btn:GetAttribute("macrotext3") ~= m3 then btn:SetAttribute("macrotext3", m3) end
@@ -339,7 +375,7 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "UNIT_PET", "UNIT_AURA",
     "UNIT_HEALTH", "PET_UI_UPDATE", "UNIT_HAPPINESS", "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "PLAYER_REGEN_ENABLED",
-    "MERCHANT_SHOW", "PLAYER_MOUNT_DISPLAY_CHANGED" }) do
+    "MERCHANT_SHOW", "PLAYER_MOUNT_DISPLAY_CHANGED", "CVAR_UPDATE" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 local queued

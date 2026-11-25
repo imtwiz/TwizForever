@@ -1,4 +1,4 @@
-TwizHunt 1.4.0 - one-key hunter
+TwizHunt 1.5.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -21,6 +21,12 @@ SHOOT (the one key)
   press and never switches off, mending / feeding your pet only happens
   with no enemy targeted (targeting one always shoots), and the interrupt
   moved to the end of the key.
+  1.5.0: Auto Shot is asked for once per target (and again after a fight)
+  instead of on every press - asking again while it's already shooting makes
+  the game retry it and delays your shots (the stutter). Every spell the
+  game may refuse (cooldown, out of range, too close) now runs from its own
+  small button, so a refused one can't stop the rest of the key; Raptor
+  Strike comes first and starts your melee swings when you're in range.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
