@@ -1,4 +1,4 @@
-TwizHunt 1.2.0 - one-key hunter
+TwizHunt 1.2.1 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.

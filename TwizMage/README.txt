@@ -1,4 +1,4 @@
-TwizMage 1.0.0 - one-key mage
+TwizMage 1.0.1 - one-key mage
 =============================
 
 Bind the keys in Options > Keybindings > AddOns > TwizMage.

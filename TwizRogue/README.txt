@@ -1,4 +1,4 @@
-TwizRogue 1.2.0 - one-key rogue
+TwizRogue 1.2.1 - one-key rogue
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizRogue.

@@ -1,4 +1,4 @@
-TwizWarrior 1.3.0 - one-key warrior
+TwizWarrior 1.3.1 - one-key warrior
 ====================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizWarrior.

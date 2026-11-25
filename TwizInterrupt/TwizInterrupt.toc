@@ -2,9 +2,8 @@
 ## Title: TwizInterrupt
 ## Notes: Interrupts for every class: one key interrupts the enemy under your mouse (else your target) with your class's interrupt (the TwizRogue / TwizWarrior / TwizHunt / TwizMage attack keys fire it too, in a fight), and a big alert with a warning sound shows the moment your target - or an enemy near you in a fight - starts a cast you can interrupt. /interrupt
 ## Author: Alan Sherbourne
-## Version: 1.2.0
+## Version: 1.2.1
 ## SavedVariables: TwizInterruptDB
 ## IconTexture: Interface\Icons\Ability_Kick
 
-Bindings.xml
 TwizInterrupt.lua

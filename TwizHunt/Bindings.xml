@@ -1,5 +1,5 @@
 <Bindings>
-    <Binding name="CLICK TwizHuntButton:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK TwizHuntButton:LeftButton" header="TWIZHUNT" category="ADDONS"/>
     <Binding name="CLICK TwizHuntButton:RightButton" category="ADDONS"/>
     <Binding name="CLICK TwizHuntButton:MiddleButton" category="ADDONS"/>
 </Bindings>

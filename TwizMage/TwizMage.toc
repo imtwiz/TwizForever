@@ -2,9 +2,8 @@
 ## Title: TwizMage
 ## Notes: Mage helper: one key for Counterspell (in a fight, when ready), Fire Blast and Frostbolt; out of combat it puts your armor up and conjures water, food and a mana gem. Frost Nova, Polymorph, Blink and Mana (gem / Evocation / drink) keys, and rune restock at reagent vendors. /mage
 ## Author: Alan Sherbourne
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: TwizMageDB
 ## IconTexture: Interface\Icons\Spell_Frost_FrostBolt02
 
-Bindings.xml
 TwizMage.lua

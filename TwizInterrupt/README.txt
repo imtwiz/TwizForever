@@ -1,4 +1,4 @@
-TwizInterrupt 1.2.0 - interrupts for every class
+TwizInterrupt 1.2.1 - interrupts for every class
 ================================================
 
 Bind the key in Options > Keybindings > AddOns > TwizInterrupt.

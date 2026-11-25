@@ -2,9 +2,8 @@
 ## Title: TwizHunt
 ## Notes: Hunter helper: one-key shooting (Auto Shot, pet attack, Hunter's Mark, Summon Hawk, Serpent Sting, Arcane Shot), a melee key with Mongoose Bite / Counterattack when allowed, the right aspect and pet care out of combat, and ammo + pet food restock at vendors. /hunt
 ## Author: Alan Sherbourne
-## Version: 1.2.0
+## Version: 1.2.1
 ## SavedVariables: TwizHuntDB
 ## IconTexture: Interface\Icons\Ability_Hunter_SniperShot
 
-Bindings.xml
 TwizHunt.lua

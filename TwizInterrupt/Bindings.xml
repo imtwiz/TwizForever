@@ -1,3 +1,3 @@
 <Bindings>
-    <Binding name="CLICK TwizInterruptButton:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK TwizInterruptButton:LeftButton" header="TWIZINTERRUPT" category="ADDONS"/>
 </Bindings>
