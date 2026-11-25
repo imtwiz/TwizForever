@@ -1,4 +1,4 @@
-TwizHunt 1.5.1 - one-key hunter
+TwizHunt 1.6.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -30,6 +30,18 @@ SHOOT (the one key)
   1.5.1: those small buttons now cast their spell directly (1.5.0 used
   small macros, which the game won't run from inside a macro, so the key
   did nothing). The once-per-target Auto Shot is the first line of the key.
+  1.6.0: this game ends the whole key press at the first spell it refuses
+  (on cooldown, out of range, too close) - even through those buttons - so
+  Raptor Strike being refused at range stopped Arcane Shot and Serpent
+  Sting. Now the key does: Auto Shot (once per target), pet attack, Hunter's
+  Mark -> Serpent Sting (once per target), then ONE spell per press from a
+  rotating list: Arcane Shot, Raptor Strike, Concussive Shot, Arcane Shot,
+  Raptor Strike, (Mongoose Bite, Counterattack, Kill Command, interrupt).
+  A refused one just costs that press - spam the key and each gets its
+  turn several times a second. The melee key works the same way. If a mob
+  reaches you before Serpent Sting goes out, use the melee key (or back
+  off) - Serpent Sting can't be cast in melee range and holds the key up
+  until it lands or you change target.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 

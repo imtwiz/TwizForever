@@ -9,8 +9,9 @@
 --     the target is in melee range, Raptor Strike (+ Mongoose Bite / Counterattack when allowed)
 --     on the same key (1.4.0; each half is simply refused by the game at the wrong range).
 --     1.5.0: Auto Shot is asked for once per target instead of on every press (re-asking while
---     it's shooting delays the shots); 1.5.1: every spell that can be refused is cast by its own
---     small spell button, so a refused one can't stop the rest of the key.
+--     it's shooting delays the shots). 1.6.0: the game ends a press at the first spell it refuses,
+--     so Arcane Shot / Raptor Strike / Concussive Shot / reactives / interrupt take turns, one per
+--     press, from a rotating button - a refused one costs one press, not the whole key.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -177,92 +178,110 @@ local function AutoKick()
 end
 NS.AutoKick = AutoKick
 
--- 1.5.1: every spell that the game may refuse (on cooldown, out of range, too close) is cast by
--- its own small spell button through /click, so one refused spell can't hold up the rest of the
--- key (a refused /cast line ends the whole press in this game). Spell buttons, not macros: the
--- game won't run a macro from inside a macro.
-local steps = {}
-local function Clicker()
-    local n = 0
-    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
-    -- line: "/cast [conditions] Spell" -> "/click [conditions] TwizHuntStepN"
-    return function(line)
-        local cond, spell = line:match("^/cast (%b[]) (.+)$")
-        if not spell then cond, spell = "", line:match("^/cast (.+)$") end
-        if not spell then return line end
-        n = n + 1
-        local b = steps[n]
-        if not b then
-            b = CreateFrame("Button", "TwizHuntStep" .. n, UIParent, "SecureActionButtonTemplate")
-            b:RegisterForClicks("AnyUp", "AnyDown")
-            b:SetAttribute("type", "spell")
-            b:Hide()
-            steps[n] = b
-        end
-        if b:GetAttribute("spell") ~= spell then b:SetAttribute("spell", spell) end
-        local unit = (cond:find("@pet") and "pet") or "target"
-        if b:GetAttribute("unit") ~= unit then b:SetAttribute("unit", unit) end
-        -- /click must match the "cast on key down" option, or the button ignores it
-        return "/click " .. (cond ~= "" and (cond .. " ") or "") .. "TwizHuntStep" .. n .. (keyDown and " LeftButton 1" or "")
-    end, function()
-        for i = n + 1, #steps do
-            if steps[i]:GetAttribute("spell") then steps[i]:SetAttribute("spell", nil) end
-        end
+-- 1.6.0: in this game the first spell it refuses (on cooldown, out of range, too close) ends the
+-- whole key press - nothing after it runs, not even through /click. So the spells that can be
+-- refused take turns instead: a rotating spell button casts the NEXT spell of its list on each
+-- press (restricted code, like TwizHeal's combat combo). A refused one costs that one press; spam
+-- the key and every spell gets its turn several times a second.
+local cycles, header = {}, nil
+local function CycleButton(name, spells)
+    if not (SecureHandlerWrapScript and CreateFrame) then return nil end
+    local b = cycles[name]
+    if not b then
+        if not header then header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate") end
+        b = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+        b:RegisterForClicks("AnyUp", "AnyDown")
+        b:SetAttribute("type", "spell")
+        b:SetAttribute("unit", "target")
+        b:Hide()
+        local ok = pcall(SecureHandlerWrapScript, b, "OnClick", header, [[
+            local count = self:GetAttribute("cyclecount") or 0
+            if count < 1 then return end
+            local n = (self:GetAttribute("cyclen") or 0) % count + 1
+            self:SetAttribute("cyclen", n)
+            self:SetAttribute("spell", self:GetAttribute("cyclespell" .. n))
+        ]])
+        if not ok then return nil end
+        cycles[name] = b
     end
+    local list = table.concat(spells, ",")
+    if b:GetAttribute("cyclelist") ~= list then
+        b:SetAttribute("cyclelist", list)
+        for i, sp in ipairs(spells) do b:SetAttribute("cyclespell" .. i, sp) end
+        b:SetAttribute("cyclecount", #spells)
+        b:SetAttribute("cyclen", 0)
+    end
+    return b
+end
+
+local function ClickLine(b)
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    -- /click must match the "cast on key down" option, or the button ignores it
+    return "/click [@target,harm,nodead] " .. b:GetName() .. (keyDown and " LeftButton 1" or "")
 end
 
 local T = "[@target,harm,nodead]"
 
-local function MeleeSteps(C, lines)
-    -- Raptor Strike first: it waits for your next swing (off the global cooldown) and starts your
-    -- melee swings; Mongoose Bite / Counterattack only when the game allows them
-    if Known("Raptor Strike") then lines[#lines + 1] = C("/cast " .. T .. " Raptor Strike") end
-    if db.reactives then
-        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do
-            if Known(r) then lines[#lines + 1] = C("/cast " .. T .. " " .. r) end
-        end
+local function KickSpells(out)
+    for l in AutoKick():gmatch("[^\n]+") do
+        local sp = l:match("^/cast %b[] (.+)$") or l:match("^/cast (.+)$")
+        if sp then out[#out + 1] = sp end
     end
 end
 
-local function KickSteps(C, lines)
-    for l in AutoKick():gmatch("[^\n]+") do lines[#lines + 1] = C(l) end
+local function MeleeSpells(out)
+    if Known("Raptor Strike") then out[#out + 1] = "Raptor Strike" end
+    if db.reactives then
+        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then out[#out + 1] = r end end
+    end
 end
 
-local function ShootLines(C)
+local function ShootLines()
     local lines = {}
     -- 1.5.0: Auto Shot is asked for ONCE per target (and again after a fight). Asking for it on
     -- every press while it's already shooting makes the game retry it and delays your shots -
-    -- that was the stutter. "!" = never switches it off. First in the key: once it's shooting
-    -- the sequence sits at "null" and is skipped, so it never holds anything up.
+    -- that was the stutter. "!" = never switches it off. Once it's shooting the sequence sits at
+    -- "null" and is skipped, so it never holds anything up.
     if Known("Auto Shot") then
         lines[#lines + 1] = "/castsequence " .. T .. " reset=target/combat !Auto Shot, null"
     end
     lines[#lines + 1] = "/petattack " .. T
-    -- 1.4.0: melee on the same key; each spell on its own button, so being out of melee range
-    -- can't stop the shots (and being too close can't stop these)
-    if db.meleeMerge then MeleeSteps(C, lines) end
-    -- 1.3.0: Concussive Shot whenever it's ready, to keep the target from reaching you
-    if db.concussive and Known("Concussive Shot") then lines[#lines + 1] = C("/cast " .. T .. " Concussive Shot") end
-    if Known("Arcane Shot") then lines[#lines + 1] = C("/cast " .. T .. " Arcane Shot") end
-    if db.reactives and Known("Kill Command") then lines[#lines + 1] = C("/cast " .. T .. " Kill Command") end
-    -- the interrupt (Intimidation is a pet ability, off the global cooldown)
-    KickSteps(C, lines)
-    -- the opener sequence stays in the key itself (a button can't hold a sequence), last
+    -- the openers once per target ("null" stops the sequence there until the target changes)
     local seq = {}
     for _, s in ipairs({ "Hunter's Mark", "Summon Hawk", "Serpent Sting" }) do if Known(s) then seq[#seq + 1] = s end end
-    -- the openers once per target ("null" stops the sequence there until the target changes)
     if #seq > 0 then
         lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
     end
-    return lines
+    -- then the rest take turns: Arcane Shot most often, Raptor Strike (in melee range, 1.4.0),
+    -- Concussive Shot (1.3.0), the reactives when allowed, Kill Command, the interrupt
+    local list = {}
+    local arcane = Known("Arcane Shot") and "Arcane Shot"
+    local raptor = db.meleeMerge and Known("Raptor Strike") and "Raptor Strike"
+    if arcane then list[#list + 1] = arcane end
+    if raptor then list[#list + 1] = raptor end
+    if db.concussive and Known("Concussive Shot") then list[#list + 1] = "Concussive Shot" end
+    if arcane then list[#list + 1] = arcane end
+    if raptor then list[#list + 1] = raptor end
+    if db.meleeMerge and db.reactives then
+        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = r end end
+    end
+    if db.reactives and Known("Kill Command") then list[#list + 1] = "Kill Command" end
+    KickSpells(list)
+    local b = #list > 0 and CycleButton("TwizHuntShootCycle", list)
+    if b then lines[#lines + 1] = ClickLine(b) end
+    return lines, list
 end
 
-local function MeleeMacro(C)
+local function MeleeMacro()
     local lines = { "/startattack " .. T, "/petattack " .. T }
-    MeleeSteps(C, lines)
-    KickSteps(C, lines)
-    return table.concat(lines, "\n")
+    local list = {}
+    MeleeSpells(list)
+    KickSpells(list)
+    local b = #list > 0 and CycleButton("TwizHuntMeleeCycle", list)
+    if b then lines[#lines + 1] = ClickLine(b) end
+    return table.concat(lines, "\n"), list
 end
+NS.CycleButton = CycleButton
 
 local function PetMacro()
     local m = PetFix()
@@ -273,7 +292,6 @@ end
 
 function NS.Update()
     if not db or InCombatLockdown() then return end
-    local C, finish = Clicker()
     local lines = {}
     local function addFix(fix, cond)
         for l in fix:gmatch("[^\n]+") do
@@ -294,11 +312,13 @@ function NS.Update()
         local afix, awhy = AspectFix()
         if afix then addFix(afix, "nocombat"); why = awhy end
     end
-    for _, l in ipairs(ShootLines(C)) do lines[#lines + 1] = l end
+    local shoot, slist = ShootLines()
+    for _, l in ipairs(shoot) do lines[#lines + 1] = l end
+    NS.shootList = slist
     local m1 = table.concat(lines, "\n")
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
-    local m2 = MeleeMacro(C)
-    finish()
+    local m2, mlist = MeleeMacro()
+    NS.meleeList = mlist
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
     local m3 = PetMacro()
     if btn:GetAttribute("macrotext3") ~= m3 then btn:SetAttribute("macrotext3", m3) end
