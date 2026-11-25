@@ -98,6 +98,7 @@ NS.ADDONS = {
             { "Aspect of the Hawk automatically", function(d) return NotFalse(d.aspects) end, flip("aspects") },
             { "Aspect of the Cheetah, no target", function(d) return T(d.cheetah) end, flip("cheetah") },
             { "Pet care on the Shoot key", function(d) return NotFalse(d.petCare) end, flip("pet") },
+            { "Concussive Shot whenever it's ready", function(d) return NotFalse(d.concussive) end, flip("concussive") },
             { "Mongoose Bite / Counterattack / Kill Command", function(d) return NotFalse(d.reactives) end, flip("reactives") },
             { "Restock ammo at vendors", function(d) return NotFalse(d.ammo) end, flip("ammo") },
             { "Restock pet food at vendors", function(d) return NotFalse(d.petFood) end, flip("food") },

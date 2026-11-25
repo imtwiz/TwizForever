@@ -1,4 +1,4 @@
-TwizHunt 1.2.1 - one-key hunter
+TwizHunt 1.3.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -10,8 +10,10 @@ SHOOT (the one key)
     an enemy targeted without Aspect of the Hawk -> Aspect of the Hawk
     (/hunt cheetah: Aspect of the Cheetah when nothing's targeted).
   Then, on an enemy: Auto Shot + your pet attacks, and on each NEW target
-  Hunter's Mark -> Summon Hawk -> Serpent Sting once, then Arcane Shot every
-  time it's ready (spam the key; Auto Shot keeps going in between).
+  Hunter's Mark -> Summon Hawk -> Serpent Sting once, then Concussive Shot
+  every time it's ready (1.3.0 - slows the target so it can't reach you;
+  /hunt concussive turns it off), and Arcane Shot every time it's ready
+  (spam the key; Auto Shot keeps going in between).
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
@@ -47,6 +49,7 @@ Commands
   /hunt aspects       automatic Aspect of the Hawk on/off
   /hunt cheetah       Aspect of the Cheetah with nothing targeted on/off
   /hunt pet           pet care on the Shoot key on/off
+  /hunt concussive    Concussive Shot on the Shoot key on/off
   /hunt reactives     Mongoose Bite / Counterattack / Kill Command on/off
   /hunt ammo [n]      ammo restock on/off, or keep n stacks
   /hunt food [n]      pet food restock on/off, or keep n

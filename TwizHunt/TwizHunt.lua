@@ -4,7 +4,8 @@
 --     pet hurt -> Mend Pet, pet unhappy -> Feed Pet, and Aspect of the Hawk when you have an enemy
 --     targeted (Aspect of the Cheetah with nothing targeted, if you turn that on);
 --     then on an enemy: Auto Shot + pet attack, and on each new target Hunter's Mark ->
---     Summon Hawk -> Serpent Sting, then Arcane Shot whenever it's ready.
+--     Summon Hawk -> Serpent Sting, then Concussive Shot whenever it's ready (1.3.0: slows the target
+--     so it can't close the distance; /hunt concussive turns it off), then Arcane Shot.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -16,7 +17,7 @@
 local ADDON, NS = ...
 local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
-    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true }
+    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -179,6 +180,8 @@ local function ShootLines()
     if #seq > 0 then
         lines[#lines + 1] = "/castsequence [@target,harm,nodead] reset=target " .. table.concat(seq, ", ") .. ", null"
     end
+    -- 1.3.0: Concussive Shot whenever it's ready, to keep the target from reaching you
+    if db.concussive and Known("Concussive Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Concussive Shot" end
     if Known("Arcane Shot") then lines[#lines + 1] = "/cast [@target,harm,nodead] Arcane Shot" end
     -- 1.1.0: Kill Command is off the global cooldown, so after Arcane Shot it still goes off when allowed
     if db.reactives and Known("Kill Command") then lines[#lines + 1] = "/cast [@target,harm,nodead] Kill Command" end
@@ -340,7 +343,7 @@ ev:SetScript("OnEvent", function(_, event, a1)
 end)
 
 _G["BINDING_HEADER_TWIZHUNT"] = "TwizHunt"
-_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Arcane + interrupt)"
+_G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Concussive, Arcane + interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack + interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:MiddleButton"] = "Pet care (mend / revive / call / feed)"
 
@@ -353,6 +356,7 @@ SlashCmdList["TWIZHUNT"] = function(msg)
     if cmd == "aspects" then flip("aspects", "automatic Aspect of the Hawk")
     elseif cmd == "cheetah" then flip("cheetah", "Aspect of the Cheetah when nothing's targeted")
     elseif cmd == "pet" then flip("petCare", "pet care on the Shoot key")
+    elseif cmd == "concussive" then flip("concussive", "Concussive Shot whenever it's ready")
     elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")
     elseif cmd == "ammo" then
         local n = tonumber(rest)
@@ -363,12 +367,12 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         if n then db.petFoodCount = math.max(0, math.floor(n)); Print(("keeping %d pet food."):format(db.petFoodCount))
         else flip("petFood", "pet food restock at vendors") end
     elseif cmd == "status" or cmd == "" then
-        Print(("aspects %s (cheetah %s), pet care %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
-            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
+        Print(("aspects %s (cheetah %s), pet care %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
+            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
             onoff(db.petFood), db.petFoodCount or 20, NS.next or "none"))
-        if cmd == "" then Print("/hunt aspects | cheetah | pet | reactives | ammo [stacks] | food [count] | status") end
+        if cmd == "" then Print("/hunt aspects | cheetah | pet | concussive | reactives | ammo [stacks] | food [count] | status") end
     else
-        Print("/hunt aspects | cheetah | pet | reactives | ammo [stacks] | food [count] | status")
+        Print("/hunt aspects | cheetah | pet | concussive | reactives | ammo [stacks] | food [count] | status")
     end
 end
 TwizHunt = NS
