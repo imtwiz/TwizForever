@@ -1,4 +1,4 @@
-TwizHunt 1.6.0 - one-key hunter
+TwizHunt 1.7.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -42,6 +42,17 @@ SHOOT (the one key)
   reaches you before Serpent Sting goes out, use the melee key (or back
   off) - Serpent Sting can't be cast in melee range and holds the key up
   until it lands or you change target.
+  1.7.0: Serpent Sting is kept up on a timer. The game hides debuffs in a
+  fight, so the key can't look for it; instead one of the rotating steps is
+  the sequence "Concussive Shot, Serpent Sting": every time Concussive Shot
+  comes off its 12-second cooldown it goes out, and Serpent Sting is put
+  back on right after (it lasts 15 seconds). Spell cooldowns keep running
+  while you spam the key, unlike a sequence's own reset timer. With
+  /hunt concussive off, two Arcane Shots pace it instead. Serpent Sting
+  left the once-per-target opener, so a mob reaching you no longer holds
+  the key up. (The rotating steps are small macros now - the 1.5.0 "key did
+  nothing" came from the first refused spell ending the press, not from the
+  macros.)
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 

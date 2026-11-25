@@ -47,7 +47,7 @@ GetMoney = function() return 1e7 end
 
 SecureHandlerWrapScript = function(frame, script, header, pre) frame.__pre = pre end
 local function press(b)  -- run the restricted pre-click snippet, return the spell it set
-  local f = assert(loadstring("local self = ...\n" .. b.__pre)); f(b); return b:GetAttribute("spell")
+  local f = assert(loadstring("local self = ...\n" .. b.__pre)); f(b); return b:GetAttribute("macrotext")
 end
 SIM.LoadAddon(REPO .. "/TwizHunt", "TwizHunt")
 SIM.Fire("ADDON_LOADED", "TwizHunt"); SIM.Fire("PLAYER_ENTERING_WORLD"); SIM.Advance(0.5)
@@ -55,28 +55,28 @@ local function raw(n) return tostring(TwizHuntButton:GetAttribute("macrotext" ..
 local function key(n)
   -- expand "/click TwizHuntStepN" into that step's macro, so the test reads the whole key
   local t = raw(n):gsub("/click (%b[]) (TwizHunt%a+Cycle)[^\n]*", function(c, b)
-    local f = _G[b]; assert(f:GetAttribute("type") == "spell" and f:GetAttribute("unit") == "target")
+    local f = _G[b]; assert(f:GetAttribute("type") == "macro")
     local l = {}
-    for i = 1, f:GetAttribute("cyclecount") do l[i] = f:GetAttribute("cyclespell" .. i) end
-    return "CYCLE{" .. table.concat(l, ", ") .. "}" end)
+    for i = 1, f:GetAttribute("cyclecount") do l[i] = (f:GetAttribute("cyclestep" .. i):gsub("^/cast %[@target,harm,nodead%] ", ""):gsub("^/castsequence %[@target,harm,nodead%] reset=target ", "SEQ:")) end
+    return "CYCLE{" .. table.concat(l, " | ") .. "}" end)
   return (t:gsub("\n", " || "))
 end
 L("no target, all fine: " .. key(1))
 target = "enemy"; SIM.Fire("PLAYER_TARGET_CHANGED"); SIM.Advance(0.5)
 L("enemy targeted, no Hawk: " .. key(1))
-assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /castsequence [@target,harm,nodead] reset=target/combat !Auto Shot, null || /petattack [@target,harm,nodead] || /castsequence [@target,harm,nodead] reset=target Hunter's Mark, Summon Hawk, Serpent Sting, null || CYCLE{Arcane Shot, Raptor Strike, Concussive Shot, Arcane Shot, Raptor Strike, Mongoose Bite, Counterattack, Kill Command, Intimidation}", "DBG " .. key(1))
+assert(key(1) == "/cast [nocombat] !Aspect of the Hawk || /castsequence [@target,harm,nodead] reset=target/combat !Auto Shot, null || /petattack [@target,harm,nodead] || /castsequence [@target,harm,nodead] reset=target Hunter's Mark, Summon Hawk, null || CYCLE{SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | Mongoose Bite | Counterattack | Kill Command | /cast [combat,@target,harm,nodead] Intimidation}", "DBG " .. key(1))
 assert(raw(1):find("\n/click %[@target,harm,nodead%] TwizHuntShootCycle$"), "DBG " .. raw(1))
 -- each press casts the next spell in the list
 local cyc = TwizHuntShootCycle
 local got = {}
-for i = 1, 10 do got[i] = press(cyc) end
+for i = 1, 11 do got[i] = press(cyc) end
 L("presses: " .. table.concat(got, ", "))
-assert(got[1] == "Arcane Shot" and got[2] == "Raptor Strike" and got[3] == "Concussive Shot" and got[10] == "Arcane Shot")
+assert(got[1]:find("Concussive Shot, Serpent Sting$") and got[2] == "/cast [@target,harm,nodead] Arcane Shot" and got[3]:find("Raptor Strike") and got[11] == got[1], "DBG " .. table.concat(got, " | "))
 
 
 buffs["playerAspect of the Hawk"] = true; SIM.Fire("UNIT_AURA", "player"); SIM.Advance(0.5)
 L("with Hawk: " .. key(1))
-assert(key(1):find("castsequence %[@target,harm,nodead%] reset=target Hunter's Mark, Summon Hawk, Serpent Sting, null"))
+assert(key(1):find("castsequence %[@target,harm,nodead%] reset=target Hunter's Mark, Summon Hawk, null || CYCLE{SEQ:Concussive Shot, Serpent Sting"))
 pet.hp = 400; SIM.Fire("UNIT_HEALTH", "pet"); SIM.Advance(0.5)
 L("pet at 40%: " .. key(1))
 assert(key(1):find("%[nocombat,noharm,@pet%] Mend Pet || /stopmacro %[nocombat,noharm%]"), "DBG " .. key(1))
@@ -91,14 +91,14 @@ L("pet key: " .. key(3))
 SIM.Fire("MERCHANT_SHOW")
 L("vendor bought: " .. table.concat(bought, ", "))
 assert(bought[1] == "2515x200" and bought[#bought]:find("^2287x"), "Sharp Arrow topped up, Haunch of Meat for the pet")
-assert(key(2) == "/startattack [@target,harm,nodead] || /petattack [@target,harm,nodead] || CYCLE{Raptor Strike, Mongoose Bite, Counterattack, Intimidation}", "DBG " .. key(2))
-assert(key(1):find("Counterattack, Kill Command, Intimidation}$"), "DBG " .. key(1))
+assert(key(2) == "/startattack [@target,harm,nodead] || /petattack [@target,harm,nodead] || CYCLE{Raptor Strike | Mongoose Bite | Counterattack | /cast [combat,@target,harm,nodead] Intimidation}", "DBG " .. key(2))
+assert(key(1):find("Counterattack | Kill Command | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
 L("hunter reactives in")
 SlashCmdList.TWIZHUNT("reactives"); assert(not key(2):find("Mongoose") and not key(1):find("Kill Command"))
 L("hunter reactives off")
-assert(key(2):find("CYCLE{Raptor Strike, Intimidation}$"), "DBG " .. key(2))
+assert(key(2):find("CYCLE{Raptor Strike | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(2))
 assert(not key(1):find("Scatter"))
 L("merged: " .. key(1))
-assert(key(1):find("CYCLE{Arcane Shot, Raptor Strike, Concussive Shot, Arcane Shot, Raptor Strike, Intimidation}$"), "DBG " .. key(1))
+assert(key(1):find("CYCLE{SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | SEQ:Concussive Shot, Serpent Sting | Arcane Shot | Raptor Strike | /cast %[combat,@target,harm,nodead%] Intimidation}$"), "DBG " .. key(1))
 SlashCmdList.TWIZHUNT("melee"); assert(not key(1):find("Raptor")); L("melee off: " .. key(1)); SlashCmdList.TWIZHUNT("melee"); assert(key(1):find("Raptor"))
-SlashCmdList.TWIZHUNT("concussive"); assert(not key(1):find("Concussive")); L("concussive off: " .. key(1))
+SlashCmdList.TWIZHUNT("concussive"); assert(not key(1):find("Concussive") and key(1):find("SEQ:Arcane Shot, Arcane Shot, Serpent Sting")); L("concussive off: " .. key(1))
