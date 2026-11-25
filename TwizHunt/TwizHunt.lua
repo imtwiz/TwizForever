@@ -13,7 +13,8 @@
 --     it's shooting delays the shots). 1.6.0: the game ends a press at the first spell it refuses,
 --     so Arcane Shot / Raptor Strike / Concussive Shot / reactives / interrupt take turns, one per
 --     press, from a rotating button - a refused one costs one press, not the whole key.
---     1.7.0: Serpent Sting is re-applied each time Concussive Shot comes off cooldown (~12 s).
+--     1.8.0: back to single-spell rotating steps (1.7.x's step macros never ran in this game);
+--     Serpent Sting once a round; /hunt debug + /hunt log record what each press does.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
 --   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
@@ -25,7 +26,7 @@
 local ADDON, NS = ...
 local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
-    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true }
+    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true, debug = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -182,38 +183,37 @@ NS.AutoKick = AutoKick
 
 -- 1.6.0: in this game the first spell it refuses (on cooldown, out of range, too close) ends the
 -- whole key press - nothing after it runs. So the spells that can be refused take turns instead:
--- a rotating button runs the NEXT small macro of its list on each press (restricted code, the same
--- way the GSE addon steps through its sequences). A refused one costs that one press; spam the
--- key and every step gets its turn several times a second.
--- 1.7.0: steps are small macros, so one step can be a sequence: "Concussive Shot, Serpent Sting"
--- re-applies Serpent Sting each time Concussive Shot comes off its 12-second cooldown - a timer
--- that keeps running while you spam (Serpent Sting lasts 15 seconds). The game hides debuffs in
--- combat, so the key can't look for it; this keeps it up instead.
+-- a rotating spell button casts the NEXT spell of its list on each press (restricted code, like
+-- TwizHeal's combat combo, which works in this game). A refused one costs that one press; spam
+-- the key and every spell gets its turn several times a second.
+-- 1.8.0: back to spell buttons - 1.7.x's small step macros never ran in this game.
 local cycles, header = {}, nil
-local function CycleButton(name, steps)
+local function CycleButton(name, spells)
     if not (SecureHandlerWrapScript and CreateFrame) then return nil end
     local b = cycles[name]
     if not b then
         if not header then header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate") end
         b = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
         b:RegisterForClicks("AnyUp", "AnyDown")
-        b:SetAttribute("type", "macro")
+        b:SetAttribute("type", "spell")
+        b:SetAttribute("unit", "target")
         b:Hide()
         local ok = pcall(SecureHandlerWrapScript, b, "OnClick", header, [[
             local count = self:GetAttribute("cyclecount") or 0
             if count < 1 then return end
             local n = (self:GetAttribute("cyclen") or 0) % count + 1
             self:SetAttribute("cyclen", n)
-            self:SetAttribute("macrotext", self:GetAttribute("cyclestep" .. n))
+            self:SetAttribute("spell", self:GetAttribute("cyclespell" .. n))
         ]])
         if not ok then return nil end
         cycles[name] = b
+        if NS.Watch then NS.Watch(b) end
     end
-    local list = table.concat(steps, "|")
+    local list = table.concat(spells, ",")
     if b:GetAttribute("cyclelist") ~= list then
         b:SetAttribute("cyclelist", list)
-        for i, st in ipairs(steps) do b:SetAttribute("cyclestep" .. i, st) end
-        b:SetAttribute("cyclecount", #steps)
+        for i, sp in ipairs(spells) do b:SetAttribute("cyclespell" .. i, sp) end
+        b:SetAttribute("cyclecount", #spells)
         b:SetAttribute("cyclen", 0)
     end
     return b
@@ -226,61 +226,45 @@ local function ClickLine(b)
 end
 
 local T = "[@target,harm,nodead]"
-local function Cast(sp) return "/cast " .. T .. " " .. sp end
 
-local function KickSteps(out)
-    for l in AutoKick():gmatch("[^\n]+") do out[#out + 1] = l end
-end
-
--- the Serpent Sting timer step (nil if you don't know it)
-local function SerpentStep()
-    if not Known("Serpent Sting") then return nil end
-    if db.concussive and Known("Concussive Shot") then
-        -- Concussive Shot (12 s cooldown) paces it; it also keeps the target from reaching you
-        return "/castsequence " .. T .. " reset=target Concussive Shot, Serpent Sting"
-    elseif Known("Arcane Shot") then
-        -- two Arcane Shots (6 s cooldown each) pace it
-        return "/castsequence " .. T .. " reset=target Arcane Shot, Arcane Shot, Serpent Sting"
+local function KickSpells(out)
+    for l in AutoKick():gmatch("[^\n]+") do
+        local sp = l:match("^/cast %b[] (.+)$") or l:match("^/cast (.+)$")
+        if sp then out[#out + 1] = sp end
     end
-    return "/castsequence " .. T .. " reset=target Serpent Sting, null"
 end
 
 local function ShootLines()
     local lines = {}
-    -- 1.7.1: Auto Shot out of a fight on every press (that's the pull); in a fight only now and
-    -- then, as one of the rotating steps below - asking for it on every press while it's shooting
-    -- makes the game retry it and delays the shots (the stutter). "!" = never switches it off.
-    -- (1.5.0-1.7.0 asked from a /castsequence: this game refuses Auto Shot in a sequence, and a
-    -- refused line ends the whole press - so nothing else ever went off.)
-    local auto = Known("Auto Shot")
-    if auto then lines[#lines + 1] = "/cast [nocombat,@target,harm,nodead] !Auto Shot" end
+    -- Auto Shot: asked for out of a fight on every press (the pull). In a fight it isn't asked
+    -- for again - asking while it's shooting makes the game retry it and delays the shots (the
+    -- stutter). (1.5.0-1.7.0 asked from a /castsequence, which this game refuses - and a refused
+    -- line ends the whole press.)
+    if Known("Auto Shot") then lines[#lines + 1] = "/cast [nocombat,@target,harm,nodead] !Auto Shot" end
     lines[#lines + 1] = "/petattack " .. T
-    -- Hunter's Mark (and Summon Hawk) once per target - as a rotating step (1.7.1), so a step
-    -- the game refuses can only cost one press; Serpent Sting is on the timer step
+    -- Hunter's Mark (and Summon Hawk) once per target
     local seq = {}
     for _, s in ipairs({ "Hunter's Mark", "Summon Hawk" }) do if Known(s) then seq[#seq + 1] = s end end
-    local opener = #seq > 0 and ("/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null")
-    -- then the rest take turns: the Serpent Sting timer (with Concussive Shot), Arcane Shot most
-    -- often, Raptor Strike (in melee range), the reactives when allowed, Kill Command, interrupt
-    local list = {}
-    local arcane = Known("Arcane Shot") and Cast("Arcane Shot")
-    local raptor = db.meleeMerge and Known("Raptor Strike") and Cast("Raptor Strike")
-    local serpent = SerpentStep()
-    if opener then list[#list + 1] = opener end
-    if serpent then list[#list + 1] = serpent end
-    if arcane then list[#list + 1] = arcane end
-    if raptor then list[#list + 1] = raptor end
-    if serpent then list[#list + 1] = serpent end
-    if arcane then list[#list + 1] = arcane end
-    if raptor then list[#list + 1] = raptor end
-    if not serpent and db.concussive and Known("Concussive Shot") then list[#list + 1] = Cast("Concussive Shot") end
-    if db.meleeMerge and db.reactives then
-        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = Cast(r) end end
+    if #seq > 0 then
+        lines[#lines + 1] = "/castsequence " .. T .. " reset=target " .. table.concat(seq, ", ") .. ", null"
     end
-    if db.reactives and Known("Kill Command") then list[#list + 1] = Cast("Kill Command") end
-    -- once a round in a fight: Auto Shot again (after a new target or a stretch of melee)
-    if auto then list[#list + 1] = "/cast [combat,@target,harm,nodead] !Auto Shot" end
-    KickSteps(list)
+    -- then the rest take turns, one per press: Arcane Shot most, Raptor Strike (in melee range),
+    -- Concussive Shot, Serpent Sting once a round, reactives, Kill Command, the interrupt.
+    -- The game hides debuffs in a fight, so Serpent Sting can't be checked; once a round keeps it up.
+    local list = {}
+    local arcane = Known("Arcane Shot") and "Arcane Shot"
+    local raptor = db.meleeMerge and Known("Raptor Strike") and "Raptor Strike"
+    local function add(x) if x then list[#list + 1] = x end end
+    add(arcane); add(raptor)
+    if db.concussive and Known("Concussive Shot") then add("Concussive Shot") end
+    add(arcane); add(raptor)
+    if Known("Serpent Sting") then add("Serpent Sting") end
+    add(arcane); add(raptor)
+    if db.meleeMerge and db.reactives then
+        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then add(r) end end
+    end
+    if db.reactives and Known("Kill Command") then add("Kill Command") end
+    KickSpells(list)
     local b = #list > 0 and CycleButton("TwizHuntShootCycle", list)
     if b then lines[#lines + 1] = ClickLine(b) end
     return lines, list
@@ -289,17 +273,61 @@ end
 local function MeleeMacro()
     local lines = { "/startattack " .. T, "/petattack " .. T }
     local list = {}
-    if Known("Raptor Strike") then list[#list + 1] = Cast("Raptor Strike") end
+    if Known("Raptor Strike") then list[#list + 1] = "Raptor Strike" end
     if db.reactives then
-        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = Cast(r) end end
+        for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = r end end
     end
-    KickSteps(list)
+    KickSpells(list)
     local b = #list > 0 and CycleButton("TwizHuntMeleeCycle", list)
     if b then lines[#lines + 1] = ClickLine(b) end
     return table.concat(lines, "\n"), list
 end
 NS.CycleButton = CycleButton
 
+------------------------------------------------------------------------
+-- 1.8.0: press log (/hunt debug, /hunt log): what each press tried and what the game answered,
+-- kept in TwizHuntDB.log so a fight can be looked at afterwards
+------------------------------------------------------------------------
+local function Log(msg)
+    if not (db and db.debug) then return end
+    db.log = db.log or {}
+    local ok, line = pcall(string.format, "%.2f %s", GetTime(), msg)
+    if not ok then return end
+    table.insert(db.log, line)
+    while #db.log > 400 do table.remove(db.log, 1) end
+end
+NS.Log = Log
+local function SpellName(id)
+    if not id then return "?" end
+    local ok, n = pcall(function() return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id) end)
+    n = ok and plain(n) or nil
+    return n or tostring(plain(id) or "?")
+end
+function NS.Watch(b)
+    pcall(b.HookScript, b, "OnClick", function(self, button, down)
+        Log(("click %s %s%s -> %s"):format(self:GetName(), tostring(button), down and " down" or "",
+            tostring(plain(self:GetAttribute("spell")) or plain(self:GetAttribute("macrotext")) or "-")))
+    end)
+end
+local watch = CreateFrame("Frame")
+for _, e in ipairs({ "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_FAILED_QUIET", "UNIT_SPELLCAST_INTERRUPTED", "UI_ERROR_MESSAGE", "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED", "START_AUTOREPEAT_SPELL", "STOP_AUTOREPEAT_SPELL", "PLAYER_TARGET_CHANGED" }) do
+    pcall(watch.RegisterEvent, watch, e)
+end
+watch:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+    if not (db and db.debug) then return end
+    if event:match("^UNIT_SPELLCAST") then
+        if a1 ~= "player" then return end
+        local id = event == "UNIT_SPELLCAST_SENT" and a4 or a3
+        Log(("%s %s"):format(event:gsub("UNIT_SPELLCAST_", ""):lower(), SpellName(id)))
+    elseif event == "UI_ERROR_MESSAGE" then
+        Log("error: " .. tostring(plain(a2) or "?"))
+    else
+        Log(event:lower())
+    end
+end)
+NS.Watch(btn)
 local function PetMacro()
     local m = PetFix()
     if m then return m end
@@ -463,6 +491,12 @@ SlashCmdList["TWIZHUNT"] = function(msg)
     if cmd == "aspects" then flip("aspects", "automatic Aspect of the Hawk")
     elseif cmd == "cheetah" then flip("cheetah", "Aspect of the Cheetah when nothing's targeted")
     elseif cmd == "pet" then flip("petCare", "pet care on the Shoot key")
+    elseif cmd == "debug" then flip("debug", "press log (kept in your saved settings; /hunt log shows it)")
+    elseif cmd == "log" then
+        local l = db.log or {}
+        if #l == 0 then Print("the press log is empty (/hunt debug turns it on)") end
+        for i = math.max(1, #l - 29), #l do Print(l[i]) end
+    elseif cmd == "clearlog" then db.log = {}; Print("press log cleared")
     elseif cmd == "melee" then flip("meleeMerge", "Raptor Strike on the Shoot key in melee range")
     elseif cmd == "concussive" then flip("concussive", "Concussive Shot whenever it's ready")
     elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")

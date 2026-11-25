@@ -1,4 +1,4 @@
-TwizHunt 1.7.1 - one-key hunter
+TwizHunt 1.8.0 - one-key hunter
 ================================
 
 Bind the keys in Options > Keybindings > AddOns > TwizHunt.
@@ -60,6 +60,15 @@ SHOOT (the one key)
   of the rotating steps, asked for about once a round instead of every
   press (no stutter). Hunter's Mark / Summon Hawk moved into the rotating
   steps too, so nothing can freeze the key.
+  1.8.0: the step macros never ran in this game (only Auto Shot went off),
+  so the rotating steps are single spells again: Arcane Shot, Raptor
+  Strike, Concussive Shot, Arcane Shot, Raptor Strike, Serpent Sting,
+  Arcane Shot, Raptor Strike, (reactives, Kill Command, interrupt). Serpent
+  Sting is tried once a round (the game hides debuffs in a fight). Hunter's
+  Mark stays a once-per-target opener. Auto Shot is started out of combat
+  only (the pull). New press log: /hunt debug (on by default for now),
+  /hunt log shows the last 30 lines, /hunt clearlog empties it; it's kept
+  in your saved settings so a fight can be checked after a /reload.
   A new target starts the openers over. Spells you haven't learned are left
   out on their own.
 
