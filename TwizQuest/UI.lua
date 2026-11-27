@@ -224,8 +224,12 @@ local function Layout()
     for _, row in ipairs(rows) do row:SetWidth(w - 2 * PAD) end
 end
 
+local refreshAfterCombat
 local function Refresh()
     if not frame then return end
+    -- 1.21.3: the step card holds the secure target button, so it can't move mid-fight
+    if InCombatLockdown() then refreshAfterCombat = true; return end
+    refreshAfterCombat = nil
     -- footer: party status, XP bars, Solo/Group, Share
     local synced = NS.KeepAllQuests and NS.KeepAllQuests()
     local st = NS.db.party and NS.PartyStatus and NS.PartyStatus() or nil
@@ -894,6 +898,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
     end
     if event == "PLAYER_REGEN_ENABLED" then
         if targetDirty then NS.UpdateTargetButton() end
+        if refreshAfterCombat then Refresh() end
         return
     end
     if event == "MERCHANT_CLOSED" then

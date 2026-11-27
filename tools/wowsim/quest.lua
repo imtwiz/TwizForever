@@ -95,3 +95,18 @@ SlashCmdList.QUESTROUTE("cleanup")
 SlashCmdList.QUESTROUTE("abandon")
 if StaticPopupDialogs.TWIZQUEST_ABANDON then StaticPopupDialogs.TWIZQUEST_ABANDON.OnAccept(nil, ns._plan().drop) end
 SIM.Advance(1)
+
+-- 1.21.3: no moving the step card (it holds the secure target button) mid-fight; redraw after
+do
+    local card = TwizQuestFrame.card
+    local moves, orig = 0, card.SetPoint
+    card.SetPoint = function(...) moves = moves + 1; return orig(...) end
+    InCombatLockdown = function() return true end
+    ns.RefreshParty(); SIM.Advance(1)
+    if moves > 0 then SIM.errors[#SIM.errors + 1] = "moved the step card in combat " .. moves .. "x" end
+    InCombatLockdown = function() return false end
+    SIM.Fire("PLAYER_REGEN_ENABLED")
+    if moves == 0 then SIM.errors[#SIM.errors + 1] = "no redraw after combat" end
+    SIM.log[#SIM.log + 1] = "combat: card moves during fight 0, after fight " .. moves
+    card.SetPoint = orig
+end
