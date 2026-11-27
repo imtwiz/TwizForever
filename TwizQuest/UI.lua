@@ -688,7 +688,13 @@ local function Moved(dist)
 end
 
 local function Tick()
-    if not NS.db or not NS.Bridge() or NS.IsPlanning() then return end
+    if not NS.db or NS.IsPlanning() then return end
+    local B, why = NS.Bridge()
+    if not B then
+        -- 1.21.2: say why instead of leaving the window blank
+        if frame then frame.status = "No plan: " .. tostring(why or "Questie isn't ready"); Refresh() end
+        return
+    end
     if wantFull then
         wantFull, dirty, lastFull = false, false, GetTime()
         NS.Plan(true); Refresh(); return

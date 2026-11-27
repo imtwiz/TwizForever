@@ -35,7 +35,7 @@ for id in pairs(QUEST) do DB.QuestPointers[id] = true end
 for id in pairs(NPC) do DB.NPCPointers[id] = true end
 local QuestXP = { GetQuestLogRewardXP = function(_, id) return QUEST[id] and QUEST[id].xp or 0 end }
 local ZoneDB = { GetUiMapIdByAreaId = function(_, a) return 1453 end }
-Questie = { started = true }
+Questie = { started = false }  -- still loading at login; see the check below
 QuestieLoader = { ImportModule = function(_, name) if name == "QuestieDB" then return DB elseif name == "ZoneDB" then return ZoneDB elseif name == "QuestXP" then return QuestXP end end }
 SIM.px, SIM.py = 500, 500
 local HBD = {
@@ -55,6 +55,14 @@ UiMapPoint = { CreateFromCoordinates = function() return {} end }
 SIM.level = 20
 local ns = SIM.LoadAddon(REPO .. "/TwizQuest", "TwizQuest")
 SIM.Fire("ADDON_LOADED", "TwizQuest"); SIM.Fire("PLAYER_LOGIN"); SIM.Advance(1)
+-- 1.21.2: while Questie is still loading the window says so instead of staying blank
+do
+    SIM.Advance(2)
+    local t = TwizQuestFrame and TwizQuestFrame.summary and TwizQuestFrame.summary:GetText() or ""
+    SIM.log[#SIM.log + 1] = "while Questie loads: " .. t
+    if not t:find("Questie is still loading", 1, true) then SIM.errors[#SIM.errors + 1] = "blank window while Questie loads: " .. t end
+    Questie.started = true
+end
 
 local function show(label)
     SIM.log[#SIM.log + 1] = "=== " .. label
