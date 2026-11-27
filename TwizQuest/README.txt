@@ -1,5 +1,9 @@
 TwizQuest 1.4.0 - which quests to do, in what order, for the most XP/hour
 
+NEW IN 1.21.4
+  - Questie and TomTom are both required again: the game won't load
+    TwizQuest unless both are installed and enabled.
+
 NEW IN 1.19.0
   - Share this zone's quests: "more" menu > "Share this zone's quests", or
     /tq sharezone. Offers your shareable quests for the zone you're in -
@@ -214,7 +218,7 @@ NEW IN 1.4
                  XP/hour (gray ones included) are listed: /tq cleanup, and
                  /tq abandon drops them (asks first).
 
-Needs Questie. TomTom (or Quest Pilot's built-in copy) draws the arrow to each step.
+Needs Questie and TomTom. TomTom draws the arrow to each step.
 
 What it does
   It keeps itself up to date: a full re-plan whenever your quest log,
