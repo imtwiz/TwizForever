@@ -156,4 +156,36 @@ shot = 0
 for _, b in ipairs(bought) do local id, n = b:match("^(%d+)x(%d+)$"); if id == "2516" then shot = shot + tonumber(n) end end
 L("short on money: bought " .. shot)
 assert(shot == 300, "buys what it can afford: " .. shot)
+-- 1.9.1: the best ammo's info isn't loaded the first time the vendor opens -> wait for it, then buy it
+GetMoney = function() return 1e7 end
+GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:900" end end
+local loaded = false
+local gii4 = GetItemInfo
+GetItemInfo = function(x)
+  local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
+  if id == 2515 and not loaded then return nil end
+  return gii4(x)
+end
+C_Item.GetItemInfoInstant = function(x)
+  local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
+  if id == 2515 or id == 2512 then return id, "Projectile", "Arrow", "", 1, 6, 2 end
+  return id, "Consumable", "", "", 1, 0, 0
+end
+local requested = false
+C_Item.RequestLoadItemDataByID = function(id) if id == 2515 then requested = true; C_Timer.After(0.3, function() loaded = true end) end end
+MerchantFrame.__shown = true
+bought, said = {}, {}
+SIM.Fire("MERCHANT_SHOW")
+assert(#bought == 0 and requested, "waits instead of buying the worse arrow: " .. table.concat(bought, ", "))
+SIM.Advance(2)
+L("after item info loaded: " .. table.concat(bought, ", "))
+assert(bought[1] == "2515x200", "bought Sharp Arrow once it loaded: " .. table.concat(bought, ", "))
+for _, b in ipairs(bought) do assert(not b:find("^2512x"), "never Rough Arrow") end
+assert(table.concat(TwizHuntDB.log, "\n"):find("%-> Sharp Arrow"), "choice is in the log")
+-- /hunt buy re-runs it
+bought = {}
+GetItemCount = function(id) return 0 end
+SlashCmdList.TWIZHUNT("buy")
+assert(bought[1] == "2515x200", "/hunt buy: " .. table.concat(bought, ", "))
+L("/hunt buy: " .. #bought .. " purchases")
 DEFAULT_CHAT_FRAME.AddMessage = realPrint

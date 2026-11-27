@@ -125,5 +125,6 @@ Commands
   /hunt melee         Raptor Strike on the Shoot key in melee range on/off
   /hunt wingclip      Wing Clip on the melee key on/off
   /hunt reactives     Mongoose Bite / Counterattack / Kill Command on/off
+  /hunt buy           re-run the vendor restock now (at a vendor)
   /hunt ammo [n]      ammo restock on/off, or keep n stacks (when no quiver)
   /hunt food [n]      pet food restock on/off, or keep n

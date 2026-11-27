@@ -26,6 +26,8 @@
 --   At any vendor: tops up ammo for your ranged weapon and food your pet eats.
 --     1.9.0: buys the highest-level arrows / bullets you can use, enough to fill every slot of
 --     your quiver or ammo pouch (no quiver: /hunt ammo [stacks], 5 by default).
+--     1.9.1: waits for the vendor's item info to load before choosing (the best ammo was skipped
+--     when the game hadn't loaded it yet); /hunt buy re-runs it; each choice goes in /hunt log.
 -- The game locks keys in combat and hides health and buffs from addons, so in a fight it runs
 -- that fixed order (a new target starts it over) - it can't react to what happens mid-fight.
 local ADDON, NS = ...
@@ -408,10 +410,20 @@ local function MerchantItems()
         local link = GetMerchantItemLink(i)
         if link then
             local name, _, _, ilvl, minLvl, itype, sub, stack = GetItemInfo(link)
-            local _, _, price, qty, avail = GetMerchantItemInfo(i)
+            local mname, _, price, qty, avail = GetMerchantItemInfo(i)
             local id = tonumber(link:match("item:(%d+)"))
-            out[#out + 1] = { i = i, id = id, name = name, ilvl = ilvl or 0, min = minLvl or 0, type = itype, sub = sub,
-                stack = stack or 20, price = price or 0, qty = qty or 1, avail = avail or -1 }
+            -- 1.9.1: the game often hasn't loaded a vendor item's info the first time you open the
+            -- vendor (GetItemInfo returns nothing) - so the best arrows were skipped and a worse,
+            -- already-known one bought. Its type is always known instantly; ask for the rest.
+            local loading = not name
+            if loading then
+                local gii = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+                if gii then local _, t, s = gii(link); itype, sub = itype or t, sub or s end
+                local req = (C_Item and C_Item.RequestLoadItemDataByID)
+                if req and id then pcall(req, id) end
+            end
+            out[#out + 1] = { i = i, id = id, name = name or mname, ilvl = ilvl or 0, min = minLvl or 0, type = itype, sub = sub,
+                stack = stack or 20, price = price or 0, qty = qty or 1, avail = avail or -1, loading = loading }
         end
     end
     return out
@@ -486,20 +498,41 @@ local function AmmoBag(kind, keepID)
 end
 NS.AmmoBag = AmmoBag
 
-function NS.Restock()
+local restockTries = 0
+function NS.Restock(retry)
     if not db then return end
+    if not retry then restockTries = 0 end
     local items = MerchantItems()
     local lvl = UnitLevel("player") or 1
     local said = {}
     -- ammo: the best one you can use for your weapon, enough to fill every slot of your
     -- quiver / ammo pouch (no quiver: db.ammoStacks stacks)
     local kind = db.ammo and WantAmmo()
+    if db.ammo and not kind then Log("restock: no bow/crossbow/gun in the ranged slot") end
     if kind then
-        local best
+        -- ammo of our kind whose info isn't loaded yet: wait for it (up to ~3 s) before choosing
+        local waiting = #items == 0
         for _, it in ipairs(items) do
-            if it.type == "Projectile" and it.sub == kind and it.min <= lvl and it.avail ~= 0
+            if it.loading and it.type == "Projectile" and (it.sub == nil or it.sub == kind) then waiting = true end
+        end
+        if waiting and restockTries < 6 and C_Timer then
+            restockTries = restockTries + 1
+            Log("restock: waiting for vendor item info (" .. restockTries .. ")")
+            C_Timer.After(0.5, function()
+                if not MerchantFrame or MerchantFrame:IsShown() then pcall(NS.Restock, true) end
+            end)
+            return
+        end
+        local best, seen = nil, {}
+        for _, it in ipairs(items) do
+            if it.type == "Projectile" then
+                seen[#seen + 1] = ("%s[%s ilvl %d req %d%s]"):format(tostring(it.name), tostring(it.sub), it.ilvl, it.min, it.loading and " ?" or "")
+            end
+            if it.type == "Projectile" and it.sub == kind and not it.loading and it.min <= lvl and it.avail ~= 0
                 and (not best or it.ilvl > best.ilvl or (it.ilvl == best.ilvl and it.min > best.min)) then best = it end
         end
+        Log(("restock: %s, level %d, vendor ammo: %s -> %s"):format(kind, lvl,
+            #seen > 0 and table.concat(seen, ", ") or "none", best and best.name or "nothing"))
         if best then
             local stack = best.stack or 200
             local slots, other, otherName = AmmoBag(kind, best.id)
@@ -584,6 +617,8 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         for i = math.max(1, #l - 29), #l do Print(l[i]) end
     elseif cmd == "clearlog" then db.log = {}; Print("press log cleared")
     elseif cmd == "melee" then flip("meleeMerge", "Raptor Strike on the Shoot key in melee range")
+    elseif cmd == "buy" then
+        if MerchantFrame and MerchantFrame:IsShown() then NS.Restock() else Print("open a vendor first.") end
     elseif cmd == "wingclip" then flip("wingClip", "Wing Clip on the melee key")
     elseif cmd == "concussive" then flip("concussive", "Concussive Shot whenever it's ready")
     elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")
@@ -599,9 +634,9 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         Print(("aspects %s (cheetah %s), pet care %s, melee on Shoot %s, Wing Clip %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
             :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.meleeMerge), onoff(db.wingClip ~= false), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
             onoff(db.petFood), db.petFoodCount or 20, NS.next or "none"))
-        if cmd == "" then Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | ammo [stacks w/o quiver] | food [count] | status") end
+        if cmd == "" then Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | buy | ammo [stacks w/o quiver] | food [count] | status") end
     else
-        Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | ammo [stacks] | food [count] | status")
+        Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | buy | ammo [stacks] | food [count] | status")
     end
 end
 TwizHunt = NS
