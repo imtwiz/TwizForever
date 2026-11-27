@@ -25,8 +25,8 @@ local bag = { [0] = { [1] = 4541 } }   -- bread (pet won't eat)
 local items = { [4541] = { "Freshly Baked Bread", 5 }, [117] = { "Tough Jerky", 5 }, [2287] = { "Haunch of Meat", 15 } }
 C_Container = { GetContainerNumSlots = function(b) return b == 0 and 16 or 0 end,
   GetContainerItemInfo = function(b, s) local id = bag[b] and bag[b][s]; return id and { itemID = id } end }
-local realGII = GetItemInfo
-GetItemInfo = function(x)
+local realGII = C_Item.GetItemInfo
+FakeGII = function(x)
   local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
   if items[id] then return items[id][1], nil, nil, items[id][2], 1, "Consumable", "Food & Drink", 20 end
   if id == 2512 then return "Rough Arrow", nil, nil, 5, 1, "Projectile", "Arrow", 200 end
@@ -44,6 +44,11 @@ local bought = {}
 BuyMerchantItem = function(i, n) bought[#bought + 1] = merchant[i] .. "x" .. n end
 GetItemCount = function(id) return id == 2515 and 150 or 0 end
 GetMoney = function() return 1e7 end
+
+-- like this client: the global errors, C_Item.GetItemInfo / GetItemCount work
+C_Item.GetItemInfo = function(...) return FakeGII(...) end
+C_Item.GetItemCount = function(...) return GetItemCount(...) end
+GetItemInfo = function() error("attempt to call a nil value") end
 
 SecureHandlerWrapScript = function(frame, script, header, pre) frame.__pre = pre end
 local function press(b)  -- run the restricted pre-click snippet, return the spell it set
@@ -112,8 +117,8 @@ for i = 1, 2 do assert(not key(i):find("null") and not key(i):find("castsequence
 -- 1.9.0: with a quiver, buy the best arrows you can use until every quiver slot is full
 local quiverItems = { [1] = 2512, [2] = 2512 }   -- 2 slots of Rough Arrow (worse than Sharp Arrow)
 GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:900" end if slot == 20 then return "item:7278" end end
-local gii2 = GetItemInfo
-GetItemInfo = function(x)
+local gii2 = FakeGII
+FakeGII = function(x)
   local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
   if id == 7278 then return "Light Leather Quiver", nil, nil, 10, 1, "Quiver", "Quiver", 1 end
   if id == 7279 then return "Small Leather Ammo Pouch", nil, nil, 10, 1, "Quiver", "Ammo Pouch", 1 end
@@ -134,8 +139,8 @@ assert(arrows == 12 * 200 - 150, "fills 12 quiver slots of Sharp Arrow, minus th
 assert(table.concat(said, "\n"):find("2 quiver slots hold Rough Arrow"), "warns about worse ammo taking slots")
 -- a gun with an ammo pouch: bullets, sized by the pouch; a quiver doesn't count for a gun
 GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:901" end if slot == 20 then return "item:7278" end if slot == 21 then return "item:7279" end end
-local gii3 = GetItemInfo
-GetItemInfo = function(x)
+local gii3 = FakeGII
+FakeGII = function(x)
   local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
   if id == 901 then return "Old Blunderbuss", nil, nil, 10, 1, "Weapon", "Guns", 1 end
   return gii3(x)
@@ -160,8 +165,8 @@ assert(shot == 300, "buys what it can afford: " .. shot)
 GetMoney = function() return 1e7 end
 GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:900" end end
 local loaded = false
-local gii4 = GetItemInfo
-GetItemInfo = function(x)
+local gii4 = FakeGII
+FakeGII = function(x)
   local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
   if id == 2515 and not loaded then return nil end
   return gii4(x)

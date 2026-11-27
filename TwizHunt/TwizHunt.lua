@@ -35,6 +35,22 @@ local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
     petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true, wingClip = true, debug = true }
 
+-- 1.9.2: this client's global GetItemInfo errors ("attempt to call a nil value"); use the C_Item
+-- versions when the game has them (looked up on each call)
+local function GetItemInfo(x)
+    local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (f and x) then return nil end
+    return f(x)
+end
+local function GetItemCount(id)
+    local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
+    return f and id and f(id) or 0
+end
+local function GetItemFamily(x)
+    local f = (C_Item and C_Item.GetItemFamily) or _G.GetItemFamily
+    return f and x and f(x) or nil
+end
+
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
 
@@ -474,7 +490,7 @@ end
 local function IsAmmoBag(link, kind)
     local _, _, _, _, _, itype, sub = GetItemInfo(link)
     if itype == "Quiver" then return sub == POUCH_FOR[kind] end
-    if GetItemFamily then
+    do
         local fam = GetItemFamily(link)
         if fam and fam > 0 and fam < 4 then return bit.band(fam, FAMILY_FOR[kind]) ~= 0 end
     end
@@ -537,9 +553,11 @@ function NS.Restock(retry)
             local stack = best.stack or 200
             local slots, other, otherName = AmmoBag(kind, best.id)
             local want = slots > 0 and slots * stack or (db.ammoStacks or 5) * stack
+            local had = GetItemCount(best.id) or 0
             local n = Buy(best, want)
             if n > 0 then said[#said + 1] = ("%d %s"):format(n, best.name) end
-            if (GetItemCount(best.id) or 0) < want and n > 0 then
+            -- (bag counts update a moment after buying, so count from what we had + bought)
+            if slots > 0 and had < want and had + n < want then
                 Print(("couldn't fill your %s with %s (money or vendor stock)."):format(POUCH_FOR[kind]:lower(), best.name))
             end
             if other > 0 then
