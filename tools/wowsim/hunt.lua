@@ -39,9 +39,15 @@ GetInventoryItemLink = function(u, slot) return slot == 18 and "item:900" or nil
 local merchant = { 2512, 2515, 2516, 117, 2287, 4541 }
 GetMerchantNumItems = function() return #merchant end
 GetMerchantItemLink = function(i) return "item:" .. merchant[i] end
-GetMerchantItemInfo = function(i) return nil, nil, 10, 1, -1 end
+FakeMII = function(i) return nil, nil, 10, 1, -1 end
+GetMerchantItemID = function(i) return merchant[i] end
+GetMerchantItemMaxStack = function(i) return select(8, FakeGII(merchant[i])) or 20 end
+-- like this client: GetMerchantItemInfo errors, C_MerchantFrame.GetItemInfo works
+C_MerchantFrame = C_MerchantFrame or {}
+C_MerchantFrame.GetItemInfo = function(i) local _, _, p, q, a = FakeMII(i) return { price = p, stackCount = q, numAvailable = a, hasExtendedCost = false } end
+GetMerchantItemInfo = function() error("attempt to call a nil value") end
 local bought = {}
-BuyMerchantItem = function(i, n) bought[#bought + 1] = merchant[i] .. "x" .. n end
+BuyMerchantItem = function(i, n) bought[#bought + 1] = merchant[i] .. "x" .. (n or "bundle") end
 GetItemCount = function(id) return id == 2515 and 150 or 0 end
 GetMoney = function() return 1e7 end
 
@@ -193,4 +199,20 @@ GetItemCount = function(id) return 0 end
 SlashCmdList.TWIZHUNT("buy")
 assert(bought[1] == "2515x200", "/hunt buy: " .. table.concat(bought, ", "))
 L("/hunt buy: " .. #bought .. " purchases")
+-- 1.9.3: ammo sold in bundles of 200 -> one BuyMerchantItem(i) per bundle, no quantity
+FakeMII = function(i) if merchant[i] == 2515 then return nil, nil, 2000, 200, -1 end return nil, nil, 10, 1, -1 end
+GetItemCount = function(id) return id == 2515 and 150 or 0 end
+bought = {}
+SlashCmdList.TWIZHUNT("buy")
+local bundles = 0
+for _, b in ipairs(bought) do if b == "2515xbundle" then bundles = bundles + 1 end assert(not b:find("^2515x%d")) end
+L("bundles of 200: " .. bundles .. " purchases (" .. table.concat(bought, ", ") .. ")")
+assert(bundles == 5, "1000 wanted, 150 held -> 5 bundles: " .. bundles)
+-- bundles you can't afford aren't bought
+GetMoney = function() return 2000 * 2 + 5 end
+bought = {}
+SlashCmdList.TWIZHUNT("buy")
+bundles = 0
+for _, b in ipairs(bought) do if b == "2515xbundle" then bundles = bundles + 1 end end
+assert(bundles == 2, "money for 2 bundles: " .. bundles)
 DEFAULT_CHAT_FRAME.AddMessage = realPrint

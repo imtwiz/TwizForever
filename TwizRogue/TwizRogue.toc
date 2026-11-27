@@ -2,7 +2,7 @@
 ## Title: TwizRogue
 ## Notes: Rogue helper: one key for the opener from Stealth and the Sinister Strike (or Mutilate) -> Eviscerate rotation with Riposte / Surprise Attack when allowed, poisons on your weapons out of combat, an interrupt key (and Kick on the attack key in a fight), and Flash Powder / poison restock at vendors. /rogue
 ## Author: Alan Sherbourne
-## Version: 1.2.2
+## Version: 1.2.3
 ## SavedVariables: TwizRogueDB
 ## IconTexture: Interface\Icons\Ability_Rogue_Eviscerate
 

@@ -353,6 +353,21 @@ function GetMerchantItemInfo(i) local m = SIM.merchant[i] if not m then return n
 C_MerchantFrame = {}
 function C_MerchantFrame.GetItemInfo(i) local m = SIM.merchant[i] if not m then return nil end local it = I(m.id)
     return { name = it.name, texture = it.icon, price = m.price, stackCount = m.stack or 1, numAvailable = m.avail or -1, isPurchasable = true, isUsable = true, hasExtendedCost = false } end
+-- A scenario that fakes the old global GetMerchantItemInfo still reaches addons that read
+-- C_MerchantFrame.GetItemInfo (as they must - the real client's global errors)
+do
+    local mockMII, mockInfo = GetMerchantItemInfo, C_MerchantFrame.GetItemInfo
+    C_MerchantFrame.GetItemInfo = function(i)
+        local g = rawget(_G, "GetMerchantItemInfo")
+        if g and g ~= mockMII then
+            local name, icon, price, qty, avail, purchasable, usable, ext = g(i)
+            if price == nil and name == nil then return nil end
+            return { name = name, texture = icon, price = price, stackCount = qty or 1, numAvailable = avail or -1,
+                isPurchasable = purchasable ~= false, isUsable = usable ~= false, hasExtendedCost = ext and true or false }
+        end
+        return mockInfo(i)
+    end
+end
 function BuyMerchantItem(i, q) local m = SIM.merchant[i] q = q or (m.stack or 1) rec("BuyMerchantItem", i, q) SIM.money = SIM.money - m.price * q / (m.stack or 1) SIM.PutInBags(m.id, q) C_Timer.After(0.2, function() SIM.Fire("BAG_UPDATE_DELAYED") end) end
 function SIM.OpenMerchant() MerchantFrame.__shown = true SIM.Fire("MERCHANT_SHOW") end
 function SIM.CloseMerchant() MerchantFrame.__shown = false SIM.Fire("MERCHANT_CLOSED") end

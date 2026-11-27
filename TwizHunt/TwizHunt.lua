@@ -420,14 +420,26 @@ local function WantAmmo()
 end
 NS.WantAmmo = WantAmmo
 
+-- 1.9.3: this client's GetMerchantItemInfo errors too; C_MerchantFrame.GetItemInfo is the one
+-- that works (as TwizCraft / TwizAH use). Returns name, price, units per purchase, stock, extended cost.
+local function MerchantInfo(i)
+    if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+        local info = C_MerchantFrame.GetItemInfo(i)
+        if info then return info.name, info.price, info.stackCount, info.numAvailable, info.hasExtendedCost end
+        return nil
+    end
+    local name, _, price, qty, avail, _, _, ext = GetMerchantItemInfo(i)
+    return name, price, qty, avail, ext
+end
+
 local function MerchantItems()
     local out = {}
     for i = 1, (GetMerchantNumItems and GetMerchantNumItems() or 0) do
         local link = GetMerchantItemLink(i)
         if link then
             local name, _, _, ilvl, minLvl, itype, sub, stack = GetItemInfo(link)
-            local mname, _, price, qty, avail = GetMerchantItemInfo(i)
-            local id = tonumber(link:match("item:(%d+)"))
+            local mname, price, qty, avail, ext = MerchantInfo(i)
+            local id = (GetMerchantItemID and GetMerchantItemID(i)) or tonumber(link:match("item:(%d+)"))
             -- 1.9.1: the game often hasn't loaded a vendor item's info the first time you open the
             -- vendor (GetItemInfo returns nothing) - so the best arrows were skipped and a worse,
             -- already-known one bought. Its type is always known instantly; ask for the rest.
@@ -438,8 +450,10 @@ local function MerchantItems()
                 local req = (C_Item and C_Item.RequestLoadItemDataByID)
                 if req and id then pcall(req, id) end
             end
-            out[#out + 1] = { i = i, id = id, name = name or mname, ilvl = ilvl or 0, min = minLvl or 0, type = itype, sub = sub,
-                stack = stack or 20, price = price or 0, qty = qty or 1, avail = avail or -1, loading = loading }
+            if price and not ext then
+                out[#out + 1] = { i = i, id = id, name = name or mname, ilvl = ilvl or 0, min = minLvl or 0, type = itype, sub = sub,
+                    stack = stack or 20, price = price, qty = math.max(1, qty or 1), avail = avail or -1, loading = loading }
+            end
         end
     end
     return out
@@ -449,11 +463,24 @@ local function Buy(item, want)
     local have = GetItemCount(item.id) or 0
     local need = want - have
     if need <= 0 then return 0 end
-    if item.avail and item.avail >= 0 then need = math.min(need, item.avail * math.max(1, item.qty)) end
-    local each = item.price / math.max(1, item.qty)
-    local bought, money = 0, GetMoney() or 0
+    local bundle = item.qty                  -- units you get per purchase (ammo: usually 200)
+    local each = item.price / bundle
+    local money = GetMoney() or 0
+    if bundle > 1 then
+        -- 1.9.3: sold in bundles: one bundle per purchase, like TwizCraft - BuyMerchantItem's
+        -- quantity is ambiguous for bundles
+        local buys = math.ceil(need / bundle)
+        if item.price > 0 then buys = math.min(buys, math.floor(money / item.price)) end
+        if item.avail and item.avail >= 0 then buys = math.min(buys, item.avail) end
+        for _ = 1, buys do BuyMerchantItem(item.i) end
+        return math.max(0, buys) * bundle
+    end
+    if item.avail and item.avail >= 0 then need = math.min(need, item.avail) end
+    local chunk = (GetMerchantItemMaxStack and GetMerchantItemMaxStack(item.i)) or item.stack or 20
+    chunk = math.max(1, chunk)
+    local bought = 0
     while need > 0 do
-        local n = math.min(need, item.stack)
+        local n = math.min(need, chunk)
         -- short on money: buy what you can afford instead of nothing
         if each > 0 and money < each * n then n = math.floor(money / each) end
         if n <= 0 then break end

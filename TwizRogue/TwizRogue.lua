@@ -25,6 +25,27 @@ local function GetItemCount(x)
     local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
     return f and x and f(x) or 0
 end
+-- This client's GetMerchantItemInfo errors; C_MerchantFrame.GetItemInfo works.
+-- Returns the price and how many units one purchase gives.
+local function MerchantPrice(i)
+    if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+        local info = C_MerchantFrame.GetItemInfo(i)
+        if info and not info.hasExtendedCost then return info.price, info.stackCount end
+        return nil
+    end
+    local _, _, price, qty = GetMerchantItemInfo(i)
+    return price, qty
+end
+-- buy `need` units: one purchase per bundle when sold in bundles, else in stack-sized chunks
+local function BuyUnits(i, need, qty, stack)
+    qty = math.max(1, qty or 1)
+    if qty > 1 then
+        for _ = 1, math.ceil(need / qty) do BuyMerchantItem(i) end
+        return
+    end
+    local n = need
+    while n > 0 do local k = math.min(n, stack or 20); BuyMerchantItem(i, k); n = n - k end
+end
 local db
 local DEFAULTS = { poisons = true, stealth = false, opener = "auto", snd = false, reactives = true, restock = true, powder = 10, poisonCount = 10 }
 
@@ -206,7 +227,7 @@ function NS.Restock()
         local link = GetMerchantItemLink(i)
         local name, minLvl, stack
         if link then name, _, _, _, minLvl, _, _, stack = GetItemInfo(link) end
-        local _, _, price, qty = GetMerchantItemInfo(i)
+        local price, qty = MerchantPrice(i)
         local want
         if name == "Flash Powder" and Known("Vanish") then want = db.powder or 10
         elseif name and (minLvl or 0) <= (UnitLevel("player") or 1) then
@@ -220,9 +241,8 @@ function NS.Restock()
         if want then
             local need = want - (GetItemCount(link) or 0)
             local per = (price or 0) / math.max(1, qty or 1)
-            if need > 0 and (GetMoney() or 0) >= per * need then
-                local n = need
-                while n > 0 do local k = math.min(n, stack or 20); BuyMerchantItem(i, k); n = n - k end
+            if price and need > 0 and (GetMoney() or 0) >= per * need then
+                BuyUnits(i, need, qty, stack)
                 said[#said + 1] = ("%d %s"):format(need, name)
             end
         end
