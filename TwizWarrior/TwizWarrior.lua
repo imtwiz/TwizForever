@@ -12,6 +12,17 @@
 -- The game locks keys in combat and hides health and buffs from addons, so the order is fixed;
 -- spells that aren't usable right now (Execute, Victory Rush) are simply skipped by the game.
 local ADDON, NS = ...
+-- This client's global GetItemInfo can error ("attempt to call a nil value"); use the C_Item
+-- versions when the game has them (looked up on each call)
+local function GetItemInfo(x)
+    local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (f and x) then return nil end
+    return f(x)
+end
+local function GetItemCount(x)
+    local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
+    return f and x and f(x) or 0
+end
 local db
 local DEFAULTS = { shout = true, rend = true, hs = true, overpower = true, revenge = true }
 

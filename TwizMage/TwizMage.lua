@@ -12,6 +12,17 @@
 -- The game locks keys in combat and hides health, mana and buffs from addons, so in a fight the
 -- order is fixed; Fire Blast / Counterspell on cooldown are simply skipped by the game.
 local ADDON, NS = ...
+-- This client's global GetItemInfo can error ("attempt to call a nil value"); use the C_Item
+-- versions when the game has them (looked up on each call)
+local function GetItemInfo(x)
+    local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (f and x) then return nil end
+    return f(x)
+end
+local function GetItemCount(x)
+    local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
+    return f and x and f(x) or 0
+end
 local db
 local DEFAULTS = { main = "auto", fireblast = true, armor = "auto", conjure = true, water = 20, food = 20,
     gem = true, restock = true, runes = 5 }

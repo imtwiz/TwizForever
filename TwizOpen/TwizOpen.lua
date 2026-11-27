@@ -2,6 +2,12 @@
 -- containers in your bags, one at a time, only when it's safe to do so.
 
 local ADDON = ...
+-- This client's global GetItemInfo can error ("attempt to call a nil value"); use C_Item's
+local function GetItemInfo(x)
+    local fn = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (fn and x) then return nil end
+    return fn(x)
+end
 local f = CreateFrame("Frame")
 
 local DEFAULTS = {

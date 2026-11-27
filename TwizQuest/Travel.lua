@@ -6,6 +6,17 @@
 --  * At an innkeeper whose inn is close to your next steps (and your hearth is far from them),
 --    it suggests setting your hearth there - that also means full rested XP when you log out.
 local ADDON, NS = ...
+-- This client's global GetItemInfo can error ("attempt to call a nil value"); use the C_Item
+-- versions when the game has them (looked up on each call)
+local function GetItemInfo(x)
+    local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (f and x) then return nil end
+    return f(x)
+end
+local function GetItemCount(x)
+    local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
+    return f and x and f(x) or 0
+end
 
 local HEARTHSTONE = 6948
 local HEARTH_SPELL = 8690
@@ -19,7 +30,7 @@ local function Bridge() local B = NS.Bridge and NS.Bridge(); return B end
 -- hearthstone
 ------------------------------------------------------------------------
 function NS.HearthReady()
-    if not (GetItemCount and GetItemCount(HEARTHSTONE) > 0) then return false end
+    if not (GetItemCount(HEARTHSTONE) > 0) then return false end
     local start, dur
     if C_Container and C_Container.GetItemCooldown then start, dur = C_Container.GetItemCooldown(HEARTHSTONE)
     elseif GetItemCooldown then start, dur = GetItemCooldown(HEARTHSTONE) end

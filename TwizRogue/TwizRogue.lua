@@ -14,6 +14,17 @@
 -- The game locks keys in combat and hides combo points' effect on macros, so the order is fixed: a
 -- sequence only moves on when a cast actually goes off (not enough energy = it waits).
 local ADDON, NS = ...
+-- This client's global GetItemInfo can error ("attempt to call a nil value"); use the C_Item
+-- versions when the game has them (looked up on each call)
+local function GetItemInfo(x)
+    local f = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+    if not (f and x) then return nil end
+    return f(x)
+end
+local function GetItemCount(x)
+    local f = (C_Item and C_Item.GetItemCount) or _G.GetItemCount
+    return f and x and f(x) or 0
+end
 local db
 local DEFAULTS = { poisons = true, stealth = false, opener = "auto", snd = false, reactives = true, restock = true, powder = 10, poisonCount = 10 }
 

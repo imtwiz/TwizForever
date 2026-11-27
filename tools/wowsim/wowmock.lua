@@ -209,6 +209,16 @@ function C_Item.GetItemInfo(id)
     return it.name, link, it.quality or 1, 10, 1, "Trade Goods", "", 20, "", it.icon or 134400, it.vendor or 0, it.classID or 7, it.subID or 0, it.bind or 0
 end
 GetItemInfo = C_Item.GetItemInfo
+-- A scenario that fakes item info by replacing the old global GetItemInfo still reaches addons
+-- that call C_Item.GetItemInfo (as they must - the real client's global errors)
+do
+    local mockInfo = C_Item.GetItemInfo
+    C_Item.GetItemInfo = function(...)
+        local g = rawget(_G, "GetItemInfo")
+        if g and g ~= mockInfo and g ~= C_Item.GetItemInfo then return g(...) end
+        return mockInfo(...)
+    end
+end
 function C_Item.GetItemInfoInstant(id) local it = I(id) if not it then return nil end return id, "Trade Goods", "", "", it.icon or 134400, it.classID or 7, it.subID or 0 end
 function C_Item.GetItemNameByID(id) local it = I(id) return it and not it.uncached and it.name or nil end
 function C_Item.GetItemIconByID(id) local it = I(id) return it and (it.icon or 134400) end
@@ -216,6 +226,14 @@ function C_Item.RequestLoadItemDataByID(id) local it = I(id) if it and it.uncach
 function C_Item.DoesItemExistByID(id) return I(id) ~= nil end
 function C_Item.GetItemCount(id, bank) local n = 0 for _, s in pairs(SIM.bags) do if s.id == id then n = n + s.count end end if bank then n = n + (SIM.bank and SIM.bank[id] or 0) end return n end
 GetItemCount = C_Item.GetItemCount
+do
+    local mockCount = C_Item.GetItemCount
+    C_Item.GetItemCount = function(...)
+        local g = rawget(_G, "GetItemCount")
+        if g and g ~= mockCount and g ~= C_Item.GetItemCount then return g(...) end
+        return mockCount(...)
+    end
+end
 function C_Item.GetItemID(loc) local s = SIM.bags[loc.bag .. ":" .. loc.slot] return s and s.id end
 function C_Item.DoesItemExist(loc) return SIM.bags[loc.bag .. ":" .. loc.slot] ~= nil end
 function C_Item.IsBound(loc) local s = SIM.bags[loc.bag .. ":" .. loc.slot] return s and s.bound or false end
