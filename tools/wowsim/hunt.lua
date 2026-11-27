@@ -3,7 +3,7 @@ local L = function(s) SIM.log[#SIM.log + 1] = s end
 SIM.class = "HUNTER"
 UnitClass = function() return "hunter", "HUNTER" end
 local known = { ["Concussive Shot"] = 5116, ["Intimidation"] = 19577, ["Scatter Shot"] = 19503, ["Mongoose Bite"] = 1495, ["Counterattack"] = 19306, ["Kill Command"] = 34026, ["Auto Shot"] = 75, ["Hunter's Mark"] = 1130, ["Serpent Sting"] = 1978, ["Arcane Shot"] = 3044,
-  ["Summon Hawk"] = 9001, ["Raptor Strike"] = 2973, ["Aspect of the Hawk"] = 13165, ["Mend Pet"] = 136,
+  ["Summon Hawk"] = 9001, ["Raptor Strike"] = 2973, ["Wing Clip"] = 2974, ["Aspect of the Hawk"] = 13165, ["Mend Pet"] = 136,
   ["Revive Pet"] = 982, ["Call Pet"] = 883, ["Feed Pet"] = 6991, ["Aspect of the Cheetah"] = 5118 }
 C_Spell = C_Spell or {}
 C_Spell.GetSpellInfo = function(n) local id = known[n]; return id and { spellID = id, name = n } end
@@ -91,12 +91,13 @@ L("pet key: " .. key(3))
 SIM.Fire("MERCHANT_SHOW")
 L("vendor bought: " .. table.concat(bought, ", "))
 assert(bought[1] == "2515x200" and bought[#bought]:find("^2287x"), "Sharp Arrow topped up, Haunch of Meat for the pet")
-assert(key(2) == "/startattack [@target,harm,nodead] || /petattack [@target,harm,nodead] || CYCLE{Raptor Strike | Mongoose Bite | Counterattack | Intimidation}", "DBG " .. key(2))
+assert(key(2) == "/startattack [@target,harm,nodead] || /petattack [@target,harm,nodead] || CYCLE{Raptor Strike | Wing Clip | Mongoose Bite | Counterattack | Intimidation}", "DBG " .. key(2))
 assert(key(1):find("Counterattack | Kill Command | Intimidation} || /castsequence"), "DBG " .. key(1))
 L("hunter reactives in")
 SlashCmdList.TWIZHUNT("reactives"); assert(not key(2):find("Mongoose") and not key(1):find("Kill Command"))
 L("hunter reactives off")
-assert(key(2):find("CYCLE{Raptor Strike | Intimidation}$"), "DBG " .. key(2))
+assert(key(2):find("CYCLE{Raptor Strike | Wing Clip | Intimidation}$"), "DBG " .. key(2))
+SlashCmdList.TWIZHUNT("wingclip"); assert(key(2):find("CYCLE{Raptor Strike | Intimidation}$"), "DBG " .. key(2)); L("wing clip off: " .. key(2)); SlashCmdList.TWIZHUNT("wingclip")
 assert(not key(1):find("Scatter"))
 L("merged: " .. key(1))
 assert(key(1):find("CYCLE{Arcane Shot | Raptor Strike | Intimidation} || /castsequence %[@target,harm,nodead%] reset=target Hunter's Mark, Summon Hawk, Concussive Shot, Serpent Sting, Concussive Shot"), "DBG " .. key(1))
@@ -107,3 +108,52 @@ SIM.Fire("UNIT_SPELLCAST_SENT", "player", "x", "y", 3044); SIM.Fire("UI_ERROR_ME
 SlashCmdList.TWIZHUNT("log"); assert(#TwizHuntDB.log >= 2); L("log entries: " .. #TwizHuntDB.log .. " last: " .. TwizHuntDB.log[#TwizHuntDB.log])
 
 for i = 1, 2 do assert(not key(i):find("null") and not key(i):find("castsequence[^|]*!")) end; L("no null / no ! in any sequence")
+
+-- 1.9.0: with a quiver, buy the best arrows you can use until every quiver slot is full
+local quiverItems = { [1] = 2512, [2] = 2512 }   -- 2 slots of Rough Arrow (worse than Sharp Arrow)
+GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:900" end if slot == 20 then return "item:7278" end end
+local gii2 = GetItemInfo
+GetItemInfo = function(x)
+  local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
+  if id == 7278 then return "Light Leather Quiver", nil, nil, 10, 1, "Quiver", "Quiver", 1 end
+  if id == 7279 then return "Small Leather Ammo Pouch", nil, nil, 10, 1, "Quiver", "Ammo Pouch", 1 end
+  return gii2(x)
+end
+C_Container.GetContainerNumSlots = function(b) if b == 0 then return 16 elseif b == 1 then return 12 end return 0 end
+C_Container.GetContainerItemInfo = function(b, s)
+  local id = (b == 1 and quiverItems[s]) or (bag[b] and bag[b][s]); return id and { itemID = id, stackCount = 200 } end
+local said = {}
+local realPrint = DEFAULT_CHAT_FRAME.AddMessage
+DEFAULT_CHAT_FRAME.AddMessage = function(self, m) said[#said + 1] = m end
+bought = {}
+SIM.Fire("MERCHANT_SHOW")
+local arrows = 0
+for _, b in ipairs(bought) do local id, n = b:match("^(%d+)x(%d+)$"); if id == "2515" then arrows = arrows + tonumber(n) end end
+L("quiver (12 slots): bought " .. arrows .. " Sharp Arrow: " .. table.concat(bought, ", "))
+assert(arrows == 12 * 200 - 150, "fills 12 quiver slots of Sharp Arrow, minus the 150 you have: " .. arrows)
+assert(table.concat(said, "\n"):find("2 quiver slots hold Rough Arrow"), "warns about worse ammo taking slots")
+-- a gun with an ammo pouch: bullets, sized by the pouch; a quiver doesn't count for a gun
+GetInventoryItemLink = function(u, slot) if slot == 18 then return "item:901" end if slot == 20 then return "item:7278" end if slot == 21 then return "item:7279" end end
+local gii3 = GetItemInfo
+GetItemInfo = function(x)
+  local id = tonumber(x) or tonumber(tostring(x):match("item:(%d+)"))
+  if id == 901 then return "Old Blunderbuss", nil, nil, 10, 1, "Weapon", "Guns", 1 end
+  return gii3(x)
+end
+C_Container.GetContainerNumSlots = function(b) if b == 0 then return 16 elseif b == 1 then return 12 elseif b == 2 then return 8 end return 0 end
+quiverItems = {}
+bought, said = {}, {}
+SIM.Fire("MERCHANT_SHOW")
+local shot = 0
+for _, b in ipairs(bought) do local id, n = b:match("^(%d+)x(%d+)$"); if id == "2516" then shot = shot + tonumber(n) end end
+L("gun + 8-slot pouch: bought " .. shot .. " Light Shot")
+assert(shot == 8 * 200, "fills the 8-slot ammo pouch: " .. shot)
+-- short on money: buys what it can afford
+GetMoney = function() return 10 * 300 end   -- price 10 each -> 300 bullets
+bought, said = {}, {}
+SIM.Fire("MERCHANT_SHOW")
+shot = 0
+for _, b in ipairs(bought) do local id, n = b:match("^(%d+)x(%d+)$"); if id == "2516" then shot = shot + tonumber(n) end end
+L("short on money: bought " .. shot)
+assert(shot == 300, "buys what it can afford: " .. shot)
+DEFAULT_CHAT_FRAME.AddMessage = realPrint

@@ -100,6 +100,7 @@ NS.ADDONS = {
             { "Pet care on the Shoot key", function(d) return NotFalse(d.petCare) end, flip("pet") },
             { "Raptor Strike on the Shoot key up close", function(d) return NotFalse(d.meleeMerge) end, flip("melee") },
             { "Concussive Shot whenever it's ready", function(d) return NotFalse(d.concussive) end, flip("concussive") },
+            { "Wing Clip on the melee key", function(d) return NotFalse(d.wingClip) end, flip("wingclip") },
             { "Mongoose Bite / Counterattack / Kill Command", function(d) return NotFalse(d.reactives) end, flip("reactives") },
             { "Restock ammo at vendors", function(d) return NotFalse(d.ammo) end, flip("ammo") },
             { "Restock pet food at vendors", function(d) return NotFalse(d.petFood) end, flip("food") },

@@ -96,6 +96,8 @@ MELEE
   target dodges) and Counterattack (after you parry, talent) whenever the
   game allows them (1.1.0). Kill Command (after a crit) goes on the Shoot
   key once you know it. /hunt reactives turns these off.
+  Wing Clip takes its turn on this key too once you know it (1.9.0;
+  /hunt wingclip turns it off).
   (The game doesn't let addons check range, so switch keys yourself when
   something reaches you.)
 
@@ -109,8 +111,8 @@ PET CARE
   Mend / revive / call / feed, whenever you press it.
 
 VENDOR RESTOCK (automatic, at any vendor)
-  Ammo: the best arrows (bow, crossbow) or bullets (gun) you can use, up to
-  5 stacks. Pet food: the highest level food your pet eats, up to 20.
+  Ammo: the best arrows (bow, crossbow) or bullets (gun) you can use, enough
+  to fill every slot of your quiver / ammo pouch (no quiver: 5 stacks). Pet food: the highest level food your pet eats, up to 20.
   Diet is matched by the food's name (the game doesn't tell addons a food's
   diet), so odd names may be missed.
 
@@ -121,6 +123,7 @@ Commands
   /hunt pet           pet care on the Shoot key on/off
   /hunt concussive    Concussive Shot on the Shoot key on/off
   /hunt melee         Raptor Strike on the Shoot key in melee range on/off
+  /hunt wingclip      Wing Clip on the melee key on/off
   /hunt reactives     Mongoose Bite / Counterattack / Kill Command on/off
-  /hunt ammo [n]      ammo restock on/off, or keep n stacks
+  /hunt ammo [n]      ammo restock on/off, or keep n stacks (when no quiver)
   /hunt food [n]      pet food restock on/off, or keep n

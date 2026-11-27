@@ -18,17 +18,20 @@
 --     Concussive Shot each time it's off its 12 s cooldown (the key's last line). 1.8.2: no
 --     "null" in sequences - this game's sequence code errors on it and aborts the press.
 --   Melee key: Raptor Strike + auto attack + pet attack, plus Mongoose Bite (after a dodge) and
---   Counterattack (after you parry) whenever the game allows them. Kill Command (after a crit)
+--   Counterattack (after you parry) whenever the game allows them. 1.9.0: Wing Clip takes its turn
+--   on the melee key too (/hunt wingclip turns it off). Kill Command (after a crit)
 --   is added to the Shoot key once you know it. /hunt reactives turns those off.
 --   Pet key: mend / revive / call / feed, whenever.
 --   In a fight the Shoot and Melee keys also fire your interrupt (Intimidation / Silencing Shot) when ready.
 --   At any vendor: tops up ammo for your ranged weapon and food your pet eats.
+--     1.9.0: buys the highest-level arrows / bullets you can use, enough to fill every slot of
+--     your quiver or ammo pouch (no quiver: /hunt ammo [stacks], 5 by default).
 -- The game locks keys in combat and hides health and buffs from addons, so in a fight it runs
 -- that fixed order (a new target starts it over) - it can't react to what happens mid-fight.
 local ADDON, NS = ...
 local db
 local DEFAULTS = { aspects = true, cheetah = false, petCare = true, ammo = true, ammoStacks = 5,
-    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true, debug = true }
+    petFood = true, petFoodCount = 20, mendAt = 0.6, reactives = true, concussive = true, meleeMerge = true, wingClip = true, debug = true }
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cffabd473TwizHunt|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
@@ -289,6 +292,8 @@ local function MeleeMacro()
     local lines = { "/startattack " .. T, "/petattack " .. T }
     local list = {}
     if Known("Raptor Strike") then list[#list + 1] = "Raptor Strike" end
+    -- 1.9.0: Wing Clip takes its turn too (slows the target so it can't run off; /hunt wingclip)
+    if db.wingClip ~= false and Known("Wing Clip") then list[#list + 1] = "Wing Clip" end
     if db.reactives then
         for _, r in ipairs({ "Mongoose Bite", "Counterattack" }) do if Known(r) then list[#list + 1] = r end end
     end
@@ -416,32 +421,98 @@ local function Buy(item, want)
     local have = GetItemCount(item.id) or 0
     local need = want - have
     if need <= 0 then return 0 end
-    local bought = 0
+    if item.avail and item.avail >= 0 then need = math.min(need, item.avail * math.max(1, item.qty)) end
+    local each = item.price / math.max(1, item.qty)
+    local bought, money = 0, GetMoney() or 0
     while need > 0 do
         local n = math.min(need, item.stack)
-        local cost = item.price / math.max(1, item.qty) * n
-        if (GetMoney() or 0) < cost then break end
+        -- short on money: buy what you can afford instead of nothing
+        if each > 0 and money < each * n then n = math.floor(money / each) end
+        if n <= 0 then break end
         BuyMerchantItem(item.i, n)
-        bought, need = bought + n, need - n
+        bought, need, money = bought + n, need - n, money - each * n
     end
     return bought
 end
+
+-- your quiver (arrows) or ammo pouch (bullets): how many slots it has, and what's in them
+local POUCH_FOR = { Arrow = "Quiver", Bullet = "Ammo Pouch" }
+local FAMILY_FOR = { Arrow = 1, Bullet = 2 }   -- GetItemFamily bits
+local C = C_Container
+local function BagSlots(bag)
+    if C and C.GetContainerNumSlots then return C.GetContainerNumSlots(bag) or 0 end
+    return GetContainerNumSlots and GetContainerNumSlots(bag) or 0
+end
+local function BagItem(bag, slot)
+    if C and C.GetContainerItemInfo then
+        local info = C.GetContainerItemInfo(bag, slot)
+        if info then return info.itemID, info.stackCount or 1 end
+        return nil
+    end
+    if GetContainerItemInfo then
+        local _, count, _, _, _, _, link = GetContainerItemInfo(bag, slot)
+        if link then return tonumber(link:match("item:(%d+)")), count or 1 end
+    end
+end
+local function BagLink(bag)
+    local inv = (C and C.ContainerIDToInventoryID and C.ContainerIDToInventoryID(bag))
+        or (ContainerIDToInventoryID and ContainerIDToInventoryID(bag)) or (19 + bag)
+    return GetInventoryItemLink and GetInventoryItemLink("player", inv)
+end
+local function IsAmmoBag(link, kind)
+    local _, _, _, _, _, itype, sub = GetItemInfo(link)
+    if itype == "Quiver" then return sub == POUCH_FOR[kind] end
+    if GetItemFamily then
+        local fam = GetItemFamily(link)
+        if fam and fam > 0 and fam < 4 then return bit.band(fam, FAMILY_FOR[kind]) ~= 0 end
+    end
+    return false
+end
+-- slots: total quiver slots; other: slots taken by anything that isn't `keepID`
+local function AmmoBag(kind, keepID)
+    local slots, other, otherName = 0, 0, nil
+    for bag = 1, 4 do
+        local link = BagLink(bag)
+        if link and IsAmmoBag(link, kind) then
+            local n = BagSlots(bag)
+            slots = slots + n
+            for s = 1, n do
+                local id = BagItem(bag, s)
+                if id and id ~= keepID then other = other + 1; otherName = otherName or GetItemInfo(id) end
+            end
+        end
+    end
+    return slots, other, otherName
+end
+NS.AmmoBag = AmmoBag
 
 function NS.Restock()
     if not db then return end
     local items = MerchantItems()
     local lvl = UnitLevel("player") or 1
     local said = {}
-    -- ammo: the best one you can use for your weapon
+    -- ammo: the best one you can use for your weapon, enough to fill every slot of your
+    -- quiver / ammo pouch (no quiver: db.ammoStacks stacks)
     local kind = db.ammo and WantAmmo()
     if kind then
         local best
         for _, it in ipairs(items) do
-            if it.type == "Projectile" and it.sub == kind and it.min <= lvl and (not best or it.ilvl > best.ilvl) then best = it end
+            if it.type == "Projectile" and it.sub == kind and it.min <= lvl and it.avail ~= 0
+                and (not best or it.ilvl > best.ilvl or (it.ilvl == best.ilvl and it.min > best.min)) then best = it end
         end
         if best then
-            local n = Buy(best, (db.ammoStacks or 5) * (best.stack or 200))
+            local stack = best.stack or 200
+            local slots, other, otherName = AmmoBag(kind, best.id)
+            local want = slots > 0 and slots * stack or (db.ammoStacks or 5) * stack
+            local n = Buy(best, want)
             if n > 0 then said[#said + 1] = ("%d %s"):format(n, best.name) end
+            if (GetItemCount(best.id) or 0) < want and n > 0 then
+                Print(("couldn't fill your %s with %s (money or vendor stock)."):format(POUCH_FOR[kind]:lower(), best.name))
+            end
+            if other > 0 then
+                Print(("%d %s slot%s hold %s, not %s - sell or use it up to fit more."):format(other,
+                    POUCH_FOR[kind]:lower(), other == 1 and "" or "s", otherName or "other items", best.name))
+            end
         end
     end
     -- pet food: the highest level food it eats that's not above your pet
@@ -494,7 +565,7 @@ end)
 
 _G["BINDING_HEADER_TWIZHUNT"] = "TwizHunt"
 _G["BINDING_NAME_CLICK TwizHuntButton:LeftButton"] = "Shoot (Auto Shot, Mark, Hawk, Sting, Concussive, Arcane; Raptor Strike in melee range; interrupt)"
-_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Mongoose Bite, Counterattack + interrupt)"
+_G["BINDING_NAME_CLICK TwizHuntButton:RightButton"] = "Melee (Raptor Strike, Wing Clip, Mongoose Bite, Counterattack + interrupt)"
 _G["BINDING_NAME_CLICK TwizHuntButton:MiddleButton"] = "Pet care (mend / revive / call / feed)"
 
 local function onoff(v) return v and "on" or "off" end
@@ -513,6 +584,7 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         for i = math.max(1, #l - 29), #l do Print(l[i]) end
     elseif cmd == "clearlog" then db.log = {}; Print("press log cleared")
     elseif cmd == "melee" then flip("meleeMerge", "Raptor Strike on the Shoot key in melee range")
+    elseif cmd == "wingclip" then flip("wingClip", "Wing Clip on the melee key")
     elseif cmd == "concussive" then flip("concussive", "Concussive Shot whenever it's ready")
     elseif cmd == "reactives" then flip("reactives", "Mongoose Bite / Counterattack / Kill Command when allowed")
     elseif cmd == "ammo" then
@@ -524,12 +596,12 @@ SlashCmdList["TWIZHUNT"] = function(msg)
         if n then db.petFoodCount = math.max(0, math.floor(n)); Print(("keeping %d pet food."):format(db.petFoodCount))
         else flip("petFood", "pet food restock at vendors") end
     elseif cmd == "status" or cmd == "" then
-        Print(("aspects %s (cheetah %s), pet care %s, melee on Shoot %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
-            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.meleeMerge), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
+        Print(("aspects %s (cheetah %s), pet care %s, melee on Shoot %s, Wing Clip %s, Concussive Shot %s, reactives %s, ammo %s (%d stacks), pet food %s (%d). Next out-of-combat fix: %s.")
+            :format(onoff(db.aspects), onoff(db.cheetah), onoff(db.petCare), onoff(db.meleeMerge), onoff(db.wingClip ~= false), onoff(db.concussive), onoff(db.reactives), onoff(db.ammo), db.ammoStacks or 5,
             onoff(db.petFood), db.petFoodCount or 20, NS.next or "none"))
-        if cmd == "" then Print("/hunt aspects | cheetah | pet | melee | concussive | reactives | ammo [stacks] | food [count] | status") end
+        if cmd == "" then Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | ammo [stacks w/o quiver] | food [count] | status") end
     else
-        Print("/hunt aspects | cheetah | pet | melee | concussive | reactives | ammo [stacks] | food [count] | status")
+        Print("/hunt aspects | cheetah | pet | melee | wingclip | concussive | reactives | ammo [stacks] | food [count] | status")
     end
 end
 TwizHunt = NS
