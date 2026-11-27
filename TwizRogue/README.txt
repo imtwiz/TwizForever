@@ -25,6 +25,14 @@ ATTACK (the one key)
   allows them; the rest of the time the game skips them. /rogue reactives
   turns that off.
 
+1.2.4: THE ATTACK KEY ATTACKS AGAIN
+  This game ends a key press at the first spell it refuses (on cooldown,
+  not allowed yet). Kick and Riposte / Surprise Attack were ahead of the
+  builder, so presses never reached Sinister Strike or Eviscerate. Now they
+  take turns, one per press, from a rotating button, and the builder ->
+  Eviscerate sequence runs on every press. If the game hides whether your
+  weapons have poison on, the key no longer keeps re-applying poison.
+
 INTERRUPT
   Kick; hold Shift for Gouge. 1.2.0: in a fight the Attack key also Kicks
   your target whenever Kick is ready (the game can't tell a macro whether

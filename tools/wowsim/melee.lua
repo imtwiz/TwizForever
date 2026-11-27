@@ -1,6 +1,7 @@
 -- TwizRogue and TwizWarrior: what the keys are set to
 local L = function(s) SIM.log[#SIM.log + 1] = s end
 C_Timer.NewTicker = C_Timer.NewTicker or function() return {} end
+SecureHandlerWrapScript = function(frame, script, header, pre) frame.__pre = pre end
 local known = {}
 C_Spell = C_Spell or {}
 C_Spell.GetSpellInfo = function(n) local id = known[n]; return id and { spellID = id, name = n } end
@@ -48,6 +49,23 @@ L("interrupt: " .. key("TwizRogueButton", 2))
 SlashCmdList.TWIZROGUE("snd")
 L("with Slice and Dice: " .. key("TwizRogueButton", 1):match("castsequence.*"))
 
+-- 1.2.4: a refused spell ends the press, so Riposte / Kick take turns from a rotating button
+-- and the builder sequence is the last line (nothing refusable runs before it)
+local k1 = key("TwizRogueButton", 1)
+assert(k1:find("/startattack %[@target,harm,nodead%] || /click %[combat,@target,harm,nodead%] TwizRogueCycle[^|]* || /castsequence"), "DBG " .. k1)
+assert(not k1:find("/cast %[[^]]*%] Riposte") and not k1:find("/cast %[combat[^]]*%] Kick"), "DBG " .. k1)
+assert(k1:find("/castsequence [^|]*$"), "sequence not last: " .. k1)
+local cyc = TwizRogueCycle
+L(("rogue cycle: %s / %s"):format(tostring(cyc:GetAttribute("cyclespell1")), tostring(cyc:GetAttribute("cyclespell2"))))
+assert(cyc:GetAttribute("cyclespell1") == "Riposte" and cyc:GetAttribute("cyclespell2") == "Kick")
+SlashCmdList.TWIZROGUE("reactives"); SIM.Advance(0.5); assert(TwizRogueCycle:GetAttribute("cyclelist") == "Kick", "DBG " .. tostring(TwizRogueCycle:GetAttribute("cyclelist")) .. " " .. key("TwizRogueButton", 1)); SlashCmdList.TWIZROGUE("reactives"); SIM.Advance(0.5)
+-- 1.2.4: when the game hides weapon enchants (secret values) the key doesn't poison forever
+issecretvalue = function(v) return v == "SECRET" end
+enchants = { "SECRET", "SECRET" }; SIM.Fire("UNIT_INVENTORY_CHANGED", "player"); SIM.Advance(0.5)
+assert(not key("TwizRogueButton", 1):find("Poison") and not key("TwizRogueButton", 1):find("/stopmacro %[nocombat%]"), "DBG " .. key("TwizRogueButton", 1))
+L("hidden enchants: no poison step")
+issecretvalue = nil
+
 -- WARRIOR
 UnitClass = function() return "warrior", "WARRIOR" end
 known = { ["Revenge"] = 6572, ["Overpower"] = 7384, ["Battle Shout"] = 6673, ["Rend"] = 772, ["Heroic Strike"] = 78, ["Execute"] = 5308, ["Victory Rush"] = 34428,
@@ -69,9 +87,6 @@ SlashCmdList.TWIZWARRIOR("overpower")
 assert(not key("TwizWarriorButton", 1):find("Overpower"))
 L("overpower off: gone")
 -- reactives
-assert(key("TwizRogueButton", 1):find("/startattack %[@target,harm,nodead%] || /cast %[@target,harm,nodead%] Riposte || /castsequence"), "DBG " .. key("TwizRogueButton", 1))
-L("rogue Riposte before the builder sequence")
-SlashCmdList.TWIZROGUE("reactives"); assert(not key("TwizRogueButton", 1):find("Riposte")); SlashCmdList.TWIZROGUE("reactives")
 assert(key("TwizWarriorButton", 1):find("/cast %[stance:2,@target,harm,nodead%] Revenge"))
 L("warrior: " .. key("TwizWarriorButton", 1))
 SlashCmdList.TWIZWARRIOR("revenge"); assert(not key("TwizWarriorButton", 1):find("Revenge"))

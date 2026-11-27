@@ -11,6 +11,9 @@
 --     whenever the game allows them (/rogue reactives turns that off).
 --   Interrupt key: Kick (Shift: Gouge). The Attack key also Kicks in a fight whenever Kick is ready.
 --   At vendors: tops up Flash Powder (once you know Vanish) and poisons the vendor sells.
+--   1.2.4: the game ends a press at the first spell it refuses, so Kick and Riposte / Surprise
+--   Attack take turns from a rotating button (one per press) and the builder -> Eviscerate
+--   sequence runs last on every press; no endless re-poisoning when the game hides enchants.
 -- The game locks keys in combat and hides combo points' effect on macros, so the order is fixed: a
 -- sequence only moves on when a cast actually goes off (not enough energy = it waits).
 local ADDON, NS = ...
@@ -51,6 +54,13 @@ local DEFAULTS = { poisons = true, stealth = false, opener = "auto", snd = false
 
 local function Print(m) DEFAULT_CHAT_FRAME:AddMessage("|cfffff569TwizRogue|r: " .. tostring(m)) end
 local function plain(v) if issecretvalue and issecretvalue(v) then return nil end return v end
+-- 1.2.4: a weapon counts as unpoisoned only when the game says so plainly. When it hides the
+-- answer (a secret value), poisoning is skipped - otherwise the key re-poisons forever and,
+-- out of a fight, never gets past the poison to the attack.
+local function Unpoisoned(v)
+    if issecretvalue and issecretvalue(v) then return false end
+    return not v
+end
 
 local function Known(name)
     if not name then return false end
@@ -106,12 +116,12 @@ NS.BagPoison = BagPoison
 local function PoisonFix()
     if not (db and db.poisons) or not GetWeaponEnchantInfo then return nil end
     local hasMain, _, _, _, hasOff = GetWeaponEnchantInfo()
-    if not plain(hasMain) and GetInventoryItemLink("player", 16) then
+    if Unpoisoned(hasMain) and GetInventoryItemLink("player", 16) then
         local p = BagPoison(MAIN_POISONS)
         if p then return { "/use " .. p, "/use 16" }, p .. " on your main hand" end
     end
     local off = WeaponType(17)
-    if not plain(hasOff) and off and off ~= "Shields" and off ~= "Miscellaneous" then
+    if Unpoisoned(hasOff) and off and off ~= "Shields" and off ~= "Miscellaneous" then
         local p = BagPoison(OFF_POISONS)
         if p then return { "/use " .. p, "/use 17" }, p .. " on your off hand" end
     end
@@ -165,6 +175,58 @@ local function AutoKick()
 end
 NS.AutoKick = AutoKick
 
+-- 1.2.4: in this game the first spell it refuses (on cooldown, not allowed yet, no energy) ends
+-- the whole key press - nothing after it runs. Kick (on cooldown most of the time) and Riposte /
+-- Surprise Attack (only allowed right after a parry / dodge) sat in front of the builder, so a
+-- press never reached Sinister Strike or Eviscerate. Like TwizHunt 1.8.0: those take turns from
+-- a rotating spell button, one per press, so a refused one costs that press only; the builder ->
+-- Eviscerate sequence is the key's last line and runs on every press.
+local cycles, header = {}, nil
+local function CycleButton(name, spells)
+    if not (SecureHandlerWrapScript and CreateFrame) then return nil end
+    local b = cycles[name]
+    if not b then
+        if not header then header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate") end
+        b = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+        b:RegisterForClicks("AnyUp", "AnyDown")
+        b:SetAttribute("type", "spell")
+        b:SetAttribute("unit", "target")
+        b:Hide()
+        local ok = pcall(SecureHandlerWrapScript, b, "OnClick", header, [[
+            local count = self:GetAttribute("cyclecount") or 0
+            if count < 1 then return end
+            local n = (self:GetAttribute("cyclen") or 0) % count + 1
+            self:SetAttribute("cyclen", n)
+            self:SetAttribute("spell", self:GetAttribute("cyclespell" .. n))
+        ]])
+        if not ok then return nil end
+        cycles[name] = b
+    end
+    local list = table.concat(spells, ",")
+    if b:GetAttribute("cyclelist") ~= list then
+        b:SetAttribute("cyclelist", list)
+        for i, sp in ipairs(spells) do b:SetAttribute("cyclespell" .. i, sp) end
+        b:SetAttribute("cyclecount", #spells)
+        b:SetAttribute("cyclen", 0)
+    end
+    return b
+end
+NS.CycleButton = CycleButton
+
+local function ClickLine(b, cond)
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    -- /click must match the "cast on key down" option, or the button ignores it
+    return "/click [" .. cond .. "] " .. b:GetName() .. (keyDown and " LeftButton 1" or "")
+end
+
+-- the spell names from the interrupt lines (TwizInterrupt's or Kick)
+local function KickSpells(out)
+    for l in AutoKick():gmatch("[^\n]+") do
+        local sp = l:match("^/cast %b[] (.+)$") or l:match("^/cast (.+)$")
+        if sp then out[#out + 1] = sp end
+    end
+end
+
 local function AttackMacro()
     local lines = {}
     local fix, why = PoisonFix()
@@ -182,14 +244,16 @@ local function AttackMacro()
         lines[#lines + 1] = "/stopmacro [stealth]"
     end
     lines[#lines + 1] = ("/startattack [%s]"):format(T)
-    -- 1.1.0: reactives first - the builder below always takes the global cooldown, so anything after it
-    -- would never fire. The game only allows these right after a parry/dodge and skips them otherwise;
-    -- a sequence step doesn't advance on a press where a reactive went off instead.
+    -- reactives and the interrupt take turns (1.2.4, see CycleButton); in a fight only
+    local list = {}
     if db.reactives then
         for _, r in ipairs({ "Riposte", "Surprise Attack" }) do
-            if Known(r) then lines[#lines + 1] = ("/cast [%s] %s"):format(T, r) end
+            if Known(r) then list[#list + 1] = r end
         end
     end
+    KickSpells(list)
+    local cb = #list > 0 and CycleButton("TwizRogueCycle", list)
+    if cb then lines[#lines + 1] = ClickLine(cb, "combat," .. T) end
     local b = Builder()
     -- three builders, then the finisher (with Slice and Dice: right after the first builder)
     local seq = { b }
@@ -210,7 +274,6 @@ end
 function NS.Update()
     if not db or InCombatLockdown() then return end
     local m1, why = AttackMacro()
-    m1 = AutoKick() .. m1
     if btn:GetAttribute("macrotext1") ~= m1 then btn:SetAttribute("macrotext1", m1) end
     local m2 = InterruptMacro()
     if btn:GetAttribute("macrotext2") ~= m2 then btn:SetAttribute("macrotext2", m2) end
